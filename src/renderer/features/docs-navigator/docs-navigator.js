@@ -6,8 +6,41 @@
   const listEl = document.getElementById('docs-list');
   const detailEl = document.getElementById('docs-detail');
   const modeButtons = document.querySelectorAll('.docs-mode-btn');
+  const modeDescription = document.getElementById('docs-mode-description');
+  const catEmptyEl = document.getElementById('docs-categories-empty');
+  const listEmptyEl = document.getElementById('docs-list-empty');
+  const featListEmptyEl = document.getElementById('feats-list-empty');
+  const featDetailEl = document.getElementById('feat-detail');
+  const treeStatusEl = document.getElementById('tree-status');
+  const treeDetailPanel = document.getElementById('tree-detail');
+  const gateResultsPanel = document.getElementById('gate-results');
+  const modeDescriptions = {
+    docs: 'カテゴリからドキュメントを探索します',
+    feats: 'FEATのカバレッジと関連ドキュメントを確認します',
+    tree: 'Breadcrumbsからリンク構造を検証します'
+  };
+  let selectedCategory = null;
+  let selectedDocPath = null;
   console.log('[Docs Navigator] Basic elements - catEl:', !!catEl, 'listEl:', !!listEl, 'detailEl:', !!detailEl);
   console.log('[Docs Navigator] modeButtons count:', modeButtons.length);
+
+  function toggleEmptyState(el, show, message) {
+    if (!el) return;
+    if (typeof message === 'string') el.textContent = message;
+    el.classList.toggle('hidden', !show);
+  }
+
+  function showDocDetailPlaceholder(message) {
+    if (!detailEl) return;
+    detailEl.classList.add('empty-state');
+    detailEl.textContent = message;
+  }
+
+  function setTreeStatus(text, tone = 'info') {
+    if (!treeStatusEl) return;
+    treeStatusEl.textContent = text;
+    treeStatusEl.className = `status status-${tone}`;
+  }
 
   if (!catEl || !listEl || !detailEl) {
     console.error('[Docs Navigator] Required elements not found!');
@@ -107,9 +140,12 @@
     for (const cat of categoryOrder) {
       const li = document.createElement('li');
       li.textContent = cat;
+      li.dataset.category = cat;
+      li.setAttribute('role', 'button');
       li.addEventListener('click', () => renderList(cat));
       catEl.appendChild(li);
     }
+    toggleEmptyState(catEmptyEl, categoryOrder.length === 0, 'カテゴリが見つかりません');
 
     const orphanTitle = document.createElement('h3');
     orphanTitle.textContent = 'Orphans';
@@ -121,55 +157,105 @@
     let orphanMap = await detectOrphans(entries);
     renderOrphans(orphanMap);
 
+    function updateCategorySelection() {
+      catEl.querySelectorAll('li').forEach(li => {
+        li.classList.toggle('active', li.dataset.category === selectedCategory);
+      });
+    }
+
+    function updateDocSelection() {
+      listEl.querySelectorAll('li').forEach(li => {
+        li.classList.toggle('active', li.dataset.path === selectedDocPath);
+      });
+    }
+
+    function setActiveDoc(entry) {
+      if (!entry) {
+        selectedDocPath = null;
+        showDocDetailPlaceholder('ドキュメントが見つかりませんでした');
+        updateDocSelection();
+        return;
+      }
+      selectedDocPath = entry.path;
+      updateDocSelection();
+      renderDetail(entry);
+    }
+
     function renderList(cat) {
+      selectedCategory = cat;
+      updateCategorySelection();
       listEl.innerHTML = '';
       const filtered = entries.filter(e => e.category === cat);
+      if (filtered.length === 0) {
+        toggleEmptyState(listEmptyEl, true, 'このカテゴリのドキュメントはまだ登録されていません');
+        setActiveDoc(null);
+        return;
+      }
+      toggleEmptyState(listEmptyEl, false);
       for (const e of filtered) {
         const li = document.createElement('li');
+        li.dataset.path = e.path;
         const a = document.createElement('a');
         a.href = '#';
         a.textContent = e.path;
-        a.addEventListener('click', async (ev) => { ev.preventDefault(); renderDetail(e); });
+        a.addEventListener('click', async (ev) => { ev.preventDefault(); setActiveDoc(e); });
         li.appendChild(a);
         const span = document.createElement('span');
-        span.textContent = ` — ${e.desc}`;
+        span.textContent = e.desc;
         li.appendChild(span);
         listEl.appendChild(li);
       }
+      const initial = filtered.find(e => e.path === selectedDocPath) || filtered[0];
+      setActiveDoc(initial);
     }
 
     async function renderDetail(entry) {
-      let extra = '';
+      if (!detailEl) return;
+      let breadcrumbsHtml = '';
       let orphanBadge = '';
       try {
         if (entry.path.endsWith('index.mdc')) {
           const res = await window.docs.read(entry.path);
           if (res.success) {
             const bc = extractBreadcrumbs(res.content);
-            if (bc) extra = `<pre>${escapeHtml(bc)}</pre>`;
+            if (bc) breadcrumbsHtml = `<section class="doc-detail__section"><h4>Breadcrumbs</h4><pre>${escapeHtml(bc)}</pre></section>`;
             const isOrphan = orphanMap.get(entry.path) === true;
-            orphanBadge = `<span class="status ${isOrphan ? 'stopped' : 'running'}">${isOrphan ? 'Orphan' : 'Linked'}</span>`;
+            orphanBadge = `<span class="status ${isOrphan ? 'status-warn' : 'status-success'}">${isOrphan ? 'Orphan' : 'Linked'}</span>`;
           }
         }
-      } catch {}
-      const gatesLink = `<button id="open-gates">Quality Gates 定義を開く</button>`;
+      } catch (err) {
+        console.warn('[Docs Navigator] Breadcrumb parse failed:', err);
+      }
+
+      detailEl.classList.remove('empty-state');
       detailEl.innerHTML = `
-        <div>
-          <p><strong>${escapeHtml(entry.path)}</strong> ${orphanBadge}</p>
-          <p>${escapeHtml(entry.desc)}</p>
-          ${extra}
-          <div class="control-group"><button id="open-doc">このドキュメントを開く</button></div>
-          <hr/>
-          <h4>Traceability Map</h4>
-          <pre>${escapeHtml(traceSection || '(not found)')}</pre>
-          <h4>Waypoints</h4>
-          <pre>${escapeHtml(waypointsSection || '(not found)')}</pre>
-          <h4>MECE Domains</h4>
-          <pre>${escapeHtml(meceSection || '(not found)')}</pre>
-          ${gatesLink}
-        </div>`;
-      document.getElementById('open-doc').addEventListener('click', async () => { await window.docs.open(entry.path); });
-      document.getElementById('open-gates').addEventListener('click', async () => { await window.docs.open('.cursor/gates.traceability.mdc'); });
+        <article class="doc-detail">
+          <header class="doc-detail__header">
+            <span class="doc-detail__path">${escapeHtml(entry.path)}</span>
+            ${orphanBadge}
+          </header>
+          <p class="doc-detail__summary">${escapeHtml(entry.desc)}</p>
+          ${breadcrumbsHtml}
+          <div class="doc-detail__actions">
+            <button id="open-doc" class="btn btn-primary">このドキュメントを開く</button>
+            <button id="open-gates" class="btn btn-secondary">Quality Gates 定義を開く</button>
+          </div>
+          <section class="doc-detail__section">
+            <h4>Traceability Map</h4>
+            <pre>${escapeHtml(traceSection || '(not found)')}</pre>
+          </section>
+          <section class="doc-detail__section">
+            <h4>Waypoints</h4>
+            <pre>${escapeHtml(waypointsSection || '(not found)')}</pre>
+          </section>
+          <section class="doc-detail__section">
+            <h4>MECE Domains</h4>
+            <pre>${escapeHtml(meceSection || '(not found)')}</pre>
+          </section>
+        </article>`;
+
+      document.getElementById('open-doc')?.addEventListener('click', async () => { await window.docs.open(entry.path); });
+      document.getElementById('open-gates')?.addEventListener('click', async () => { await window.docs.open('.cursor/gates.traceability.mdc'); });
     }
 
     const docsMode = document.getElementById('docs-mode-docs');
@@ -177,7 +263,7 @@
     const treeMode = document.getElementById('docs-mode-tree');
     window.treeView = document.getElementById('tree-view');
     const treeView = window.treeView;
-    const treeDetail = document.getElementById('tree-detail');
+    const treeDetail = treeDetailPanel;
     window.treeDetail = treeDetail;
     window.treeDirection = document.getElementById('tree-direction');
     const treeDirection = window.treeDirection;
@@ -190,29 +276,41 @@
       console.log(`[Docs Navigator] Registering listener for button ${idx}:`, btn.dataset.mode);
       btn.addEventListener('click', () => {
         console.log('[Mode Button Click] Button clicked, mode:', btn.dataset.mode);
-        modeButtons.forEach(b => b.classList.remove('active'));
+        modeButtons.forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
         const mode = btn.dataset.mode;
+        if (modeDescription) {
+          modeDescription.textContent = modeDescriptions[mode] || '';
+        }
         console.log('[Mode Switch] Switching to mode:', mode);
         docsMode.classList.toggle('active', mode === 'docs');
         featsMode.classList.toggle('active', mode === 'feats');
         treeMode.classList.toggle('active', mode === 'tree');
-        console.log('[Mode Switch] Classes applied - docs:', docsMode.classList.contains('active'), 
-                    'feats:', featsMode.classList.contains('active'), 
+        console.log('[Mode Switch] Classes applied - docs:', docsMode.classList.contains('active'),
+                    'feats:', featsMode.classList.contains('active'),
                     'tree:', treeMode.classList.contains('active'));
-        if (mode === 'tree') { 
+        if (mode === 'tree') {
           console.log('[Mode Switch] Tree mode activated, calling renderTree()');
-          renderTree(); 
+          setTreeStatus('Tree構造を解析中...', 'info');
+          renderTree();
         }
       });
     });
     console.log('[Docs Navigator] Mode buttons initialized');
 
     if (treeDirection) {
-      treeDirection.addEventListener('change', () => { renderTree(); });
+      treeDirection.addEventListener('change', () => {
+        setTreeStatus('Tree構造を解析中...', 'info');
+        renderTree();
+      });
     }
 
     document.getElementById('tree-validate')?.addEventListener('click', () => {
+      setTreeStatus('Quality Gatesを検証中...', 'info');
       renderTree();
     });
 
@@ -225,7 +323,9 @@
     }
     
     renderFeatList(filteredFeats, registry.dupIds);
+    setTreeStatus('モードをTreeに切り替えてください', 'info');
     if (categoryOrder.length > 0) renderList(categoryOrder[0]);
+    else showDocDetailPlaceholder('カテゴリがありません');
   } catch (error) { console.error('Docs Navigator init error:', error); }
 
   function extractSection(text, startHeader, stopHeaderPrefix = '## ') {
@@ -253,11 +353,16 @@
     const featDupAlert = document.getElementById('feat-dup-alert');
     if (!featsList) return;
     featsList.innerHTML = '';
+    toggleEmptyState(featListEmptyEl, items.length === 0, '該当するFEATがありません');
+    if (items.length === 0 && featDetailEl) {
+      featDetailEl.classList.add('empty-state');
+      featDetailEl.textContent = '該当するFEATがありません';
+    }
     if (dupIds && dupIds.length > 0) {
       if (featDupAlert) {
         featDupAlert.style.display = '';
         featDupAlert.textContent = `重複ID: ${dupIds.join(', ')}`;
-        featDupAlert.classList.add('stopped');
+        featDupAlert.className = 'status status-warn';
       }
     } else if (featDupAlert) {
       featDupAlert.style.display = 'none';
@@ -267,12 +372,37 @@
   }
   function computeCoverage(links) { const keys = ['PRD','UX','API','DATA','QA']; let passed = 0; const missing = []; for (const k of keys) { if (links[k] && links[k].trim()) passed++; else missing.push(k); } return { passed, missing }; }
   async function renderFeatDetail(feat, coverage) {
-    const featDetail = document.getElementById('feats-detail');
-    if (!featDetail) return;
-    const rows = []; for (const k of ['PRD','UX','API','DATA','QA']) { const val = feat.links[k] || ''; const path = val.split('#')[0].trim(); const openBtn = path ? `<button data-open="${escapeHtml(path)}" class="btn btn-sm">Open</button>` : ''; rows.push(`<tr><td>${k}</td><td>${escapeHtml(val || '(missing)')}</td><td>${openBtn}</td></tr>`); }
-    const warn = coverage.missing.length ? `<div class="status">不足: ${coverage.missing.join(', ')}</div>` : `<div class="status">OK</div>`;
-    featDetail.innerHTML = `<div><p><strong>${escapeHtml(feat.id)}</strong> — ${escapeHtml(feat.title)}</p>${warn}<table><thead><tr><th>Layer</th><th>Link</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
-    featDetail.querySelectorAll('button[data-open]').forEach(btn => { btn.addEventListener('click', async () => { const rel = btn.getAttribute('data-open'); await window.docs.open(rel); }); });
+    const detail = featDetailEl || document.getElementById('feat-detail');
+    if (!detail) return;
+    const rows = [];
+    for (const k of ['PRD', 'UX', 'API', 'DATA', 'QA']) {
+      const val = feat.links[k] || '';
+      const path = val.split('#')[0].trim();
+      const openBtn = path ? `<button data-open="${escapeHtml(path)}" class="btn btn-sm btn-secondary">Open</button>` : '';
+      rows.push(`<tr><td>${k}</td><td>${escapeHtml(val || '(missing)')}</td><td>${openBtn}</td></tr>`);
+    }
+    const statusBadge = coverage.missing.length
+      ? `<span class="status status-warn">不足: ${coverage.missing.join(', ')}</span>`
+      : `<span class="status status-success">全てカバー済み</span>`;
+    detail.classList.remove('empty-state');
+    detail.innerHTML = `
+      <article class="doc-detail">
+        <header class="doc-detail__header">
+          <span class="doc-detail__path">${escapeHtml(feat.id)}</span>
+          ${statusBadge}
+        </header>
+        <p class="doc-detail__summary">${escapeHtml(feat.title)}</p>
+        <section class="doc-detail__section">
+          <h4>Coverage Links</h4>
+          <table><thead><tr><th>Layer</th><th>Link</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table>
+        </section>
+      </article>`;
+    detail.querySelectorAll('button[data-open]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const rel = btn.getAttribute('data-open');
+        if (rel) await window.docs.open(rel);
+      });
+    });
   }
   async function detectOrphans(entries) {
     const map = new Map(); const indexEntries = entries.filter(e => /(^|\/)docs\/.+\/index\.mdc$/.test(e.path)); for (const e of indexEntries) { try { const res = await window.docs.read(e.path); if (!res.success) { map.set(e.path, true); continue; } const bc = extractBreadcrumbs(res.content); if (!bc) { map.set(e.path, true); continue; } const up = (bc.match(/>\s*Upstream:\s*(.*)/) || [])[1] || ''; const down = (bc.match(/>\s*Downstream:\s*(.*)/) || [])[1] || ''; const isEmpty = (v) => !v || v.trim() === '' || v.trim().toUpperCase() === 'N/A'; map.set(e.path, isEmpty(up) && isEmpty(down)); } catch { map.set(e.path, true); } } return map;
@@ -328,9 +458,10 @@
   }
 
   async function renderTreeNodeDetail(node) {
-    const detailPanel = window.treeDetail;
+    const detailPanel = window.treeDetail || treeDetailPanel;
     if (!detailPanel) return;
-    
+    detailPanel.classList.remove('empty-state');
+
     const upstreamLinks = node.upstream.map(path => {
       return `<li><a href="#" data-path="${escapeHtml(path)}" class="doc-link">${escapeHtml(path)}</a></li>`;
     }).join('');
@@ -538,9 +669,9 @@
   }
 
   function renderGateResults(results) {
-    const panel = document.getElementById('gate-results');
+    const panel = gateResultsPanel || document.getElementById('gate-results');
     if (!panel) return;
-    
+    panel.classList.remove('empty-state');
     panel.innerHTML = '';
     const gates = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04'];
     
@@ -627,12 +758,20 @@
     console.log('[renderTree] window.treeView exists:', !!window.treeView);
     console.log('[renderTree] window.treeDirection value:', window.treeDirection?.value);
     
-    const statusEl = document.getElementById('tree-status');
     const tView = window.treeView || document.getElementById('tree-view');
     if (!tView) { console.error('[renderTree] treeView not found!'); return; }
-    if (statusEl) statusEl.textContent = 'Loading...';
-    
+
+    setTreeStatus('Tree構造を解析中...', 'info');
+    tView.classList.remove('empty-state');
     tView.innerHTML = '<div class="tree-loading">Loading...</div>';
+    if (treeDetailPanel) {
+      treeDetailPanel.classList.add('empty-state');
+      treeDetailPanel.textContent = 'ノードを選択するとリンクが表示されます';
+    }
+    if (gateResultsPanel) {
+      gateResultsPanel.classList.add('empty-state');
+      gateResultsPanel.textContent = 'Validateを押してGate結果を確認しましょう';
+    }
     try {
       console.log('[renderTree] Calling parseAllBreadcrumbs()...');
       const nodes = await parseAllBreadcrumbs();
@@ -677,16 +816,16 @@
         const msg = 'No root nodes found (upstream=N/A or downstream=N/A)';
         console.warn('renderTree:', msg);
         tView.innerHTML = `<div class="tree-loading">${msg}</div>`;
-        if (statusEl) statusEl.textContent = 'No roots';
+        setTreeStatus('ルートが見つかりません', 'warn');
       } else {
         console.log('renderTree: success, rendered', rootNodes.length, 'root nodes');
-        if (statusEl) statusEl.textContent = `✓ ${rootNodes.length} roots`;
+        setTreeStatus(`✓ ${rootNodes.length} roots`, 'success');
       }
     } catch (e) {
       console.error('renderTree error:', e);
       console.error('renderTree error stack:', e.stack);
       tView.innerHTML = `<div class="tree-error">Error: ${escapeHtml(e.message)}</div>`;
-      if (statusEl) statusEl.textContent = '✗ Error';
+      setTreeStatus('✗ Error', 'error');
     }
   }
   

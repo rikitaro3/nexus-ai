@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;">
   <title>Nexus</title>
   <link rel="stylesheet" href="styles.css">
   <style>
@@ -11,15 +12,23 @@
   </head>
 <body>
   <div class="container">
-    <header>
-      <h1>Nexus</h1>
-      <button id="download-console" style="position: fixed; top: 10px; right: 10px; z-index: 10000; padding: 5px 10px;">📋 Console Logをダウンロード</button>
+    <header class="app-header">
+      <div class="app-header__main">
+        <div class="app-brand">
+          <h1>Nexus</h1>
+          <p class="app-subtitle">Docs / Tasks workspace</p>
+        </div>
+        <div class="app-header__actions">
+          <button id="download-console" class="btn btn-ghost">📋 Console Logをダウンロード</button>
+        </div>
+      </div>
     </header>
-    <nav class="tabs">
-      <button class="tab-btn active" data-tab="docs">Docs</button>
-      <button class="tab-btn" data-tab="tasks">Tasks</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
-    </nav>
+    <div class="primary-toolbar">
+      <nav class="tabs" role="tablist" aria-label="Main navigation">
+        <button class="tab-btn active" data-tab="docs" role="tab" aria-selected="true">Docs</button>
+        <button class="tab-btn" data-tab="tasks" role="tab" aria-selected="false">Tasks</button>
+      </nav>
+    </div>
     <main>
       <div id="docs" class="tab-content active">
         <section class="card">
@@ -31,24 +40,31 @@
               <option value="nexus">Nexus</option>
             </select>
           </div>
-          <div class="docs-mode-bar">
-            <button class="btn btn-secondary docs-mode-btn active" data-mode="docs">Docs</button>
-            <button class="btn btn-secondary docs-mode-btn" data-mode="feats">FEATs</button>
-            <button class="btn btn-secondary docs-mode-btn" data-mode="tree">Tree</button>
+          <div class="docs-mode-bar" role="toolbar">
+            <div class="docs-mode-buttons">
+              <button class="btn btn-secondary docs-mode-btn active" data-mode="docs">Docs</button>
+              <button class="btn btn-secondary docs-mode-btn" data-mode="feats">FEATs</button>
+              <button class="btn btn-secondary docs-mode-btn" data-mode="tree">Tree</button>
+            </div>
+            <div class="docs-mode-meta">
+              <span id="docs-mode-description">カテゴリからドキュメントを探索します</span>
+            </div>
           </div>
           <div id="docs-mode-docs" class="docs-mode active">
             <div class="docs-split">
               <div class="docs-left">
                 <h3>カテゴリ</h3>
                 <ul id="docs-categories"></ul>
+                <p class="empty-state" id="docs-categories-empty">カテゴリを読み込み中です...</p>
               </div>
               <div class="docs-middle">
                 <h3>ドキュメント</h3>
                 <ul id="docs-list"></ul>
+                <p class="empty-state" id="docs-list-empty">カテゴリを選択してください</p>
               </div>
               <div class="docs-right">
                 <h3>詳細</h3>
-                <div id="docs-detail"></div>
+                <div id="docs-detail" class="empty-state">ドキュメントを選択すると詳細が表示されます</div>
               </div>
             </div>
           </div>
@@ -61,10 +77,11 @@
               <div class="docs-left">
                 <h3>FEATs</h3>
                 <ul id="feats-list"></ul>
+                <p class="empty-state" id="feats-list-empty">FEAT一覧を読み込み中...</p>
               </div>
               <div class="docs-right span-2">
                 <h3>詳細</h3>
-                <div id="feat-detail"></div>
+                <div id="feat-detail" class="empty-state">FEATを選択してください</div>
               </div>
             </div>
           </div>
@@ -75,19 +92,19 @@
                 <option value="upstream">Upstream (下位→上位)</option>
               </select>
               <button id="tree-validate" class="btn btn-primary">Validate Gates</button>
-              <span id="tree-status" class="status"></span>
+              <span id="tree-status" class="status status-info" aria-live="polite"></span>
             </div>
             <div class="docs-split">
               <div class="docs-left">
                 <h3>Tree</h3>
-                <div id="tree-view"></div>
+                <div id="tree-view" class="empty-state">Treeを読み込むにはモードを切り替えてください</div>
               </div>
               <div class="docs-right span-2">
                 <h3>詳細</h3>
-                <div id="tree-detail"></div>
+                <div id="tree-detail" class="empty-state">ノードを選択するとリンクが表示されます</div>
                 <hr/>
                 <h3>Quality Gates</h3>
-                <div id="gate-results"></div>
+                <div id="gate-results" class="empty-state">Validateを押してGate結果を確認しましょう</div>
               </div>
             </div>
           </div>
@@ -123,38 +140,17 @@
             <div class="docs-left">
               <h3>カテゴリ</h3>
               <ul id="tasks-categories"></ul>
+              <p class="empty-state" id="tasks-categories-empty">タスクを追加するとカテゴリが表示されます</p>
             </div>
             <div class="docs-middle">
               <h3>一覧</h3>
               <ul id="tasks-list"></ul>
+              <p class="empty-state" id="tasks-list-empty">タスクがありません。上のフォームから追加してください。</p>
             </div>
             <div class="docs-right">
               <h3>詳細</h3>
-              <div id="task-detail"></div>
+              <div id="task-detail" class="empty-state">タスクを選択すると編集できます</div>
             </div>
-          </div>
-        </section>
-      </div>
-      <div id="settings" class="tab-content">
-        <section class="card">
-          <h2>⚙️ Settings</h2>
-          <div class="form-group">
-            <label for="project-root-input">プロジェクトルートパス</label>
-            <input id="project-root-input" type="text" placeholder="例: C:\Users\4in4o\Documents\git\shikaku-app" style="width: 100%;">
-            <small>デフォルトでは自動検出されます。自動検出に失敗する場合は、このフィールドで明示的に指定してください。</small>
-          </div>
-          <div class="control-group">
-            <button id="settings-save" class="btn btn-primary">保存</button>
-            <button id="settings-test" class="btn btn-secondary">パスをテスト</button>
-          </div>
-          <hr/>
-          <div class="form-group">
-            <label for="context-file-input">Context File パス</label>
-            <input id="context-file-input" type="text" readonly placeholder="自動検出" style="width: 100%;">
-            <small>手動でcontext.mdcファイルを指定できます。</small>
-          </div>
-          <div class="control-group">
-            <button id="context-file-select" class="btn btn-secondary">ファイルを選択</button>
           </div>
         </section>
       </div>
@@ -173,7 +169,7 @@
       });
       return true; // Prevent default error popup
     };
-    
+
     window.addEventListener('unhandledrejection', function(event) {
       console.error('[Unhandled Promise Rejection]', event.reason);
     });
@@ -183,4 +179,3 @@
   <script src="tasks.js"></script>
 </body>
 </html>
-

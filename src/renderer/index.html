@@ -12,9 +12,16 @@
   </head>
 <body>
   <div class="container">
-    <header>
-      <h1>Nexus</h1>
-      <button id="download-console" style="position: fixed; top: 10px; right: 10px; z-index: 10000; padding: 5px 10px;">📋 Console Logをダウンロード</button>
+    <header class="app-header">
+      <div class="app-header__main">
+        <div class="app-brand">
+          <h1>Nexus</h1>
+          <p class="app-subtitle">Docs / Tasks workspace</p>
+        </div>
+        <div class="app-header__actions">
+          <button id="download-console" class="btn btn-ghost">📋 Console Logをダウンロード</button>
+        </div>
+      </div>
     </header>
     <nav class="tabs">
       <button class="tab-btn active" data-tab="docs">Docs</button>
@@ -32,24 +39,31 @@
               <option value="nexus">Nexus</option>
             </select>
           </div>
-          <div class="docs-mode-bar">
-            <button class="btn btn-secondary docs-mode-btn active" data-mode="docs">Docs</button>
-            <button class="btn btn-secondary docs-mode-btn" data-mode="feats">FEATs</button>
-            <button class="btn btn-secondary docs-mode-btn" data-mode="tree">Tree</button>
+          <div class="docs-mode-bar" role="toolbar">
+            <div class="docs-mode-buttons">
+              <button class="btn btn-secondary docs-mode-btn active" data-mode="docs">Docs</button>
+              <button class="btn btn-secondary docs-mode-btn" data-mode="feats">FEATs</button>
+              <button class="btn btn-secondary docs-mode-btn" data-mode="tree">Tree</button>
+            </div>
+            <div class="docs-mode-meta">
+              <span id="docs-mode-description">カテゴリからドキュメントを探索します</span>
+            </div>
           </div>
           <div id="docs-mode-docs" class="docs-mode active">
             <div class="docs-split">
               <div class="docs-left">
                 <h3>カテゴリ</h3>
                 <ul id="docs-categories"></ul>
+                <p class="empty-state" id="docs-categories-empty">カテゴリを読み込み中です...</p>
               </div>
               <div class="docs-middle">
                 <h3>ドキュメント</h3>
                 <ul id="docs-list"></ul>
+                <p class="empty-state" id="docs-list-empty">カテゴリを選択してください</p>
               </div>
               <div class="docs-right">
                 <h3>詳細</h3>
-                <div id="docs-detail"></div>
+                <div id="docs-detail" class="empty-state">ドキュメントを選択すると詳細が表示されます</div>
               </div>
             </div>
           </div>
@@ -62,10 +76,11 @@
               <div class="docs-left">
                 <h3>FEATs</h3>
                 <ul id="feats-list"></ul>
+                <p class="empty-state" id="feats-list-empty">FEAT一覧を読み込み中...</p>
               </div>
               <div class="docs-right span-2">
                 <h3>詳細</h3>
-                <div id="feat-detail"></div>
+                <div id="feat-detail" class="empty-state">FEATを選択してください</div>
               </div>
             </div>
           </div>
@@ -76,19 +91,19 @@
                 <option value="upstream">Upstream (下位→上位)</option>
               </select>
               <button id="tree-validate" class="btn btn-primary">Validate Gates</button>
-              <span id="tree-status" class="status"></span>
+              <span id="tree-status" class="status status-info" aria-live="polite"></span>
             </div>
             <div class="docs-split">
               <div class="docs-left">
                 <h3>Tree</h3>
-                <div id="tree-view"></div>
+                <div id="tree-view" class="empty-state">Treeを読み込むにはモードを切り替えてください</div>
               </div>
               <div class="docs-right span-2">
                 <h3>詳細</h3>
-                <div id="tree-detail"></div>
+                <div id="tree-detail" class="empty-state">ノードを選択するとリンクが表示されます</div>
                 <hr/>
                 <h3>Quality Gates</h3>
-                <div id="gate-results"></div>
+                <div id="gate-results" class="empty-state">Validateを押してGate結果を確認しましょう</div>
               </div>
             </div>
           </div>
@@ -124,14 +139,16 @@
             <div class="docs-left">
               <h3>カテゴリ</h3>
               <ul id="tasks-categories"></ul>
+              <p class="empty-state" id="tasks-categories-empty">タスクを追加するとカテゴリが表示されます</p>
             </div>
             <div class="docs-middle">
               <h3>一覧</h3>
               <ul id="tasks-list"></ul>
+              <p class="empty-state" id="tasks-list-empty">タスクがありません。上のフォームから追加してください。</p>
             </div>
             <div class="docs-right">
               <h3>詳細</h3>
-              <div id="task-detail"></div>
+              <div id="task-detail" class="empty-state">タスクを選択すると編集できます</div>
             </div>
           </div>
         </section>
