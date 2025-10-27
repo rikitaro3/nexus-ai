@@ -22,27 +22,71 @@
   const MODE_STORAGE_KEY = 'nexus.docs.mode';
   const VALID_DOC_MODES = new Set(['docs', 'feats', 'tree']);
 
-  function loadPersistedMode(defaultMode) {
-    if (typeof window === 'undefined' || !window.localStorage) return defaultMode;
+  function normalizePreferenceValue(value) {
+    if (typeof value === 'string') return value.trim();
+    if (value == null) return '';
     try {
-      const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
-      if (stored && VALID_DOC_MODES.has(stored)) {
-        return stored;
-      }
+      return String(value).trim();
     } catch (err) {
-      console.warn('[Docs Navigator] Failed to read persisted mode:', err);
+      console.warn('[Docs Navigator] Failed to normalize preference value:', err);
+      return '';
     }
-    return defaultMode;
   }
 
-  function persistMode(mode) {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    try {
-      window.localStorage.setItem(MODE_STORAGE_KEY, mode);
-    } catch (err) {
-      console.warn('[Docs Navigator] Failed to persist mode:', err);
+  function createStringPreference(storageKey, { defaultValue = '', validate } = {}) {
+    const hasStorage = () => typeof window !== 'undefined' && !!window.localStorage;
+
+    function read() {
+      if (!hasStorage()) return defaultValue;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw == null) return defaultValue;
+        const normalized = normalizePreferenceValue(raw);
+        if (!normalized) return defaultValue;
+        if (validate && !validate(normalized)) return defaultValue;
+        return normalized;
+      } catch (err) {
+        console.warn('[Docs Navigator] Failed to read preference from storage:', storageKey, err);
+        return defaultValue;
+      }
     }
+
+    function write(value) {
+      if (!hasStorage()) return defaultValue;
+      try {
+        const normalized = normalizePreferenceValue(value);
+        if (!normalized) {
+          window.localStorage.removeItem(storageKey);
+          return defaultValue;
+        }
+        if (validate && !validate(normalized)) {
+          window.localStorage.removeItem(storageKey);
+          return defaultValue;
+        }
+        window.localStorage.setItem(storageKey, normalized);
+        return normalized;
+      } catch (err) {
+        console.warn('[Docs Navigator] Failed to persist preference:', storageKey, err);
+        return defaultValue;
+      }
+    }
+
+    function clear() {
+      if (!hasStorage()) return;
+      try {
+        window.localStorage.removeItem(storageKey);
+      } catch (err) {
+        console.warn('[Docs Navigator] Failed to clear preference:', storageKey, err);
+      }
+    }
+
+    return { read, write, clear };
   }
+
+  const docModePreference = createStringPreference(MODE_STORAGE_KEY, {
+    defaultValue: 'tree',
+    validate: value => VALID_DOC_MODES.has(value)
+  });
   let selectedCategory = null;
   let selectedDocPath = null;
   console.log('[Docs Navigator] Basic elements - catEl:', !!catEl, 'listEl:', !!listEl, 'detailEl:', !!detailEl);
@@ -312,7 +356,7 @@
     const treeDirection = window.treeDirection;
     const featSearch = document.getElementById('feat-search');
     
-    const initialMode = loadPersistedMode('tree');
+    const initialMode = docModePreference.read();
     let currentMode = null;
 
     function activateMode(nextMode, { skipPersist = false } = {}) {
@@ -340,7 +384,7 @@
       treeMode?.classList.toggle('active', normalized === 'tree');
 
       if (!skipPersist) {
-        persistMode(normalized);
+        docModePreference.write(normalized);
       }
 
       if (normalized === 'tree') {
