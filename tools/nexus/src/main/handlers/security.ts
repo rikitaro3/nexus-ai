@@ -10,6 +10,14 @@ export interface PathValidationResult {
   normalized: string;
   target: string;
   error?: string;
+  /**
+   * リポジトリ内に存在するパスかどうか
+   */
+  isInsideRepo?: boolean;
+  /**
+   * ホワイトリストによりリポジトリ外の絶対パスを許可したかどうか
+   */
+  allowedByWhitelist?: boolean;
 }
 
 export interface SecurityConfig {
@@ -23,6 +31,13 @@ export interface SecurityConfig {
  */
 // カスタムプロジェクトルート（設定画面から設定可能）
 let customProjectRoot: string | null = null;
+
+const ALLOWED_ABSOLUTE_BASENAMES = new Set(['context.mdc', 'context.md']);
+
+function isWhitelistedAbsoluteTarget(target: string): boolean {
+  const basename = path.basename(target).toLowerCase();
+  return ALLOWED_ABSOLUTE_BASENAMES.has(basename);
+}
 
 export function setCustomProjectRoot(root: string): void {
   customProjectRoot = root;
@@ -104,8 +119,11 @@ export function validatePath(relPath: string): PathValidationResult {
 
     const resolvedTarget = path.resolve(target);
     const relativeToRepo = path.relative(resolvedRepoRoot, resolvedTarget);
+    const isInsideRepo = !path.isAbsolute(relativeToRepo) && !relativeToRepo.startsWith('..');
+    const isAbsoluteRequest = path.isAbsolute(relPath) || path.isAbsolute(normalized);
+    const allowedByWhitelist = !isInsideRepo && isAbsoluteRequest && isWhitelistedAbsoluteTarget(resolvedTarget);
 
-    if (path.isAbsolute(relativeToRepo) || relativeToRepo.startsWith('..')) {
+    if (!isInsideRepo && !allowedByWhitelist) {
       logger.warn('パスがリポジトリ外', {
         relPath,
         normalized,
@@ -120,6 +138,14 @@ export function validatePath(relPath: string): PathValidationResult {
         target: resolvedTarget,
         error: 'パスがリポジトリ外'
       };
+    }
+
+    if (allowedByWhitelist) {
+      logger.info('Absolute path allowed by whitelist', {
+        target: resolvedTarget,
+        repoRoot: resolvedRepoRoot,
+        basename: path.basename(resolvedTarget)
+      });
     }
 
     // ファイルの存在確認
@@ -138,7 +164,9 @@ export function validatePath(relPath: string): PathValidationResult {
       valid: true,
       repoRoot: resolvedRepoRoot,
       normalized,
-      target: resolvedTarget
+      target: resolvedTarget,
+      isInsideRepo,
+      allowedByWhitelist
     };
   } catch (e) {
     logger.error('パス検証中にエラーが発生', { relPath, error: (e as Error).message });

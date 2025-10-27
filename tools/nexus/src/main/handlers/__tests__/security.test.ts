@@ -76,6 +76,8 @@ describe('security helpers', () => {
       expect(result.valid).toBe(true);
       expect(result.target).toBe(path.resolve(insideFile));
       expect(result.repoRoot).toBe(path.resolve(tempDir));
+      expect(result.isInsideRepo).toBe(true);
+      expect(result.allowedByWhitelist).toBe(false);
     });
 
     it('rejects directory traversal attempts', () => {
@@ -100,6 +102,25 @@ describe('security helpers', () => {
 
       expect(result.valid).toBe(false);
       expect(result.error).toBe('パスがリポジトリ外');
+      expect(result.allowedByWhitelist).toBeUndefined();
+
+      fs.rmSync(outside, { recursive: true, force: true });
+    });
+
+    it('allows whitelisted absolute paths outside the repository', () => {
+      const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'outside-'));
+      const outsideFile = path.join(outside, 'context.mdc');
+      fs.writeFileSync(outsideFile, '# context');
+
+      process.env.NEXUS_PROJECT_ROOT = tempDir;
+      const { validatePath } = loadSecurityModule();
+
+      const result = validatePath(outsideFile);
+
+      expect(result.valid).toBe(true);
+      expect(result.target).toBe(path.resolve(outsideFile));
+      expect(result.allowedByWhitelist).toBe(true);
+      expect(result.isInsideRepo).toBe(false);
 
       fs.rmSync(outside, { recursive: true, force: true });
     });
@@ -139,7 +160,10 @@ describe('security helpers', () => {
       const result = await wrapped({} as any, path.relative(tempDir, insideFile));
 
       expect(result).toBe(path.resolve(insideFile));
-      expect(handler).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ valid: true }));
+      expect(handler).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ valid: true, allowedByWhitelist: false, isInsideRepo: true })
+      );
     });
 
     it('throws a security error when validation fails', async () => {
