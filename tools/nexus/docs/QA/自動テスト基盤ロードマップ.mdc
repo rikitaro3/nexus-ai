@@ -15,7 +15,7 @@ Nexusの品質向上のために、ドキュメント整備から各種自動テ
 ## フェーズ2: 自動テスト基盤構築
 - `jest` を利用した単体/結合テスト実行環境を `package.json` の `test` スクリプトで標準化。
 - `@playwright/test` を利用した E2E スモークテストのエントリポイントとして `npx playwright test` を追加。
-- `tests/` 配下に E2E テスト用ディレクトリを新設し、Playwright の設定ファイル `playwright.config.ts` で集中管理。
+- `test/` 配下に E2E テスト用ディレクトリを新設し、Playwright の設定ファイル `playwright.config.ts` で集中管理。
 - CI から実行する場合は `npm run test` → `npm run test:integration`（必要に応じて追加）→ `npm run test:e2e:smoke` の順で連鎖させる。
 
 ## フェーズ3: 単体テスト
@@ -36,9 +36,9 @@ Nexusの品質向上のために、ドキュメント整備から各種自動テ
 - 対象: レンダラ HTML をブラウザ自動操作で検証するスモークテスト。
 - 手順:
   1. `npm run test:e2e:smoke` で Playwright を起動。
-  2. `tests/e2e/fixtures/smoke.html` を読み込み、UI コンポーネントのレンダリングと基本操作（ボタン押下→状態更新）を検証。
+  2. `test/e2e/fixtures/smoke.html` を読み込み、UI コンポーネントのレンダリングと基本操作（ボタン押下→状態更新）を検証。
   3. 将来的に Electron アプリ本体を操作するテストへ拡張。
-- 成果物: `tests/e2e/smoke.spec.ts`。
+- 成果物: `test/e2e/smoke.spec.ts`。
 
 ## 運用ガイドライン
 - Pull Request では最低でも単体テストをグリーンに保ち、影響範囲が広い変更は結合/E2E を追加で実行。

@@ -14,11 +14,12 @@ async function testNexus() {
   return new Promise((resolve) => {
     const os = require('os');
     const path = require('path');
-    const electronPath = path.join(__dirname, 'node_modules', '.bin', 'electron');
+    const appRoot = path.resolve(__dirname, '..', '..');
+    const electronPath = path.join(appRoot, 'node_modules', '.bin', 'electron');
     const electronCmd = os.platform() === 'win32' ? electronPath + '.cmd' : electronPath;
     
-    const electron = spawn(electronCmd, ['.'], { 
-      cwd: __dirname,
+    const electron = spawn(electronCmd, ['.'], {
+      cwd: appRoot,
       stdio: 'pipe',
       env: { ...process.env, E2E_TEST: '1' }
     });

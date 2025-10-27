@@ -90,7 +90,7 @@ AI自走型E2Eテストフロー
 #### 修正1: ファイル不存在エラー
 ```javascript
 // 検出パターン: "ENOENT: no such file or directory"
-// 修正方法: ファイル作成（既にtest-e2e-v2.jsに実装済み）
+// 修正方法: ファイル作成（既にlegacy/tests/test-e2e-v2.jsに実装済み）
 if (logs.some(log => log.includes('ENOENT') && log.includes('context.mdc'))) {
   const contextPath = 'tools/nexus/context.mdc';
   if (!fs.existsSync(contextPath)) {
@@ -99,7 +99,7 @@ if (logs.some(log => log.includes('ENOENT') && log.includes('context.mdc'))) {
 }
 ```
 
-**実装状況**: `test-e2e-v2.js` の247-308行目に実装済み
+**実装状況**: `legacy/tests/test-e2e-v2.js` の247-308行目に実装済み
 
 #### 修正2: 変数未定義エラー
 ```javascript
@@ -114,7 +114,7 @@ if (error.includes('ReferenceError') && error.includes('is not defined')) {
 #### 修正3: タイミング問題
 ```javascript
 // 検出パターン: "window.entries count = 0"
-// 修正方法: 待機時間増加、明示的な読み込み確認（既にtest-e2e-v2.jsに実装済み）
+// 修正方法: 待機時間増加、明示的な読み込み確認（既にlegacy/tests/test-e2e-v2.jsに実装済み）
 // 実装状況: 80-89行目のドキュメントナビゲーター初期化待機（最大60秒）
 let retries = 0;
 let ready = false;
@@ -125,7 +125,7 @@ while (retries < 60 && !ready) {
 }
 ```
 
-**実装状況**: `test-e2e-v2.js` の80-97行目に実装済み
+**実装状況**: `legacy/tests/test-e2e-v2.js` の80-97行目に実装済み
 
 ### 3.2 修正不可能なエラーの報告
 

@@ -28,8 +28,10 @@ async function testNexus() {
     const electronPath = require('electron');
     const electronCmd = process.platform === 'win32' ? electronPath : electronPath;
     
+    const appRoot = path.resolve(__dirname, '..', '..');
+
     electronProcess = spawn(electronCmd, ['.', '--remote-debugging-port=9222'], {
-      cwd: __dirname,
+      cwd: appRoot,
       env: { ...process.env, E2E_TEST: '1', NEXUS_DEBUG: '1' }
     });
     

@@ -3,7 +3,7 @@
 > Breadcrumbs
 > Layer: QA
 > Upstream: docs/QA/index.mdc
-> Downstream: 実装（tools/nexus/tests/）
+> Downstream: 実装（tools/nexus/test/）
 
 ## 目次
 
@@ -40,7 +40,7 @@
 ### 2.1 分類体系
 
 ```
-tests/
+test/
 ├── docs-navigator/          # Docs Navigator機能
 │   ├── basic.spec.ts        # 基本操作
 │   ├── feature.spec.ts      # 機能横断
@@ -107,7 +107,7 @@ describe('Docs Navigator - Basic', () => {
 ### 4.1 テストデータの配置
 
 ```
-tests/
+test/
 ├── fixtures/                 # テストデータ
 │   ├── context.mdc          # コンテキストファイル
 │   ├── documents/            # テスト用ドキュメント
@@ -211,8 +211,8 @@ export async function assertTreeRendered(page: Page) {
 ### 5.1 フェーズ1: ディレクトリ構造の作成
 
 ```bash
-mkdir -p tests/{docs-navigator,tree-view,tasks,integration}
-mkdir -p tests/{fixtures/documents,helpers,utils}
+mkdir -p test/{docs-navigator,tree-view,tasks,integration}
+mkdir -p test/{fixtures/documents,helpers,utils}
 ```
 
 ### 5.2 フェーズ2: 基本テストケースの実装
@@ -262,7 +262,7 @@ jobs:
 ### 6.1 Tree View Render Test
 
 ```typescript
-// tests/tree-view/render.spec.ts
+// test/tree-view/render.spec.ts
 import { test, expect } from '@playwright/test';
 import { setup, teardown } from '../helpers/setup';
 
@@ -298,7 +298,7 @@ test.describe('Tree View - Render', () => {
 ### 6.2 Docs Navigator Basic Test
 
 ```typescript
-// tests/docs-navigator/basic.spec.ts
+// test/docs-navigator/basic.spec.ts
 import { test, expect } from '@playwright/test';
 
 test.describe('Docs Navigator - Basic', () => {
