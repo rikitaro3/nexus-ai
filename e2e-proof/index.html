@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>E2E Proof</title>
+</head>
+<body>
+  <h1>E2E基盤証明アプリケーション</h1>
+  <button id="test-btn">テストボタン</button>
+  <div id="result"></div>
+
+  <script>
+    document.getElementById('test-btn').addEventListener('click', () => {
+      document.getElementById('result').textContent = 'テスト完了';
+      console.log('Button clicked');
+    });
+
+    // テスト結果をリッスン
+    setTimeout(() => {
+      if (window.testResult) {
+        console.log('TEST_RESULT:', JSON.stringify(window.testResult));
+      }
+    }, 2000);
+  </script>
+</body>
+</html>
+

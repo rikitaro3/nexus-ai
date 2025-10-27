@@ -1,0 +1,270 @@
+# E2E自動テスト実装ガイド
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: tools/nexus/docs/QA/index.mdc
+> Downstream: 実装（tools/nexus/test-nexus-e2e.js）
+
+## 目的
+
+NEXUSアプリケーションに完全自動化されたE2Eテストを実装するためのガイド。
+
+**重要**: この手法により、手動テストができない環境でも、完全自動化されたE2Eテストを実行できます。
+
+## 成功した手法
+
+### ✅ 実装済み（検証完了）
+
+`tools/nexus/e2e-proof/test-working.js` で実装された手法は、完全自動化されたE2Eテストとして動作が確認されています。
+
+**実行結果**:
+```
+✅ 完全自動化E2Eテスト: 成功
+✓ Electron起動: OK
+✓ ウィンドウ取得: OK
+✓ UI読み込み: OK
+✓ ボタンクリック: OK
+✓ テスト結果検証: OK
+✓ スクリーンショット: OK
+```
+
+## NEXUSアプリへの適用方法
+
+### ステップ1: テストファイルの作成
+
+`tools/nexus/test-nexus-e2e.js` を作成：
+
+```javascript
+const { _electron: electron } = require('@playwright/test');
+const path = require('path');
+
+async function testNexusE2E() {
+  console.log('🚀 NEXUSアプリE2Eテストを開始...\n');
+  
+  let electronApp;
+  let window;
+  
+  try {
+    // 1. Electron起動
+    console.log('1. NEXUSアプリを起動中...');
+    electronApp = await electron.launch({ 
+      args: ['main.js'],
+      cwd: __dirname,
+      env: { ...process.env }
+    });
+    
+    console.log('✓ NEXUSアプリ起動成功');
+    
+    // 2. ウィンドウ取得（DevTools除外）
+    console.log('\n2. ウィンドウを取得中...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    let foundMainWindow = false;
+    for (let i = 0; i < 10; i++) {
+      const windows = await electronApp.windows();
+      
+      for (const win of windows) {
+        const url = await win.url();
+        
+        if (!url.includes('devtools://')) {
+          window = win;
+          foundMainWindow = true;
+          console.log('✓ アプリケーションウィンドウ取得成功');
+          break;
+        }
+      }
+      
+      if (foundMainWindow) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // 3. UI操作と検証
+    console.log('\n3. UI操作を実行中...');
+    await window.waitForLoadState('load');
+    
+    // 例: Treeボタンのクリック
+    await window.waitForSelector('button[data-mode="tree"]', { timeout: 10000 });
+    await window.click('button[data-mode="tree"]');
+    console.log('✓ Treeボタンクリック成功');
+    
+    // 例: テスト結果の検証
+    await window.waitForFunction(() => window.testResult !== undefined, { 
+      timeout: 10000 
+    });
+    
+    const result = await window.evaluate(() => window.testResult);
+    console.log('\n✅ テスト結果:', JSON.stringify(result, null, 2));
+    
+    // 4. スクリーンショット
+    await window.screenshot({ path: 'test-nexus.png' });
+    
+    console.log('\n✅ NEXUSアプリE2Eテスト: 成功');
+    return { success: true, result };
+    
+  } catch (error) {
+    console.error('\n❌ テスト失敗:', error.message);
+    throw error;
+  } finally {
+    if (electronApp) {
+      await electronApp.close();
+    }
+  }
+}
+
+// 実行
+testNexusE2E().then(result => {
+  process.exit(result.success ? 0 : 1);
+}).catch(err => {
+  process.exit(1);
+});
+```
+
+### ステップ2: package.jsonにスクリプトを追加
+
+```json
+{
+  "scripts": {
+    "test:e2e": "node test-nexus-e2e.js"
+  }
+}
+```
+
+### ステップ3: テストの実行
+
+```bash
+cd tools/nexus
+npm run test:e2e
+```
+
+## 実装のポイント
+
+### 1. DevToolsとアプリウィンドウの自動判別
+
+```javascript
+// 全てのウィンドウをチェック
+const windows = await electronApp.windows();
+
+for (const win of windows) {
+  const url = await win.url();
+  
+  // DevToolsを除外
+  if (!url.includes('devtools://')) {
+    window = win;
+    break;
+  }
+}
+```
+
+### 2. 確実な読み込み待機
+
+```javascript
+await window.waitForLoadState('load');
+await window.waitForSelector('button[data-mode="tree"]', { timeout: 10000 });
+```
+
+### 3. 完全自動クリーンアップ
+
+```javascript
+finally {
+  if (electronApp) {
+    await electronApp.close();
+  }
+}
+```
+
+## テストシナリオ
+
+### 基本シナリオ
+
+1. **NEXUS起動**: Electronアプリを自動起動
+2. **Docs Navigator**: カテゴリ選択 → ドキュメント表示
+3. **Tree View**: Treeボタンクリック → ツリー表示
+4. **Tasks**: タスクのインポート/編集/保存
+5. **検証**: テスト結果を検証
+
+### 実装例
+
+```javascript
+// Docs Navigatorテスト
+await window.waitForSelector('button[data-category="PRD"]');
+await window.click('button[data-category="PRD"]');
+
+// Tree Viewテスト
+await window.waitForSelector('button[data-mode="tree"]');
+await window.click('button[data-mode="tree"]');
+
+// Tasksテスト
+await window.waitForSelector('#import-btn');
+await window.click('#import-btn');
+```
+
+## トラブルシューティング
+
+### ウィンドウが見つからない
+
+**原因**: DevToolsが最初に開かれる
+
+**解決策**: 
+```javascript
+// 十分な待機時間を設ける
+await new Promise(resolve => setTimeout(resolve, 2000));
+```
+
+### セレクターが見つからない
+
+**原因**: アプリの初期化が完了していない
+
+**解決策**: 
+```javascript
+// 明示的に待機
+await window.waitForSelector('#element-id', { timeout: 10000 });
+```
+
+### Electronが起動しない
+
+**原因**: 依存関係がインストールされていない
+
+**解決策**: 
+```bash
+npm install
+```
+
+## 実行結果の例
+
+```
+🚀 NEXUSアプリE2Eテストを開始...
+
+1. NEXUSアプリを起動中...
+✓ NEXUSアプリ起動成功
+
+2. ウィンドウを取得中...
+✓ アプリケーションウィンドウ取得成功
+
+3. UI操作を実行中...
+✓ Treeボタンクリック成功
+
+✅ テスト結果:
+{
+  "success": true,
+  "nodesCount": 9,
+  "rootNodesCount": 1
+}
+
+✅ NEXUSアプリE2Eテスト: 成功
+```
+
+## 次のステップ
+
+1. ✅ 基本E2Eテストの実装
+2. ⏳ 詳細なテストシナリオの追加
+3. ⏳ CI/CD統合
+4. ⏳ テストレポートの自動生成
+
+## 参考
+
+- `tools/nexus/e2e-proof/test-working.js`: 成功した実装例
+- `tools/nexus/e2e-proof/SUCCESS_REPORT.md`: 詳細な成功報告
+- `tools/nexus/docs/QA/E2E技術調査報告書.mdc`: 技術調査結果
+
+alwaysApply: true
+---

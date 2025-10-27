@@ -1,0 +1,241 @@
+# E2Eテスト基盤設計
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/QA/index.mdc
+> Downstream: 実装（tools/nexus/test-e2e-ai.js）
+
+## 目次
+
+1. [問題分析](#1-問題分析)
+2. [AI自走型E2Eテストの設計](#2-ai自走型e2eテストの設計)
+3. [自動修正フロー](#3-自動修正フロー)
+4. [実装計画](#4-実装計画)
+
+---
+
+## 1. 問題分析
+
+### 1.1 現状の課題
+
+#### 課題1: タイミング問題
+- `window.entries` が空（コンテキストファイルが読み込まれていない）
+- E2Eテスト実行時にコンテキスト読み込みが完了していない
+- Treeボタンクリック後にツリーが表示されない
+
+#### 課題2: エラー検出の手作業
+- ログからエラーを手動で解析
+- 修正内容を手動で判断
+- 修正後の再テストを手動で実行
+
+#### 課題3: テストの断続性
+- 1回のテストで完了するとは限らない
+- 複数回の修正が必要な場合がある
+- 修正→再テストのループを手動で繰り返す
+
+### 1.2 必要な機能
+
+1. **自動エラー検出**: ログ解析でエラーを自動検出
+2. **自動修正提案**: エラーに応じた修正プロンプト自動生成
+3. **自動再実行**: 修正後、自動的に再テスト
+4. **成功判定**: テスト結果の自動判定
+
+---
+
+## 2. AI自走型E2Eテストの設計
+
+### 2.1 アーキテクチャ
+
+```
+AI自走型E2Eテストフロー
+├─ 1. テスト実行
+│   └─ Playwright + CDP
+│      ├─ Electron起動
+│      ├─ Treeボタンクリック
+│      ├─ renderTree()実行
+│      └─ TEST_RESULT検証
+│
+├─ 2. ログ解析
+│   ├─ stdout/stderrキャプチャ
+│   ├─ エラーパターン検出
+│   └─ エラー分類
+│
+├─ 3. 自動修正判定
+│   ├─ 修正可能なエラー: 自動修正実行
+│   ├─ 修正不可能なエラー: エラー報告
+│   └─ 修正方法のプロンプト生成
+│
+└─ 4. 自動再実行ループ
+    ├─ 修正適用
+    ├─ 再ビルド
+    ├─ 再テスト（最大3回）
+    └─ 最終報告
+```
+
+### 2.2 エラーパターン定義
+
+| エラー | 検出方法 | 修正方法 |
+|-------|---------|---------|
+| `ENOENT` | ファイル不存在 | ファイル作成 |
+| `ReferenceError` | 変数未定義 | 変数宣言追加 |
+| `window.entries`が空 | ログ解析 | 待機時間増加、読み込み確認 |
+| タイミング問題 | ログ解析 | 明示的な待機実装 |
+
+---
+
+## 3. 自動修正フロー
+
+### 3.1 修正可能なエラーの自動修正
+
+#### 修正1: ファイル不存在エラー
+```javascript
+// 検出パターン: "ENOENT: no such file or directory"
+// 修正方法: ファイル作成（既にtest-e2e-v2.jsに実装済み）
+if (logs.some(log => log.includes('ENOENT') && log.includes('context.mdc'))) {
+  const contextPath = 'tools/nexus/context.mdc';
+  if (!fs.existsSync(contextPath)) {
+    fs.writeFileSync(contextPath, contextContent);
+  }
+}
+```
+
+**実装状況**: `test-e2e-v2.js` の247-308行目に実装済み
+
+#### 修正2: 変数未定義エラー
+```javascript
+// 検出パターン: "ReferenceError: X is not defined"
+// 修正方法: 変数宣言追加
+if (error.includes('ReferenceError') && error.includes('is not defined')) {
+  const varName = extractVariableName(error);
+  addVariableDeclaration(varName, location);
+}
+```
+
+#### 修正3: タイミング問題
+```javascript
+// 検出パターン: "window.entries count = 0"
+// 修正方法: 待機時間増加、明示的な読み込み確認（既にtest-e2e-v2.jsに実装済み）
+// 実装状況: 80-89行目のドキュメントナビゲーター初期化待機（最大60秒）
+let retries = 0;
+let ready = false;
+while (retries < 60 && !ready) {
+  await page.waitForTimeout(1000);
+  ready = await page.evaluate(() => window.docsNavigatorReady === true);
+  if (!ready) retries++;
+}
+```
+
+**実装状況**: `test-e2e-v2.js` の80-97行目に実装済み
+
+### 3.2 修正不可能なエラーの報告
+
+```javascript
+// 検出パターン: 修正不可能なエラー
+// 修正方法: エラー報告とプロンプト生成
+if (isUnfixableError(error)) {
+  const report = generateErrorReport(error);
+  const prompt = generateFixPrompt(error);
+  console.log(report);
+  console.log('\n修正プロンプト:\n', prompt);
+}
+```
+
+---
+
+## 4. ベストプラクティスの適用
+
+### 4.1 現在の設計が準拠しているベストプラクティス
+
+#### ✅ 準拠している項目
+
+1. **Playwright + CDP使用**: 業界標準のツールを採用
+2. **安定したセレクター**: `data-*` 属性の使用
+3. **適切な待機**: `waitForTimeout()` や明示的な待機
+4. **エラーハンドリング**: try-catch とエラーキャプチャ
+5. **スナップショット**: スクリーンショット取得
+6. **ログキャプチャ**: stdout/stderr の記録
+
+#### ⚠️ 改善が必要な項目
+
+1. **最大リトライ回数の制限**: 無限ループを避ける
+2. **テストデータの管理**: テスト環境のクリーンアップ
+3. **CI/CD統合**: 継続的テストの実装
+4. **テストの独立性**: テスト間の依存関係排除
+5. **並列実行**: 複数テストの並列実行
+
+### 4.2 実装計画
+
+```javascript
+class AutoE2ETester {
+  // エラー検出
+  detectErrors(logs) {
+    const errors = [];
+    for (const log of logs) {
+      if (this.isErrorLog(log)) {
+        errors.push(this.classifyError(log));
+      }
+    }
+    return errors;
+  }
+  
+  // エラー分類
+  classifyError(log) {
+    if (log.includes('ENOENT')) return { type: 'FILE_MISSING', message: log };
+    if (log.includes('ReferenceError')) return { type: 'VAR_UNDEFINED', message: log };
+    if (log.includes('entries count = 0')) return { type: 'TIMING', message: log };
+    return { type: 'UNKNOWN', message: log };
+  }
+}
+```
+
+### 4.2 フェーズ2: 自動修正
+
+```javascript
+class AutoFixer {
+  async applyFixes(errors) {
+    for (const error of errors) {
+      switch (error.type) {
+        case 'FILE_MISSING':
+          await this.createMissingFile(error);
+          break;
+        case 'VAR_UNDEFINED':
+          await this.addVariableDeclaration(error);
+          break;
+        case 'TIMING':
+          await this.fixTimingIssue(error);
+          break;
+      }
+    }
+  }
+}
+```
+
+### 4.3 フェーズ3: 自動再実行
+
+```javascript
+class AutoE2ETester {
+  async runWithAutoFix(maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+      const result = await this.runTest();
+      if (result.success) {
+        console.log('✅ テスト成功');
+        return result;
+      }
+      
+      const errors = this.detectErrors(result.logs);
+      if (errors.length > 0) {
+        await this.applyFixes(errors);
+        await this.rebuild();
+      }
+    }
+    console.log('❌ テスト失敗（最大試行回数に達しました）');
+  }
+}
+```
+
+---
+
+関連文書:
+- docs/QA/index.mdc: QAインデックス
+- docs/QA/E2Eテスト実行方法.mdc: E2Eテスト実行方法
+- docs/ARCH/共通コンポーネント設計.mdc: 共通コンポーネント設計

@@ -1,0 +1,34 @@
+# Nexus Context Map
+
+Nexus自身の開発コンテキスト（資格アプリとは独立）。
+
+## Purpose
+
+Nexusは「ドキュメントトレーサビリティとタスク生成・分解プラットフォーム」として、小分けドキュメントの自動管理、AI支援の定型化、品質ゲートを実現。
+
+## Context Map
+
+### PRD
+- tools/nexus/docs/PRD/要求仕様書.mdc … 要求仕様（FR-01〜FR-08）
+- tools/nexus/docs/PRD/システム要件定義書.mdc … システム要件定義
+- tools/nexus/docs/PRD/プロンプト辞書ドラフト.mdc … プロンプト辞書
+
+### ARCH
+- tools/nexus/docs/ARCH/index.mdc … アーキテクチャ索引
+- tools/nexus/docs/ARCH/システム概要.mdc … システム概要
+- tools/nexus/docs/ARCH/システム構成.mdc … システム構成
+- tools/nexus/docs/ARCH/セキュリティ設計.mdc … セキュリティ設計
+- tools/nexus/docs/ARCH/技術選定.md … 技術選定（Electron + TypeScript）
+
+### GATES
+- tools/nexus/docs/GATES/document.mdc … Quality Gates（DOC-01〜DOC-08）
+
+## Layer Structure
+
+```
+PRD → システム要件定義書 → ARCH → 実装
+```
+
+- **PRD**: 何を作るか（要求仕様）
+- **システム要件定義書**: どの技術で実現するか
+- **ARCH**: 具体的な設計（HOWの詳細）

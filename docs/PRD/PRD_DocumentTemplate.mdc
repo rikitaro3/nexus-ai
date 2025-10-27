@@ -1,0 +1,114 @@
+# PRD: Nexus ドキュメントテンプレート（記法定義）
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: tools/nexus/docs/index.mdc
+> Downstream: tools/nexus/docs/GATES/document.mdc
+
+## Purpose
+- Nexus配下およびRepo全体で統一されたドキュメント記法を定義
+- DAG構造によるトレーサビリティを実現
+
+## 必須ブロック
+
+### Breadcrumbs（トレーサビリティ）
+全ドキュメントの冒頭（タイトル直後）に以下を記載：
+
+```markdown
+> Breadcrumbs
+> Layer: PRD|UX|API|DATA|QA|ARCH|DEVELOPMENT|STRATEGY
+> Upstream: 相対パス1, 相対パス2 （カンマ区切り、なければ N/A）
+> Downstream: 相対パス1, 相対パス2 （カンマ区切り、なければ N/A）
+```
+
+**記法**:
+- `Layer`: ドキュメント階層（定義済み8種のいずれか）
+- `Upstream`: このドキュメントの「元となる」ドキュメント（上位意思決定）
+- `Downstream`: このドキュメントから「導かれる」ドキュメント（下位詳細化）
+- `N/A`: リンクがない場合（ルートまたはリーフ）
+
+## レイヤー定義
+
+| Layer | 説明 | 例 |
+|-------|------|-----|
+| **STRATEGY** | 事業戦略・競合分析 | docs/STRATEGY/index.mdc |
+| **PRD** | プロダクト要件定義 | docs/PRD/index.mdc |
+| **UX** | ユーザー体験設計 | docs/UX/index.mdc |
+| **API** | API仕様 | docs/API/openapi.yaml |
+| **DATA** | データ構造・スキーマ | docs/DATA/schema_v2.sql |
+| **ARCH** | アーキテクチャ・技術選定 | docs/ARCH/index.mdc |
+| **DEVELOPMENT** | 実装ガイド・規約 | docs/DEVELOPMENT/index.mdc |
+| **QA** | テスト・品質基準 | docs/QA/index.mdc |
+
+## 任意ブロック
+
+### Purpose（目的）
+```markdown
+## Purpose
+- このドキュメントの目的
+```
+
+### Scope（範囲）
+```markdown
+## Scope
+- 含まれる範囲
+- 含まれない範囲
+```
+
+### Dependencies（依存関係）
+```markdown
+## Dependencies
+- 依存するドキュメントや外部リソース
+```
+
+### Features Registry（機能登録）
+FEAT-ID関連ドキュメントの場合：
+```markdown
+## Features Registry（FEAT-ID）
+- FEAT-0001: 機能名
+  - PRD: パス
+  - UX: パス
+  - API: パス
+  - DATA: パス
+  - QA: パス
+```
+
+## フォーマット例
+
+### index.mdc（索引ファイル）
+```markdown
+# Nexus Documentation Index
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: N/A
+> Downstream: PRD/index.mdc, ARCH/index.mdc
+
+## Purpose
+- Nexusドキュメント索引
+
+## Content
+- 本文...
+```
+
+### 機能ドキュメント
+```markdown
+# PRD: Nexus（Docs Navigator + Tasks）
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: tools/nexus/docs/PRD/index.mdc
+> Downstream: tools/nexus/docs/ARCH/index.mdc
+
+## Purpose
+- プロジェクト横断のドキュメント/タスク運用を一元化
+
+## Content
+- 本文...
+```
+
+## 参考
+- Quality Gates定義: `tools/nexus/docs/GATES/document.mdc`
+- 検証方法: `tools/nexus/docs/GATES/README.mdc`
+alwaysApply: true
+---

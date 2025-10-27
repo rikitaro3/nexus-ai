@@ -1,0 +1,185 @@
+# セキュリティ設計
+
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: docs/ARCH/index.mdc
+> Downstream: docs/ARCH/IPC設計.mdc
+
+## 目次
+
+- [セキュリティ設計](#セキュリティ設計)
+  - [目次](#目次)
+  - [1. セキュリティポリシー](#1-セキュリティポリシー)
+    - [1.1 contextIsolation](#11-contextisolation)
+    - [1.2 nodeIntegration](#12-nodeintegration)
+    - [1.3 webSecurity](#13-websecurity)
+  - [2. IPC通信の安全性](#2-ipc通信の安全性)
+    - [2.1 contextBridgeによるAPI公開](#21-contextbridgeによるapi公開)
+    - [2.2 IPCハンドラーの実装](#22-ipcハンドラーの実装)
+  - [3. ファイルアクセス制御](#3-ファイルアクセス制御)
+    - [3.1 パス検証](#31-パス検証)
+    - [3.2 書き込み制御](#32-書き込み制御)
+  - [付録: Electronセキュリティチェックリスト](#付録-electronセキュリティチェックリスト)
+
+---
+
+## 1. セキュリティポリシー
+
+Electron標準のセキュリティベストプラクティスを採用しています。
+
+### 1.1 contextIsolation
+
+Main/Renderer間の通信をcontextBridge経由に制限します。
+
+```typescript
+// main.ts
+webPreferences: {
+  contextIsolation: true,
+  nodeIntegration: false
+}
+```
+
+理由:
+- Rendererが直接Node.jsにアクセスできない
+- IPC通信のみを許可
+- XSS攻撃からの保護
+
+### 1.2 nodeIntegration
+
+Node.js APIへの直接アクセスを禁止します。
+
+```typescript
+nodeIntegration: false
+```
+
+理由:
+- セキュリティ脆弱性の回避
+- サンドボックス環境での実行
+- セキュリティアップデートの影響範囲を最小化
+
+### 1.3 webSecurity
+
+Webセキュリティ機能を有効化します。
+
+```typescript
+webSecurity: true
+```
+
+理由:
+- XSS対策
+- CORS制御
+- mixed content blocking
+
+## 2. IPC通信の安全性
+
+### 2.1 contextBridgeによるAPI公開
+
+Preload経由でのみAPI公開を許可します。
+
+```typescript
+// preload.ts
+contextBridge.exposeInMainWorld('docs', {
+  read: (relPath: string): Promise<string> => ipcRenderer.invoke('docs:read', relPath),
+  open: (relPath: string): Promise<void> => ipcRenderer.invoke('docs:open', relPath)
+});
+```
+
+利点:
+- 明示的なAPI定義
+- 型安全性の確保
+- 直接的なIPCアクセス禁止
+
+### 2.2 IPCハンドラーの実装
+
+Main ProcessでIPCハンドラーを定義し、入力検証を実施します。
+
+```typescript
+// main.ts
+ipcMain.handle('docs:read', async (event, relPath: string) => {
+  try {
+    // リポジトリルートの解決
+    const repoRoot = path.resolve(__dirname, '../../..');
+    // 相対パスの正規化
+    const normalized = path.normalize(relPath);
+    const target = path.resolve(repoRoot, normalized);
+    
+    // リポジトリ外アクセスの防止
+    if (!target.startsWith(repoRoot)) {
+      throw new Error('パスがリポジトリ外');
+    }
+    
+    // ファイル読み込み
+    const content = fs.readFileSync(target, 'utf8');
+    return { success: true, content };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+});
+```
+
+実装している検証項目:
+- 相対パスの正規化（`path.normalize()`）
+- リポジトリ外アクセス検出（`target.startsWith(repoRoot)`）
+- ファイル読み込み（`fs.readFileSync()`）
+- エラーハンドリング（try-catch）
+
+## 3. ファイルアクセス制御
+
+### 3.1 パス検証
+
+リポジトリ外へのアクセスを禁止します。
+
+```typescript
+// main.ts
+const repoRoot = path.resolve(__dirname, '../../..');
+const target = path.resolve(repoRoot, normalized);
+
+if (!target.startsWith(repoRoot)) {
+  throw new Error('パスがリポジトリ外');
+}
+```
+
+検証ロジック:
+1. 正規化: path.normalize()で相対パスを解決
+2. 検証: targetがrepoRoot配下かチェック
+3. アクセス: ファイルシステムからの読み込み
+
+### 3.2 書き込み制御
+
+特定ファイルのみ書き込みを許可します。
+
+現在の実装では以下のファイルに書き込みを行います:
+
+許可リスト:
+- `tasks.json`: `tools/nexus/tasks.json`のみ
+- `mdc:append`: 任意の.mdcファイル（main.tsの165-177行目を参照）
+
+実装上の注意:
+- リポジトリ外ファイルへのアクセスは禁止（パス検証で実装済み）
+- システムファイル（`/etc/`, `C:\Windows\`など）へのアクセスは自動的に拒否される
+- 実行可能ファイル（`.exe`, `.bat`など）への書き込みは行っていない
+
+---
+
+関連文書:
+- docs/ARCH/index.mdc: アーキテクチャ設計書一覧
+- docs/ARCH/システム構成.mdc: システム構成
+- docs/ARCH/IPC設計.mdc: IPC設計（未作成）
+
+---
+
+## 付録: Electronセキュリティチェックリスト
+
+実装済み:
+- [x] contextIsolation: true
+- [x] nodeIntegration: false
+- [x] webSecurity: true（デフォルト）
+- [x] パス検証（リポジトリ外アクセス防止）
+- [x] contextBridge経由のAPI公開
+- [x] IPCハンドラーの入力検証
+
+将来追加を検討:
+- [ ] CSP（Content Security Policy）設定
+- [ ] 自動アップデート機能
+- [ ] デジタル署名
+- [ ] サンドボックス有効化

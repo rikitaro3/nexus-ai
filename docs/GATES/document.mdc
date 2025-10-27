@@ -1,0 +1,142 @@
+# Nexus Quality Gates（ドキュメント記法）
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: tools/nexus/docs/PRD/PRD_DocumentTemplate.mdc
+> Downstream: N/A
+
+## Purpose
+Nexusドキュメントテンプレート準拠の検証ルールを定義（機械可読形式）。
+
+## Gates
+
+```yaml
+gates:
+  - id: DOC-01
+    name: "Breadcrumbsブロック必須"
+    target: "*.mdc"
+    metric: "Breadcrumbs block exists"
+    threshold: 100%
+    severity: error
+    description: "全ドキュメントに > Breadcrumbs ブロックが存在する"
+    
+  - id: DOC-02
+    name: "Layer定義準拠"
+    target: "Breadcrumbs.Layer"
+    metric: "Layer in [STRATEGY,PRD,UX,API,DATA,ARCH,DEVELOPMENT,QA]"
+    threshold: 100%
+    severity: error
+    description: "Layer値が定義済み8種のいずれかである"
+    
+  - id: DOC-03
+    name: "リンクパス存在確認"
+    target: "Breadcrumbs.Upstream/Downstream"
+    metric: "Path exists or equals N/A"
+    threshold: 100%
+    severity: error
+    description: "Upstream/Downstreamパスが実在ファイルまたはN/Aである"
+    
+  - id: DOC-04
+    name: "循環参照検出"
+    target: "DAG structure"
+    metric: "No circular reference"
+    threshold: 0
+    severity: warn
+    description: "Upstream/Downstreamで循環参照がない"
+    
+  - id: DOC-05
+    name: "章番号必須"
+    target: "*.mdc"
+    metric: "All headings have chapter numbers"
+    threshold: 100%
+    severity: error
+    description: "全ての見出しに章番号が付与されている（例: ## 1. タイトル）"
+    
+  - id: DOC-06
+    name: "目次必須"
+    target: "*.mdc"
+    metric: "Table of contents exists"
+    threshold: 100%
+    severity: error
+    description: "ドキュメントに目次ブロック（## 目次）が存在し、リンクが有効である"
+    
+  - id: DOC-07
+    name: "命名規則必須"
+    target: "*.mdc"
+    metric: "Filename follows naming rules"
+    threshold: 100%
+    severity: error
+    description: "ファイル名が命名規則に準拠している（例: PRD_\w+\.mdc, \w+\.mdc等）"
+    
+  - id: DOC-08
+    name: "内容範囲の明示必須"
+    target: "*.mdc"
+    metric: "Content scope explicitly stated"
+    threshold: 100%
+    severity: warn
+    description: "ドキュメントに「扱う内容」と「扱わない内容」が明示されている"
+```
+
+## 検証方法
+
+### Gate-DOC-01
+```js
+// 全 .mdc ファイルをスキャン
+// > Breadcrumbs の開始行が存在するか確認
+```
+
+### Gate-DOC-02
+```js
+// Breadcrumbs.Layer を抽出
+// 定義済みリストに含まれるか確認
+const validLayers = ['STRATEGY','PRD','UX','API','DATA','ARCH','DEVELOPMENT','QA'];
+```
+
+### Gate-DOC-03
+```js
+// Upstream/Downstream パスを抽出（カンマ区切り）
+// N/A または 実在ファイルパスか確認
+```
+
+### Gate-DOC-04
+```js
+// 全ドキュメントの Upstream/Downstream を解析
+// グラフ構造で循環参照を検出（DFS）
+```
+
+### Gate-DOC-05
+```js
+// 全見出しを抽出（/^#{1,6}\s+/）
+// 章番号パターン検出（/^#{1,6}\s+\d+\./）
+// 章番号連続性チェック（1, 2, 3...）
+// 欠番検出（番号の飛び）
+```
+
+### Gate-DOC-06
+```js
+// 目次ブロック検出（/^##\s+目次/）
+// 目次リンク抽出（/\[(.+?)\]\(#(.+?)\)/）
+// リンク先アンカーの存在確認
+// リンク有効性検証
+```
+
+### Gate-DOC-07
+```js
+// ファイル名パターンチェック
+// 層別命名規則:
+//   PRD層: PRD_\w+\.mdc
+//   ARCH層: \w+\.mdc または \w+\.md
+//   QA層: \w+\.mdc
+// 除外: index.mdc
+// 基本的なファイル名規則: /[A-Z][a-zA-Z0-9_-]+\.mdc$/
+```
+
+### Gate-DOC-08
+```js
+// 内容ブロック検出（/^##\s+(扱う内容|扱わない内容|Scope)/）
+// 内容記述チェック: 空でない内容が記載されているか確認
+// 構造チェック: 箇条書き（/^[\s]*[-*]\s/）での記述確認
+```
+
+alwaysApply: true
+---

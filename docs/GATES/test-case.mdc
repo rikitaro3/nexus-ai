@@ -1,0 +1,273 @@
+# Test Case Quality Gates
+
+> Breadcrumbs
+> Layer: GATES
+> Upstream: docs/GATES/index.mdc
+> Downstream: N/A
+
+## 目的
+
+テストケースの品質を確保し、効果的なテスト管理を実現するためのQuality Gatesを定義する。
+
+## 範囲
+
+テストケース作成・実行・管理全般
+
+## Quality Gates
+
+### TC-01: テストケース命名規則準拠
+
+id: TC-01
+name: テストケース命名規則準拠
+target: テストケースファイル名
+metric: ファイル名が `[分類]-[機能]-[シナリオ].spec.ts` 形式に準拠していること
+threshold: 100%
+severity: error
+description: |
+  テストケースファイル名は統一された命名規則に準拠しなければならない。
+  形式: `[分類]-[機能]-[シナリオ].spec.ts`
+  
+  例:
+  - `docs-navigator-basic.spec.ts`
+  - `tree-view-render.spec.ts`
+  - `tasks-import.spec.ts`
+
+  分類: docs-navigator, tree-view, tasks, integration
+  機能: テスト対象の機能名
+  シナリオ: テストのシナリオ名
+
+検証方法:
+```javascript
+function validateTestCaseName(fileName) {
+  const pattern = /^[a-z-]+\.spec\.ts$/;
+  if (!pattern.test(fileName)) {
+    return { valid: false, error: 'ファイル名が命名規則に準拠していません' };
+  }
+  
+  const [category, feature, ...scenario] = fileName.replace('.spec.ts', '').split('-');
+  if (!category || !feature) {
+    return { valid: false, error: '分類と機能が必須です' };
+  }
+  
+  return { valid: true };
+}
+```
+
+### TC-02: テストケース独立性
+
+id: TC-02
+name: テストケース独立性
+target: テストケース間の依存関係
+metric: テストケース間に明示的な依存関係（beforeEachの他テスト結果への依存など）がないこと
+threshold: 100%
+severity: warning
+description: |
+  テストケースは互いに独立して実行できる必要がある。
+  他のテストケースの結果に依存するテストは禁止。
+
+検証方法:
+```javascript
+function validateTestIndependence(testCode) {
+  // 他のテストの結果を参照しているか確認
+  const dependencies = [
+    /test\(.*\).*then.*test\(/,
+    /it\(.*\).*then.*it\(/,
+    /afterEach.*test\(/,
+    /beforeAll.*order.*test\(/
+  ];
+  
+  for (const pattern of dependencies) {
+    if (pattern.test(testCode)) {
+      return { valid: false, error: 'テストケース間に依存関係があります' };
+    }
+  }
+  
+  return { valid: true };
+}
+```
+
+### TC-03: テストケースドキュメント化
+
+id: TC-03
+name: テストケースドキュメント化
+target: テストケースの説明コメント
+metric: 各テストケースに目的と期待結果のコメントが記載されていること
+threshold: 80%
+severity: warning
+description: |
+  各テストケースには目的と期待結果を記載したコメントが必要。
+
+検証方法:
+```javascript
+function validateTestDocumentation(testCode) {
+  const commentPattern = /\/\*\*[\s\S]*?目的[\s\S]*?期待結果[\s\S]*?\*\//g;
+  const matches = testCode.match(commentPattern) || [];
+  
+  const testPattern = /(test|it)\(['"](.*?)['"]/g;
+  const tests = [...testCode.matchAll(testPattern)];
+  
+  const documentedTests = matches.length;
+  const totalTests = tests.length;
+  
+  const coverage = (documentedTests / totalTests) * 100;
+  
+  if (coverage < 80) {
+    return { 
+      valid: false, 
+      error: `テストドキュメント化率が${coverage}%です（目標: 80%）` 
+    };
+  }
+  
+  return { valid: true, coverage };
+}
+```
+
+### TC-04: テストデータ管理
+
+id: TC-04
+name: テストデータ管理
+target: テストデータの配置
+metric: テストデータが fixtures/ に配置されていること
+threshold: 100%
+severity: error
+description: |
+  テストデータは fixtures/ ディレクトリに配置し、setup/teardown で管理する。
+
+検証方法:
+```javascript
+function validateTestDataManagement(testFiles) {
+  const fixturesDir = path.join(__dirname, 'tests/fixtures');
+  const hasFixtures = testFiles.some(file => file.includes('fixtures/'));
+  
+  if (!hasFixtures) {
+    return { valid: false, error: 'テストデータがfixtures/に配置されていません' };
+  }
+  
+  const testCode = fs.readFileSync(testFiles[0], 'utf8');
+  const hasSetup = /setup|beforeAll/.test(testCode);
+  const hasTeardown = /teardown|afterAll/.test(testCode);
+  
+  if (!hasSetup || !hasTeardown) {
+    return { valid: false, error: 'setup/teardownが実装されていません' };
+  }
+  
+  return { valid: true };
+}
+```
+
+---
+
+## 統合検証
+
+### 全Quality Gates の実行
+
+```javascript
+// tests/validate-test-cases.js
+const fs = require('fs');
+const path = require('path');
+
+async function validateAllTestCases() {
+  const testDir = path.join(__dirname, 'tests');
+  const testFiles = glob.sync('**/*.spec.ts', { cwd: testDir });
+  
+  const results = {
+    total: testFiles.length,
+    passed: 0,
+    failed: 0,
+    errors: []
+  };
+  
+  for (const file of testFiles) {
+    const testCode = fs.readFileSync(path.join(testDir, file), 'utf8');
+    
+    // TC-01: 命名規則
+    const tc01 = validateTestCaseName(file);
+    if (!tc01.valid) {
+      results.errors.push({ file, gate: 'TC-01', error: tc01.error });
+      results.failed++;
+      continue;
+    }
+    
+    // TC-02: 独立性
+    const tc02 = validateTestIndependence(testCode);
+    if (!tc02.valid) {
+      results.errors.push({ file, gate: 'TC-02', error: tc02.error });
+      results.failed++;
+      continue;
+    }
+    
+    // TC-03: ドキュメント化
+    const tc03 = validateTestDocumentation(testCode);
+    if (!tc03.valid) {
+      results.errors.push({ file, gate: 'TC-03', error: tc03.error });
+      results.failed++;
+      continue;
+    }
+    
+    results.passed++;
+  }
+  
+  return results;
+}
+
+// 実行
+validateAllTestCases().then(results => {
+  console.log(`Total: ${results.total}`);
+  console.log(`Passed: ${results.passed}`);
+  console.log(`Failed: ${results.failed}`);
+  
+  if (results.errors.length > 0) {
+    console.log('\nErrors:');
+    results.errors.forEach(err => {
+      console.log(`  ${err.file}: [${err.gate}] ${err.error}`);
+    });
+  }
+});
+```
+
+---
+
+## 運用方法
+
+### 実行タイミング
+
+1. テストケース作成時（pre-commit hook）
+2. テスト実行前（npm run test）
+3. CI/CD パイプラインで実行
+
+### 対処方法
+
+#### TC-01違反（命名規則）
+```
+修正方法: ファイル名を命名規則に準拠させる
+例: test-something.spec.ts → docs-navigator-basic.spec.ts
+```
+
+#### TC-02違反（独立性）
+```
+修正方法: テストケース間の依存関係を排除
+- 他のテストの結果を参照しない
+- beforeEach/afterEachで適切にセットアップ
+```
+
+#### TC-03違反（ドキュメント化）
+```
+修正方法: テストケースにコメントを追加
+例:
+/**
+ * 目的: カテゴリ選択時にドキュメント一覧が表示されることを確認
+ * 期待結果: ドキュメント一覧に3件以上が表示される
+ */
+```
+
+#### TC-04違反（テストデータ管理）
+```
+修正方法: テストデータをfixtures/に移動し、setup/teardownを実装
+```
+
+---
+
+関連文書:
+- docs/GATES/index.mdc: Quality Gates一覧
+- docs/QA/テストケース管理設計.mdc: テストケース管理設計
+- docs/QA/E2Eテスト基盤設計.mdc: E2Eテスト基盤設計

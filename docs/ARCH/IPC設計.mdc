@@ -1,0 +1,355 @@
+# IPC設計
+
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: docs/ARCH/index.mdc
+> Downstream: docs/ARCH/セキュリティ設計.mdc
+
+## 目次
+
+1. [IPCアーキテクチャ](#1-ipcアーキテクチャ)
+2. [APIインターフェース定義](#2-apiインターフェース定義)
+3. [データフォーマット](#3-データフォーマット)
+4. [エラーハンドリング](#4-エラーハンドリング)
+5. [セキュリティルールの共通化](#5-セキュリティルールの共通化)
+
+---
+
+## 1. IPCアーキテクチャ
+
+### 1.1 アーキテクチャ概要
+
+```
+Renderer Process          Preload Script          Main Process
+     (React)              (TypeScript)            (Node.js)
+        |                      |                       |
+        | API呼び出し           |                       |
+        |--------------------->|                       |
+        |                      | IPC invoke            |
+        |                      |--------------------->|
+        |                      |                       | パス検証
+        |                      |                       | ファイル読み込み
+        |                      |                       | エラーハンドリング
+        |                      |<----------------------|
+        | 応答                 |<----------------------|
+        |<---------------------|                       |
+        |                      |                       |
+```
+
+### 1.2 通信フロー
+
+1. Rendererが`window.docs.read(relPath)`を呼び出す
+2. Preloadが`contextBridge.exposeInMainWorld`経由でAPIを公開
+3. IPC `invoke`でMain Processへリクエスト送信
+4. Main Processで以下を実施:
+   - パス検証（リポジトリ外アクセス防止）
+   - ファイル読み込み
+   - エラーハンドリング
+5. Main Processから応答を返す
+6. PreloadがPromiseを返却
+7. Rendererで結果を受け取る
+
+### 1.3 責務分離
+
+| プロセス | 責務 |
+|---------|------|
+| Renderer | UI表示、ユーザー操作、データ表示 |
+| Preload | API公開、型定義、IPC Proxy |
+| Main | ファイル操作、パス検証、セキュリティ制御 |
+
+---
+
+## 2. APIインターフェース定義
+
+### 2.1 Docs API
+
+```typescript
+// preload.ts
+interface DocsAPI {
+  read(relPath: string): Promise<string>;
+  open(relPath: string): Promise<void>;
+}
+
+// main.ts
+ipcMain.handle('docs:read', async (event, relPath: string) => {
+  // 実装
+});
+```
+
+### 2.2 Tasks API
+
+```typescript
+// preload.ts
+interface TasksAPI {
+  readJson(): Promise<any>;
+  writeJson(data: any): Promise<void>;
+  appendMdc(relPath: string, content: string): Promise<void>;
+}
+
+// main.ts
+ipcMain.handle('tasks:readJson', async () => { /* 実装 */ });
+ipcMain.handle('tasks:writeJson', async (event, data: unknown) => { /* 実装 */ });
+ipcMain.handle('mdc:append', async (event, relPath: string, content: string) => { /* 実装 */ });
+```
+
+### 2.3 統一レスポンス形式
+
+```typescript
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+```
+
+---
+
+## 3. データフォーマット
+
+### 3.1 リクエスト形式
+
+```typescript
+// Docs
+docs:read:
+  relPath: string  // 相対パス（例: "docs/PRD/要求仕様書.mdc"）
+
+// Tasks
+tasks:readJson:
+  // パラメータなし
+
+tasks:writeJson:
+  data: any  // JSONデータ
+
+mdc:append:
+  relPath: string
+  content: string
+```
+
+### 3.2 レスポンス形式
+
+成功:
+```typescript
+{ success: true, data: "..." }
+{ success: true }  // void
+```
+
+失敗:
+```typescript
+{ success: false, error: "エラーメッセージ" }
+```
+
+---
+
+## 4. エラーハンドリング
+
+### 4.1 エラータイプ
+
+| エラー | 原因 | 処理 |
+|-------|------|------|
+| パス検証失敗 | リポジトリ外アクセス | エラーを返却 |
+| ファイル不存在 | ファイルが見つからない | エラーを返却 |
+| 読み込み失敗 | 権限エラーなど | エラーを返却 |
+| IPC通信失敗 | プロセス間通信エラー | エラーを返却 |
+
+### 4.2 エラーハンドリングパターン
+
+```typescript
+// main.ts
+ipcMain.handle('docs:read', async (event, relPath: string) => {
+  try {
+    // パス検証
+    const repoRoot = path.resolve(__dirname, '../../..');
+    const normalized = path.normalize(relPath);
+    const target = path.resolve(repoRoot, normalized);
+    
+    if (!target.startsWith(repoRoot)) {
+      throw new Error('パスがリポジトリ外');
+    }
+    
+    // ファイル読み込み
+    const content = fs.readFileSync(target, 'utf8');
+    return { success: true, content };
+  } catch (e) {
+    console.error('[docs:read] Error:', (e as Error).message);
+    return { success: false, error: (e as Error).message };
+  }
+});
+```
+
+---
+
+## 5. セキュリティルールの共通化
+
+### 5.1 現状の問題
+
+現在の実装では、各IPCハンドラーで同じパス検証ロジックが重複している:
+
+```typescript
+// main.ts:106-127
+ipcMain.handle('docs:read', async (event, relPath: string) => {
+  try {
+    const repoRoot = path.resolve(__dirname, '../../..');
+    const normalized = path.normalize(relPath);
+    const target = path.resolve(repoRoot, normalized);
+    
+    if (!target.startsWith(repoRoot)) {
+      throw new Error('パスがリポジトリ外');
+    }
+    // ...
+  } catch (e) {
+    // ...
+  }
+});
+
+// main.ts:129-140 (同様のロジック)
+ipcMain.handle('docs:open', async (event, relPath: string) => {
+  try {
+    const repoRoot = path.join(__dirname, '../..');
+    const target = path.normalize(path.join(repoRoot, relPath));
+    if (!target.startsWith(repoRoot)) throw new Error('パスがリポジトリ外');
+    // ...
+  } catch (e) {
+    // ...
+  }
+});
+
+// main.ts:165-177 (同様のロジック)
+ipcMain.handle('mdc:append', async (event, relPath: string, content: string) => {
+  try {
+    const repoRoot = path.join(__dirname, '../..');
+    const target = path.normalize(path.join(repoRoot, relPath));
+    if (!target.startsWith(repoRoot)) throw new Error('パスがリポジトリ外');
+    // ...
+  } catch (e) {
+    // ...
+  }
+});
+```
+
+### 5.2 共通コンポーネント設計
+
+```typescript
+// src/main/handlers/security.ts
+
+import * as path from 'path';
+import { IpcMainInvokeEvent } from 'electron';
+
+export interface PathValidationResult {
+  valid: boolean;
+  repoRoot: string;
+  normalized: string;
+  target: string;
+  error?: string;
+}
+
+/**
+ * リポジトリルートを解決する
+ */
+export function getRepoRoot(): string {
+  // __dirnameは'tools/nexus/dist'なので、リポジトリルートは'../../..'
+  return path.resolve(__dirname, '../../..');
+}
+
+/**
+ * パスを検証する
+ * @param relPath 相対パス
+ * @returns 検証結果
+ */
+export function validatePath(relPath: string): PathValidationResult {
+  try {
+    const repoRoot = getRepoRoot();
+    const normalized = path.normalize(relPath);
+    const target = path.resolve(repoRoot, normalized);
+    
+    if (!target.startsWith(repoRoot)) {
+      return {
+        valid: false,
+        repoRoot,
+        normalized,
+        target,
+        error: 'パスがリポジトリ外'
+      };
+    }
+    
+    return {
+      valid: true,
+      repoRoot,
+      normalized,
+      target
+    };
+  } catch (e) {
+    return {
+      valid: false,
+      repoRoot: '',
+      normalized: '',
+      target: '',
+      error: (e as Error).message
+    };
+  }
+}
+
+/**
+ * IPCハンドラーのラッパー（パス検証付き）
+ */
+export function withPathValidation<T>(
+  handler: (event: IpcMainInvokeEvent, validatedPath: PathValidationResult) => Promise<T>
+) {
+  return async (event: IpcMainInvokeEvent, relPath: string): Promise<T> => {
+    const validation = validatePath(relPath);
+    
+    if (!validation.valid) {
+      throw new Error(validation.error || 'パス検証失敗');
+    }
+    
+    return handler(event, validation);
+  };
+}
+```
+
+### 5.3 使用例
+
+```typescript
+// src/main/handlers/docs.ts
+
+import { ipcMain } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
+import { withPathValidation } from './security';
+
+ipcMain.handle('docs:read', withPathValidation(async (event, validation) => {
+  const content = fs.readFileSync(validation.target, 'utf8');
+  return { success: true, content };
+}));
+
+ipcMain.handle('docs:open', withPathValidation(async (event, validation) => {
+  const { shell } = require('electron');
+  const result = await shell.openPath(validation.target);
+  if (result) throw new Error(result);
+  return { success: true };
+}));
+```
+
+### 5.4 実装計画
+
+1. **共通セキュリティモジュールの作成** (`src/main/handlers/security.ts`)
+2. **型定義ファイルの作成** (`src/main/types/ipc.ts`)
+3. **IPCハンドラーのリファクタリング** (`src/main/handlers/`)
+   - `docs.ts`: Docs API
+   - `tasks.ts`: Tasks API
+   - `env.ts`: Environment API
+4. **既存コードの置き換え** (`main.ts`から各ハンドラーへ移行)
+
+### 5.5 メリット
+
+- **DRY原則**: パス検証ロジックの重複を排除
+- **保守性向上**: セキュリティルールの変更を1箇所で対応
+- **テスタビリティ**: ユニットテストが容易
+- **型安全性**: TypeScriptの型チェックが効く
+- **一貫性**: 全てのIPCハンドラーで同じ検証ロジックを使用
+
+---
+
+関連文書:
+- docs/ARCH/index.mdc: アーキテクチャ設計書一覧
+- docs/ARCH/セキュリティ設計.mdc: セキュリティ設計
+- docs/ARCH/システム構成.mdc: システム構成

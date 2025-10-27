@@ -1,0 +1,67 @@
+# Quality Gates Index
+
+> Breadcrumbs
+> Layer: GATES
+> Upstream: tools/nexus/docs/index.mdc
+> Downstream: N/A
+
+## 目的
+
+Nexusの品質基準を定義し、すべての開発・テスト・リリースにおいて品質を保証する。
+
+## Quality Gates一覧
+
+### Document Quality Gates
+
+- **DOC-01**: Breadcrumbs必須
+- **DOC-02**: Upstream/Downstreamリンク
+- **DOC-03**: 階層構造の一貫性
+- **DOC-04**: ファイル名規則準拠
+
+詳細: [document.mdc](document.mdc)
+
+### Test Case Quality Gates
+
+- **TC-01**: テストケース命名規則準拠
+- **TC-02**: テストケース独立性
+- **TC-03**: テストケースドキュメント化
+- **TC-04**: テストデータ管理
+
+詳細: [test-case.mdc](test-case.mdc)
+
+## 適用範囲
+
+- ドキュメント作成時（pre-commit hook）
+- テストケース作成時（pre-commit hook）
+- CI/CDパイプライン（自動実行）
+
+## 検証方法
+
+### ドキュメント検証
+
+```bash
+# 全ドキュメントのQuality Gates検証
+npm run validate:docs
+```
+
+### テストケース検証
+
+```bash
+# 全テストケースのQuality Gates検証
+npm run validate:tests
+```
+
+## 非準拠時の対処
+
+1. **エラー（Error）**: 即座に修正が必要
+2. **警告（Warning）**: 次回リリースまでに修正
+
+## 関連文書
+
+- docs/index.mdc: ドキュメントインデックス
+- docs/QA/index.mdc: QAテスト方針
+- docs/PRD/index.mdc: 要求仕様
+- docs/ARCH/index.mdc: アーキテクチャ設計
+
+alwaysApply: true
+---

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI','Roboto','Helvetica','Arial',sans-serif; }
+  </style>
+  </head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Nexus</h1>
+      <button id="download-console" style="position: fixed; top: 10px; right: 10px; z-index: 10000; padding: 5px 10px;">📋 Console Logをダウンロード</button>
+    </header>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="docs">Docs</button>
+      <button class="tab-btn" data-tab="tasks">Tasks</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </nav>
+    <main>
+      <div id="docs" class="tab-content active">
+        <section class="card">
+          <h2>📚 Docs Navigator</h2>
+          <div class="control-group hidden" id="context-select-wrap">
+            <label>Context:</label>
+            <select id="context-select" title="Context source">
+              <option value="repo">Repo</option>
+              <option value="nexus">Nexus</option>
+            </select>
+          </div>
+          <div class="docs-mode-bar">
+            <button class="btn btn-secondary docs-mode-btn active" data-mode="docs">Docs</button>
+            <button class="btn btn-secondary docs-mode-btn" data-mode="feats">FEATs</button>
+            <button class="btn btn-secondary docs-mode-btn" data-mode="tree">Tree</button>
+          </div>
+          <div id="docs-mode-docs" class="docs-mode active">
+            <div class="docs-split">
+              <div class="docs-left">
+                <h3>カテゴリ</h3>
+                <ul id="docs-categories"></ul>
+              </div>
+              <div class="docs-middle">
+                <h3>ドキュメント</h3>
+                <ul id="docs-list"></ul>
+              </div>
+              <div class="docs-right">
+                <h3>詳細</h3>
+                <div id="docs-detail"></div>
+              </div>
+            </div>
+          </div>
+          <div id="docs-mode-feats" class="docs-mode">
+            <div class="feats-toolbar">
+              <input id="feat-search" type="text" placeholder="FEAT-IDやタイトルを検索">
+              <span id="feat-dup-alert" class="status hidden"></span>
+            </div>
+            <div class="docs-split">
+              <div class="docs-left">
+                <h3>FEATs</h3>
+                <ul id="feats-list"></ul>
+              </div>
+              <div class="docs-right span-2">
+                <h3>詳細</h3>
+                <div id="feat-detail"></div>
+              </div>
+            </div>
+          </div>
+          <div id="docs-mode-tree" class="docs-mode">
+            <div class="feats-toolbar">
+              <select id="tree-direction" title="Tree direction">
+                <option value="downstream">Downstream (上位→下位)</option>
+                <option value="upstream">Upstream (下位→上位)</option>
+              </select>
+              <button id="tree-validate" class="btn btn-primary">Validate Gates</button>
+              <span id="tree-status" class="status"></span>
+            </div>
+            <div class="docs-split">
+              <div class="docs-left">
+                <h3>Tree</h3>
+                <div id="tree-view"></div>
+              </div>
+              <div class="docs-right span-2">
+                <h3>詳細</h3>
+                <div id="tree-detail"></div>
+                <hr/>
+                <h3>Quality Gates</h3>
+                <div id="gate-results"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div id="tasks" class="tab-content">
+        <section class="card">
+          <h2>🗒️ Tasks</h2>
+          <div class="tasks-toolbar">
+            <button id="tasks-save" class="btn btn-primary">Save</button>
+            <button id="tasks-export" class="btn btn-secondary">Export to human_todo.mdc</button>
+            <input id="tasks-filter" type="text" placeholder="キーワード/FEAT-ID/カテゴリでフィルタ">
+          </div>
+          <div class="tasks-inputs">
+            <div class="form-group">
+              <label for="tasks-bulk">複数行貼り付け（1行=1件、例: 【機能改善】タイトル）</label>
+              <textarea id="tasks-bulk" rows="4"></textarea>
+            </div>
+            <div class="control-group">
+              <button id="tasks-bulk-import" class="btn btn-primary">取り込み</button>
+            </div>
+            <hr/>
+            <div class="form-group">
+              <label>単一追加</label>
+              <div class="control-group">
+                <input id="tasks-add-category" type="text" placeholder="カテゴリ">
+                <input id="tasks-add-title" type="text" placeholder="タイトル">
+                <button id="tasks-add-one" class="btn btn-secondary">追加</button>
+              </div>
+            </div>
+          </div>
+          <div class="docs-split">
+            <div class="docs-left">
+              <h3>カテゴリ</h3>
+              <ul id="tasks-categories"></ul>
+            </div>
+            <div class="docs-middle">
+              <h3>一覧</h3>
+              <ul id="tasks-list"></ul>
+            </div>
+            <div class="docs-right">
+              <h3>詳細</h3>
+              <div id="task-detail"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div id="settings" class="tab-content">
+        <section class="card">
+          <h2>⚙️ Settings</h2>
+          <div class="form-group">
+            <label for="project-root-input">プロジェクトルートパス</label>
+            <input id="project-root-input" type="text" placeholder="例: C:\Users\4in4o\Documents\git\shikaku-app" style="width: 100%;">
+            <small>デフォルトでは自動検出されます。自動検出に失敗する場合は、このフィールドで明示的に指定してください。</small>
+          </div>
+          <div class="control-group">
+            <button id="settings-save" class="btn btn-primary">保存</button>
+            <button id="settings-test" class="btn btn-secondary">パスをテスト</button>
+          </div>
+          <hr/>
+          <div class="form-group">
+            <label for="context-file-input">Context File パス</label>
+            <input id="context-file-input" type="text" readonly placeholder="自動検出" style="width: 100%;">
+            <small>手動でcontext.mdcファイルを指定できます。</small>
+          </div>
+          <div class="control-group">
+            <button id="context-file-select" class="btn btn-secondary">ファイルを選択</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script>
+    // Global error handler: log all errors to console instead of showing popup
+    window.onerror = function(message, source, lineno, colno, error) {
+      console.error('[Global Error Handler]', {
+        message: message,
+        source: source,
+        line: lineno,
+        col: colno,
+        error: error,
+        stack: error ? error.stack : 'N/A'
+      });
+      return true; // Prevent default error popup
+    };
+    
+    window.addEventListener('unhandledrejection', function(event) {
+      console.error('[Unhandled Promise Rejection]', event.reason);
+    });
+  </script>
+  <script src="app.js"></script>
+  <script src="docs-navigator.js"></script>
+  <script src="tasks.js"></script>
+</body>
+</html>
+

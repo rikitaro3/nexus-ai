@@ -1,0 +1,328 @@
+# テストケース管理設計
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/QA/index.mdc
+> Downstream: 実装（tools/nexus/tests/）
+
+## 目次
+
+1. [設計方針](#1-設計方針)
+2. [テストケースの分類](#2-テストケースの分類)
+3. [テストケース命名規則](#3-テストケース命名規則)
+4. [テストデータ管理](#4-テストデータ管理)
+5. [実装計画](#5-実装計画)
+
+---
+
+## 1. 設計方針
+
+### 1.1 目標
+
+- 体系的整理: テストケースを機能・モジュールごとに分類
+- 一貫した命名: 検索しやすい命名規則
+- 独立したテスト: テスト間の依存関係排除
+- データ管理: テストデータのクリーンアップ
+- ベストプラクティス準拠: 業界標準に沿った設計
+
+### 1.2 採用するベストプラクティス
+
+1. テストの分類: 機能・モジュールごとの体系的な整理
+2. 命名規則: 一貫した命名で検索性向上
+3. バージョン管理: Git で変更履歴を追跡
+4. テストデータ管理: テスト環境のクリーンアップ
+5. リスクベース優先順位: 重要な機能に優先順位を付与
+
+---
+
+## 2. テストケースの分類
+
+### 2.1 分類体系
+
+```
+tests/
+├── docs-navigator/          # Docs Navigator機能
+│   ├── basic.spec.ts        # 基本操作
+│   ├── feature.spec.ts      # 機能横断
+│   └── orphan.spec.ts       # Orphan検出
+├── tree-view/               # Tree View機能
+│   ├── render.spec.ts       # ツリー表示
+│   ├── gates.spec.ts        # Quality Gates検証
+│   └── navigation.spec.ts   # ナビゲーション
+├── tasks/                    # Tasks管理機能
+│   ├── import.spec.ts       # インポート
+│   ├── edit.spec.ts         # 編集
+│   └── export.spec.ts       # エクスポート
+└── integration/             # 統合テスト
+    ├── end-to-end.spec.ts   # E2Eテスト
+    └── workflow.spec.ts     # ワークフロー
+```
+
+### 2.2 分類基準
+
+| 分類 | 基準 | 例 |
+|------|------|-----|
+| 基本操作 | 単一機能の基本動作 | カテゴリ選択、ドキュメント表示 |
+| 機能横断 | 複数機能の連携 | FEAT-ID横断、カバレッジ表示 |
+| Quality Gates | 検証機能 | DOC-01〜04チェック |
+| 統合テスト | 全体フロー | E2Eテスト、ワークフロー |
+
+---
+
+## 3. テストケース命名規則
+
+### 3.1 命名形式
+
+```
+[分類]-[機能]-[シナリオ].spec.ts
+```
+
+### 3.2 実例
+
+| ファイル名 | テスト内容 |
+|-----------|-----------|
+| `docs-navigator-basic.spec.ts` | Docs Navigatorの基本操作 |
+| `tree-view-render.spec.ts` | Tree Viewの表示 |
+| `tasks-import.spec.ts` | Tasksのインポート |
+| `integration-end-to-end.spec.ts` | E2Eテスト |
+
+### 3.3 テスト関数の命名
+
+```typescript
+describe('Docs Navigator - Basic', () => {
+  test('should display document list when category is selected', async () => {
+    // ...
+  });
+  
+  test('should open document when click Open button', async () => {
+    // ...
+  });
+});
+```
+
+---
+
+## 4. テストデータ管理
+
+### 4.1 テストデータの配置
+
+```
+tests/
+├── fixtures/                 # テストデータ
+│   ├── context.mdc          # コンテキストファイル
+│   ├── documents/            # テスト用ドキュメント
+│   │   ├── test-prd.mdc
+│   │   └── test-arch.mdc
+│   └── tasks.json           # テスト用タスク
+├── helpers/                  # テストヘルパー
+│   ├── setup.ts             # セットアップ
+│   ├── teardown.ts          # クリーンアップ
+│   └── page-objects.ts      # ページオブジェクト
+└── utils/                    # ユーティリティ
+    ├── logger.ts
+    └── assertions.ts
+```
+
+### 4.2 テストデータのライフサイクル
+
+```typescript
+// setup.ts
+export async function setup() {
+  // テスト用ファイル作成
+  await createTestDocuments();
+  await createTestTasks();
+}
+
+// teardown.ts
+export async function teardown() {
+  // テスト用ファイル削除
+  await cleanupTestDocuments();
+  await cleanupTestTasks();
+}
+```
+
+### 4.3 テスト部品の再利用
+
+#### 再利用可能な部品
+
+1. **Page Objects**: UI操作の抽象化
+   - `helpers/page-objects.ts`: DocsNavigatorPage, TreeViewPage, TasksPage
+   
+2. **Test Fixtures**: テストデータの生成
+   - `helpers/fixtures.ts`: テスト用ドキュメント、タスク、コンテキストの生成
+   
+3. **Assertions**: 検証ロジックの統一
+   - `utils/assertions.ts`: 共通のアサーション関数
+   
+4. **Test Utilities**: 共通ユーティリティ
+   - `utils/wait.ts`: 待機処理の統一
+   - `utils/logger.ts`: ログ出力の統一
+
+#### 部品再利用のベストプラクティス
+
+1. **DRY原則**: 同じコードを複数回書かない
+2. **単一責任**: 各部品は1つの責務に集中
+3. **再利用性**: 複数のテストケースで使える設計
+4. **保守性**: 変更が容易な構造
+
+#### 再利用例
+
+```typescript
+// helpers/page-objects.ts
+export class DocsNavigatorPage {
+  constructor(private page: Page) {}
+  
+  async selectCategory(name: string) {
+    await this.page.click(`button[data-category="${name}"]`);
+  }
+  
+  async getDocumentCount() {
+    return await this.page.$$eval('.doc-item', els => els.length);
+  }
+}
+
+// helpers/fixtures.ts
+export async function createTestContext() {
+  const contextPath = 'fixtures/context.mdc';
+  const content = generateTestContext();
+  await fs.writeFile(contextPath, content);
+  return contextPath;
+}
+
+// utils/assertions.ts
+export async function assertTreeRendered(page: Page) {
+  await page.waitForSelector('#tree-view .tree-node');
+  const nodes = await page.$$('.tree-node');
+  expect(nodes.length).toBeGreaterThan(0);
+}
+```
+
+#### 再利用ガイドライン
+
+1. **共通操作**: 3回以上使われる操作はPage Object化
+2. **データ生成**: テストデータ生成はFixtures化
+3. **検証ロジック**: 複数のテストで使う検証はAssertion化
+4. **命名規則**: 再利用可能な部品は名詞形で命名
+
+---
+
+## 5. 実装計画
+
+### 5.1 フェーズ1: ディレクトリ構造の作成
+
+```bash
+mkdir -p tests/{docs-navigator,tree-view,tasks,integration}
+mkdir -p tests/{fixtures/documents,helpers,utils}
+```
+
+### 5.2 フェーズ2: 基本テストケースの実装
+
+優先度順:
+1. tree-view-render.spec.ts（最重要）
+2. docs-navigator-basic.spec.ts
+3. tasks-import.spec.ts
+4. integration-end-to-end.spec.ts
+
+### 5.3 フェーズ3: テストヘルパーの実装
+
+```typescript
+// helpers/page-objects.ts
+export class DocsNavigatorPage {
+  async selectCategory(name: string) {
+    await this.page.click(`button[data-category="${name}"]`);
+  }
+  
+  async getDocumentCount() {
+    return await this.page.$$eval('.doc-item', els => els.length);
+  }
+}
+```
+
+### 5.4 フェーズ4: CI/CD統合
+
+```yaml
+# .github/workflows/e2e.yml
+name: E2E Tests
+
+on: [push, pull_request]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: npm install
+      - run: npm run test:e2e
+```
+
+---
+
+## 6. 実装例
+
+### 6.1 Tree View Render Test
+
+```typescript
+// tests/tree-view/render.spec.ts
+import { test, expect } from '@playwright/test';
+import { setup, teardown } from '../helpers/setup';
+
+test.describe('Tree View - Render', () => {
+  test.beforeAll(setup);
+  test.afterAll(teardown);
+  
+  test('should render tree with documents', async ({ page }) => {
+    await page.goto('http://localhost:9222');
+    await page.waitForSelector('button[data-mode="tree"]');
+    await page.click('button[data-mode="tree"]');
+    
+    // Wait for tree to render
+    await page.waitForSelector('#tree-view .tree-node');
+    
+    // Assert tree is visible
+    const treeNodes = await page.$$('.tree-node');
+    expect(treeNodes.length).toBeGreaterThan(0);
+  });
+  
+  test('should display quality gate results', async ({ page }) => {
+    await page.click('button[data-mode="tree"]');
+    await page.waitForSelector('#tree-view');
+    await page.click('button#validate-gates');
+    
+    // Assert gate results are displayed
+    const gateResults = await page.$('#gate-results');
+    expect(gateResults).not.toBeNull();
+  });
+});
+```
+
+### 6.2 Docs Navigator Basic Test
+
+```typescript
+// tests/docs-navigator/basic.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('Docs Navigator - Basic', () => {
+  test('should display documents when category is clicked', async ({ page }) => {
+    await page.goto('http://localhost:9222');
+    await page.click('button[data-category="PRD"]');
+    
+    const docs = await page.$$('.doc-item');
+    expect(docs.length).toBeGreaterThan(0);
+  });
+  
+  test('should show document details when clicked', async ({ page }) => {
+    await page.click('button[data-category="PRD"]');
+    await page.click('.doc-item');
+    
+    const details = await page.$('#doc-detail');
+    expect(details).not.toBeNull();
+  });
+});
+```
+
+---
+
+関連文書:
+- docs/QA/index.mdc: QAインデックス
+- docs/QA/E2Eテスト実行方法.mdc: E2Eテスト実行方法
+- docs/QA/E2Eテスト基盤設計.mdc: E2Eテスト基盤設計

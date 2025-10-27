@@ -1,0 +1,91 @@
+# PRD: Docs Navigator＋Tasks ブレークダウン支援（Cursor auto）
+
+> 目的: TasksのTODOから、Cursor autoのみを用いて安全・低コストにブレークダウン提案→プロンプト生成→実作業へ導く標準フローと要件を定義する。
+
+## 1. スコープ/非スコープ
+- スコープ: Docs Navigator / Tasks / Quality Gates / Orchestrated Prompt Flow（Cursor auto）
+- 非スコープ: 外部AI API（従量課金の発生する統合は対象外）
+
+## 2. 役者（Actors）
+- 人間（PM/開発者）
+- Dev Console（Electronアプリ、Docs Navigator/Tasksタブ）
+- Cursor auto（プロンプト駆動の自動化役）
+- メンテワーカー（context/gates/索引チェック）
+
+## 3. ユースケース
+- UC-01: TODO登録→ブレークダウン提案→人手レビュー→採用/修正→プロンプト生成→実行
+- UC-02: 既存TODOの再ブレークダウン（メタアップ）
+- UC-03: FEAT-ID紐付け、Docs/QA連携（ナビゲーション/リンクOpen）
+
+## 4. 基本フロー（要求反映）
+1) (プログラム) 定型処理で「プロンプト作成依頼のプロンプト」を生成
+2) (人間) その定型プロンプトで「本依頼のプロンプト」を作成依頼
+3) (AI=Cursor auto) プロンプト作成
+4) (人間) 生成プロンプトで本作業を実施（必要に応じて再ブレークダウン/メタアップ）
+
+## 5. UI要件（Dev Console）
+- Tasks: 各タスク行に「Breakdown」ボタン
+  - 右ペインに生成された定型プロンプト（編集可）を表示
+  - 「Copy for Cursor auto」ボタン（クリップボードコピー）
+  - 「Open FEAT」ボタン（FEAT連携時にDocs NavigatorのFEATビューへジャンプ、または関連DocをOpen）
+- Docs Navigator: FEAT/PRD/UX/API/DATA/QAリンクの1クリックOpen
+
+## 6. データ要件（tasks.json）
+- 追加フィールド:
+  - `breakdownPrompt: string`（定型プロンプトの最新草案）
+  - `breakdownStatus: 'DRAFT'|'READY'|'REVIEWED'`（レビュー状態）
+  - `lastBreakdownAt: string (ISO8601)`（最終生成時刻）
+- 既存: `id, title, category, priority, status, featId, notes, links{}`
+
+## 7. プロンプト定型（要求）
+- 入力:
+  - タスク: `title, category, priority, status, featId`
+  - 文脈: `.cursor/context.mdc`のDAG/MECE/Quality Gates、`docs/PRD/index.mdc`のFeatures Registry、関連Docパス（PRD/UX/API/DATA/QA）
+  - 制約: 冗長禁止・MECE・各サブタスクに完了基準・外部API不使用
+- 出力:
+  - サブタスク一覧（MECE、粒度: 5〜10、各項目に完了基準）
+  - 前提・不明点（最大5件）
+  - 参照リンク（PRD/UX/API/DATA/QA）
+
+## 8. 品質ゲート（Breakdown）
+- Gate-BD-01: 生成サブタスクがMECEで重複0
+- Gate-BD-02: 各サブタスクに明確な完了基準
+- Gate-BD-03: 各サブタスクが少なくとも1つのDoc（PRD/UX/API/DATA/QA）にアンカー
+
+## 9. 監査/トレーサビリティ
+- `lastBreakdownAt`の記録、`breakdownPrompt`の履歴管理（差分は任意）
+- プロンプト（作成依頼）→ 採択版 → 実行結果（任意）のリンクをNotesに保存可能
+
+## 10. セキュリティ/コスト
+- 外部AI APIの呼び出しは禁止。Cursor autoに限定
+- オフラインでも編集・保存可能（Docs/Tasksはローカル）
+
+## 11. 受入基準
+- Breakdownボタン1回で定型プロンプトが生成される
+- 生成直後で Gate-BD の 80% 以上を満たす（人手レビューで補完可）
+- コピー&実行で作業タスクへ落とし込める
+
+## 12. 将来拡張
+- Gate-BD自動評価のUI表示
+- PR/コミット連携で進捗自動更新
+- FEAT-IDの自動推定（Registry/タグ走査）
+
+---
+
+### 付録A: 定型プロンプト雛形
+```
+あなたはプロジェクトの実装ブレークダウン設計者です。以下の制約と入力を踏まえ、MECEなサブタスク（各項目に完了基準付き）を5〜10件で提案し、不明点（最大5件）と参照先（PRD/UX/API/DATA/QA）も挙げてください。
+
+[制約]
+- 冗長禁止、簡潔さ重視
+- DAG/MECE/Quality Gatesを尊重（context.mdc参照）
+
+[入力]
+- タスク: {title} / カテゴリ: {category} / 優先度: {priority} / FEAT: {featId}
+- 関連ドキュメント: {links}
+
+[出力]
+- サブタスク一覧: [ {name, acceptanceCriteria, refs} ... ]
+- 不明点: [question1..]
+- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]
+```
