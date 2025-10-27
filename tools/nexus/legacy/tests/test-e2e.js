@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+const appRoot = path.resolve(__dirname, '..', '..');
 const LOG_FILE = path.join(__dirname, 'test-e2e.log');
 let logMessages = [];
 
@@ -25,7 +26,7 @@ async function testTreeView() {
     // Try to find electron executable
     const os = require('os');
     let electronCmd = 'electron';
-    const electronPath = path.join(__dirname, 'node_modules', '.bin', 'electron');
+    const electronPath = path.join(appRoot, 'node_modules', '.bin', 'electron');
     const electronCmdPath = os.platform() === 'win32' ? electronPath + '.cmd' : electronPath;
     if (require('fs').existsSync(electronCmdPath)) {
       electronCmd = electronCmdPath;
@@ -35,8 +36,8 @@ async function testTreeView() {
       log(`Using electron from: ${electronPath}`);
     }
     
-    const electron = spawn(electronCmd, ['.'], { 
-      cwd: __dirname,
+    const electron = spawn(electronCmd, ['.'], {
+      cwd: appRoot,
       stdio: 'pipe'
     });
     

@@ -13,11 +13,14 @@ async function testNexusE2E() {
   try {
     // 1. NEXUSアプリを起動
     console.log('1. NEXUSアプリを起動中...');
-    const projectRoot = path.resolve(__dirname, '../..');
+    const legacyDir = path.resolve(__dirname, '..');
+    const projectRoot = path.resolve(legacyDir, '..');
+    const legacyMain = path.join(legacyDir, 'main.js');
     console.log(`   Project root: ${projectRoot}`);
-    electronApp = await electron.launch({ 
-      args: ['main.js'],
-      cwd: __dirname,
+    console.log(`   Legacy main: ${legacyMain}`);
+    electronApp = await electron.launch({
+      args: [legacyMain],
+      cwd: legacyDir,
       env: { ...process.env, NEXUS_DEBUG: '1', E2E_TEST: '1', NEXUS_PROJECT_ROOT: projectRoot }
     });
     

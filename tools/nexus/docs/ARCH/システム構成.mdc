@@ -13,7 +13,7 @@
     - [1.1 通信フロー](#11-通信フロー)
   - [2. プロセス構成](#2-プロセス構成)
     - [2.1 Main Process (main.ts)](#21-main-process-maints)
-    - [2.2 Renderer Process (renderer/)](#22-renderer-process-renderer)
+    - [2.2 Renderer Process (src/renderer/)](#22-renderer-process-srcrenderer)
     - [2.3 Preload (preload.js)](#23-preload-preloadjs)
   - [3. ディレクトリ構造](#3-ディレクトリ構造)
     - [3.1 推奨構造](#31-推奨構造)
@@ -69,7 +69,7 @@ NexusはElectronアプリケーションとして、3つのプロセスで構成
 - utils/: ユーティリティ（security.ts, file.ts）
 - dist/main/main.js: ビルド後JavaScript
 
-### 2.2 Renderer Process (renderer/)
+### 2.2 Renderer Process (src/renderer/)
 
 役割: UI表示・ユーザーインタラクション
 
@@ -137,49 +137,27 @@ NexusはElectron + TypeScriptの標準的な構造を採用します。
 
 ```
 tools/nexus/
-├── src/                     # ソースコード
-│   ├── main/               # Main Process
-│   │   ├── main.ts        # エントリーポイント
-│   │   ├── handlers/      # IPCハンドラー
-│   │   │   ├── docs.ts    # docs:* ハンドラー
-│   │   │   └── tasks.ts   # tasks:* ハンドラー
-│   │   └── utils/         # ユーティリティ
-│   │       ├── security.ts # セキュリティ検証
-│   │       └── file.ts     # ファイル操作
-│   ├── preload/           # Preload script
-│   │   └── preload.ts    # Bridge API
-│   └── renderer/          # Renderer Process
-│       ├── index.html     # UI構造
-│       ├── styles/        # スタイル
-│       │   ├── app.css    # メインスタイル
-│       │   └── theme.css # テーマ
-│       ├── features/      # 機能別
-│       │   ├── docs-navigator/
-│       │   │   ├── docs-navigator.js
-│       │   │   └── tree-view.js
-│       │   └── tasks/
-│       │       └── tasks.js
-│       └── shared/        # 共通
-│           ├── app.js     # アプリ初期化
-│           └── utils.js   # ユーティリティ
-├── dist/                   # ビルド成果物
-│   ├── main/              # Main Process ビルド
-│   └── renderer/          # Renderer Process ビルド
-├── docs/                   # ドキュメント
-│   ├── PRD/              # 要件定義
-│   ├── ARCH/             # アーキテクチャ設計
-│   ├── DEVELOPMENT/      # 開発ガイド
-│   ├── QA/               # テスト
-│   └── GATES/            # Quality Gates定義
-├── test/                   # テスト
-│   ├── e2e/              # E2Eテスト
-│   │   └── test-e2e.js   # E2Eテストスクリプト
-│   └── unit/             # ユニットテスト
-├── tasks.json             # Tasksデータ
-├── context.mdc            # Nexus context
-├── package.json           # プロジェクト設定
-├── tsconfig.json          # TypeScript設定
-└── webpack.config.ts      # Webpack設定
+├── src/                      # ソースコード
+│   ├── main/                 # Main Process
+│   ├── preload/              # Preload script
+│   └── renderer/             # Renderer Process (HTML/JS/CSS)
+├── dist/                     # TypeScriptビルド成果物
+├── docs/                     # 仕様・設計ドキュメント
+├── test/                     # テストコード
+│   ├── e2e/                  # Playwright E2Eテスト
+│   │   ├── fixtures/
+│   │   └── smoke.spec.ts
+│   └── unit/                 # ユニットテスト（将来拡張用）
+├── legacy/                   # 旧構成（main.js, renderer/ 等）
+│   └── tests/                # レガシーE2Eスクリプト
+├── scripts/                  # CLIスクリプト群
+│   └── validate-docs-gates.js
+├── e2e-proof/                # 自動化実装の検証資産
+├── context.mdc               # Nexus context map
+├── package.json              # プロジェクト設定
+├── tsconfig.json             # TypeScript設定
+├── jest.config.js            # Jest設定
+└── playwright.config.ts      # Playwright設定
 ```
 
 ### 3.2 ディレクトリ説明
@@ -194,8 +172,11 @@ tools/nexus/
 - **dist/**: ビルド成果物（gitignore対象）
 - **docs/**: ドキュメント（ARCH/PRD/DEVELOPMENT等）
 - **test/**: テストコード
-  - e2e/: E2Eテスト
-  - unit/: ユニットテスト
+  - e2e/: Playwright E2Eテスト（smoke.spec.ts）
+  - unit/: ユニットテストの配置場所（`.gitkeep`のみ）
+- **legacy/**: 旧Electron構成（`main.js`や`renderer/`など）。参照のみで更新禁止
+- **scripts/**: CLIユーティリティ（Quality Gates検証など）
+- **e2e-proof/**: 完全自動化E2Eテストの検証成果
 
 ### 3.3 ビルドツール
 

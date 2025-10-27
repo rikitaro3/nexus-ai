@@ -136,7 +136,7 @@ description: |
 検証方法:
 ```javascript
 function validateTestDataManagement(testFiles) {
-  const fixturesDir = path.join(__dirname, 'tests/fixtures');
+  const fixturesDir = path.join(__dirname, 'test/fixtures');
   const hasFixtures = testFiles.some(file => file.includes('fixtures/'));
   
   if (!hasFixtures) {
@@ -162,7 +162,7 @@ function validateTestDataManagement(testFiles) {
 ### 全Quality Gates の実行
 
 ```javascript
-// tests/validate-test-cases.js
+// test/validate-test-cases.js
 const fs = require('fs');
 const path = require('path');
 

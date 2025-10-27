@@ -4,7 +4,7 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const VALID_LAYERS = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
-const DEFAULT_CONTEXT_CANDIDATES = ['.cursor/context.mdc', 'context.mdc'];
+const DEFAULT_CONTEXT_CANDIDATES = ['.cursor/context.mdc', 'context.mdc', path.join('tools', 'nexus', 'context.mdc')];
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));

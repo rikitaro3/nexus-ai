@@ -26,7 +26,7 @@ npm install
 npm run build
 ```
 
-This compiles `main.ts` to `dist/main.js`.
+This compiles the Electron main and preload processes into `dist/`.
 
 ### Run
 
@@ -58,26 +58,31 @@ npm run test:e2e:playwright
 ## File Structure
 
 ```
-nexus/
-├── src/
-│   ├── main/           # Main Process (TypeScript)
-│   │   └── main.ts
-│   ├── preload/        # Preload script (TypeScript)
-│   │   └── preload.ts
-│   └── renderer/       # Renderer Process UI
-│       ├── index.html
-│       ├── styles/
-│       │   └── app.css
-│       ├── features/
-│       │   ├── docs-navigator/
-│       │   │   └── docs-navigator.js
-│       │   └── tasks/
-│       │       └── tasks.js
-│       └── shared/
-│           └── app.js
-├── dist/               # Compiled TypeScript output
-├── docs/               # Documentation
-└── tasks.json          # Tasks data
+tools/
+└── nexus/
+    ├── src/
+    │   ├── main/           # Main Process (TypeScript)
+    │   │   └── main.ts
+    │   ├── preload/        # Preload script (TypeScript)
+    │   │   └── preload.ts
+    │   └── renderer/       # Renderer Process UI (HTML/JS/CSS)
+    │       ├── index.html
+    │       ├── styles/
+    │       │   └── app.css
+    │       ├── features/
+    │       │   ├── docs-navigator/
+    │       │   │   └── docs-navigator.js
+    │       │   └── tasks/
+    │       │       └── tasks.js
+    │       └── shared/
+    │           └── app.js
+    ├── dist/               # Compiled TypeScript output
+    ├── docs/               # Documentation
+    ├── test/
+    │   ├── e2e/            # Playwright smoke tests
+    │   └── unit/           # Placeholder for unit tests
+    ├── legacy/             # Archived pre-TypeScript assets
+    └── context.mdc         # Nexus context map
 ```
 
 ## Current Status
@@ -120,7 +125,7 @@ git commit -m "Update nexus submodule"
 ## Troubleshooting
 
 If you see blank screen:
-1. Make sure `dist/main.js` exists: `npm run build`
-2. Check that renderer files are in `renderer/` folder
-3. Verify paths in `main.ts` are correct for TypeScript output
+1. Make sure `dist/` exists: `npm run build`
+2. Check that renderer files are in `src/renderer/`
+3. Verify paths in `src/main/main.ts` are correct for TypeScript output
 

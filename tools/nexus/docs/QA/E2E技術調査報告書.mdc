@@ -84,7 +84,7 @@ const browser = await chromium.connectOverCDP('http://localhost:9222');
 - ✅ ログキャプチャ
 
 **実装済みファイル**:
-- `tools/nexus/test-e2e-v2.js`: 基本E2Eテスト実装
+- `tools/nexus/legacy/tests/test-e2e-v2.js`: 基本E2Eテスト実装
 - `tools/nexus/e2e-proof/`: 最小構成の証明アプリ
 
 ### フェーズ2: 自動修正機能（実装中）

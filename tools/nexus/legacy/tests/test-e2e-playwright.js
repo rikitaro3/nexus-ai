@@ -14,11 +14,12 @@ async function testNexusWithPlaywright() {
   try {
     // Start Electron with remote debugging
     console.log('Starting Electron with remote debugging...');
-    const electronPath = path.join(__dirname, 'node_modules', '.bin', 'electron');
+    const appRoot = path.resolve(__dirname, '..', '..');
+    const electronPath = path.join(appRoot, 'node_modules', '.bin', 'electron');
     const electronCmd = os.platform() === 'win32' ? electronPath + '.cmd' : electronPath;
     
     electronProcess = spawn(electronCmd, ['.', '--remote-debugging-port=9222'], {
-      cwd: __dirname,
+      cwd: appRoot,
       env: { ...process.env, E2E_TEST: '1' }
     });
     

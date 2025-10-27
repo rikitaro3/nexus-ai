@@ -12,7 +12,7 @@ NexusのE2Eテスト（Tree表示＋DAG Quality Gate Check）の実行方法を�
 
 ### ✅ 完了項目
 - TypeScript化（main.ts）
-- E2Eテストスクリプト（`test-e2e-v2.js`）
+- E2Eテストスクリプト（`tools/nexus/legacy/tests/test-e2e-v2.js`）
 - PlaywrightによるCDP接続
 - スクリーンショット取得
 - `TEST_RESULT`検証
@@ -141,7 +141,7 @@ renderTree: success, rendered 1 root nodes
 
 ### ✅ 完了項目
 - TypeScript化（main.ts）
-- E2Eテストスクリプト（`test-e2e-v2.js`）
+- E2Eテストスクリプト（`tools/nexus/legacy/tests/test-e2e-v2.js`）
 - PlaywrightによるCDP接続実装
 - Treeボタン自動クリック機能
 - `window.renderTree()` グローバル公開
@@ -156,7 +156,7 @@ renderTree: success, rendered 1 root nodes
 ```bash
 cd tools/nexus
 npm run build
-node test-e2e-v2.js
+node legacy/tests/test-e2e-v2.js
 ```
 
 **動作内容**:
@@ -179,7 +179,7 @@ node test-e2e-v2.js
 
 **自動E2Eテスト（基本動作確認）**:
 ```bash
-node test-e2e-v2.js
+node legacy/tests/test-e2e-v2.js
 ```
 - `TEST_RESULT` 検出で成功
 - `renderTree()` 実行確認

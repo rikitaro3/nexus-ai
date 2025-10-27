@@ -38,7 +38,7 @@ logger.info('Project root initialized', {
 function createWindow() {
   // Adjust paths for TypeScript compilation (dist/ folder)
   const appPath = __dirname;
-  const rendererPath = path.join(appPath, '..', '..', '..', 'renderer');
+  const rendererPath = path.join(PROJECT_ROOT, 'tools', 'nexus', 'src', 'renderer');
   const preloadPath = path.join(appPath, '..', 'preload', 'preload.js');
   
   mainWindow = new BrowserWindow({

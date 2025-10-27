@@ -3,7 +3,7 @@
 > Breadcrumbs
 > Layer: QA
 > Upstream: tools/nexus/docs/QA/index.mdc
-> Downstream: 実装（tools/nexus/test-nexus-e2e.js）
+> Downstream: 実装（tools/nexus/legacy/tests/test-nexus-e2e.js）
 
 ## 目的
 
@@ -32,7 +32,7 @@ NEXUSアプリケーションに完全自動化されたE2Eテストを実装す
 
 ### ステップ1: テストファイルの作成
 
-`tools/nexus/test-nexus-e2e.js` を作成：
+`tools/nexus/legacy/tests/test-nexus-e2e.js` を作成：
 
 ```javascript
 const { _electron: electron } = require('@playwright/test');
@@ -47,9 +47,11 @@ async function testNexusE2E() {
   try {
     // 1. Electron起動
     console.log('1. NEXUSアプリを起動中...');
-    electronApp = await electron.launch({ 
-      args: ['main.js'],
-      cwd: __dirname,
+    const legacyDir = path.resolve(__dirname, '..');
+    const legacyMain = path.join(legacyDir, 'main.js');
+    electronApp = await electron.launch({
+      args: [legacyMain],
+      cwd: legacyDir,
       env: { ...process.env }
     });
     
@@ -96,7 +98,7 @@ async function testNexusE2E() {
     console.log('\n✅ テスト結果:', JSON.stringify(result, null, 2));
     
     // 4. スクリーンショット
-    await window.screenshot({ path: 'test-nexus.png' });
+    await window.screenshot({ path: path.join(__dirname, 'test-nexus.png') });
     
     console.log('\n✅ NEXUSアプリE2Eテスト: 成功');
     return { success: true, result };
@@ -124,7 +126,7 @@ testNexusE2E().then(result => {
 ```json
 {
   "scripts": {
-    "test:e2e": "node test-nexus-e2e.js"
+    "test:e2e": "node legacy/tests/test-nexus-e2e.js"
   }
 }
 ```
