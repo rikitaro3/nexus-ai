@@ -19,6 +19,30 @@
     feats: 'FEATのカバレッジと関連ドキュメントを確認します',
     tree: 'Breadcrumbsからリンク構造を検証します'
   };
+  const MODE_STORAGE_KEY = 'nexus.docs.mode';
+  const VALID_DOC_MODES = new Set(['docs', 'feats', 'tree']);
+
+  function loadPersistedMode(defaultMode) {
+    if (typeof window === 'undefined' || !window.localStorage) return defaultMode;
+    try {
+      const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
+      if (stored && VALID_DOC_MODES.has(stored)) {
+        return stored;
+      }
+    } catch (err) {
+      console.warn('[Docs Navigator] Failed to read persisted mode:', err);
+    }
+    return defaultMode;
+  }
+
+  function persistMode(mode) {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      window.localStorage.setItem(MODE_STORAGE_KEY, mode);
+    } catch (err) {
+      console.warn('[Docs Navigator] Failed to persist mode:', err);
+    }
+  }
   let selectedCategory = null;
   let selectedDocPath = null;
   console.log('[Docs Navigator] Basic elements - catEl:', !!catEl, 'listEl:', !!listEl, 'detailEl:', !!detailEl);
@@ -288,35 +312,50 @@
     const treeDirection = window.treeDirection;
     const featSearch = document.getElementById('feat-search');
     
+    const initialMode = loadPersistedMode('tree');
+    let currentMode = null;
+
+    function activateMode(nextMode, { skipPersist = false } = {}) {
+      const normalized = VALID_DOC_MODES.has(nextMode) ? nextMode : 'tree';
+      if (currentMode === normalized && !skipPersist) {
+        if (normalized === 'tree') {
+          setTreeStatus('Tree構造を解析中...', 'info');
+          renderTree();
+        }
+        return;
+      }
+
+      currentMode = normalized;
+      modeButtons.forEach(b => {
+        const isActive = b.dataset.mode === normalized;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      if (modeDescription) {
+        modeDescription.textContent = modeDescriptions[normalized] || '';
+      }
+
+      docsMode?.classList.toggle('active', normalized === 'docs');
+      featsMode?.classList.toggle('active', normalized === 'feats');
+      treeMode?.classList.toggle('active', normalized === 'tree');
+
+      if (!skipPersist) {
+        persistMode(normalized);
+      }
+
+      if (normalized === 'tree') {
+        setTreeStatus('Tree構造を解析中...', 'info');
+        renderTree();
+      }
+    }
+
     console.log('[Docs Navigator] Initializing mode buttons...', modeButtons.length);
     console.log('[Docs Navigator] Tree elements - treeMode:', !!treeMode, 'treeView:', !!window.treeView, 'treeDirection:', !!treeDirection);
 
     modeButtons.forEach((btn, idx) => {
       console.log(`[Docs Navigator] Registering listener for button ${idx}:`, btn.dataset.mode);
       btn.addEventListener('click', () => {
-        console.log('[Mode Button Click] Button clicked, mode:', btn.dataset.mode);
-        modeButtons.forEach(b => {
-          b.classList.remove('active');
-          b.setAttribute('aria-selected', 'false');
-        });
-        btn.classList.add('active');
-        btn.setAttribute('aria-selected', 'true');
-        const mode = btn.dataset.mode;
-        if (modeDescription) {
-          modeDescription.textContent = modeDescriptions[mode] || '';
-        }
-        console.log('[Mode Switch] Switching to mode:', mode);
-        docsMode.classList.toggle('active', mode === 'docs');
-        featsMode.classList.toggle('active', mode === 'feats');
-        treeMode.classList.toggle('active', mode === 'tree');
-        console.log('[Mode Switch] Classes applied - docs:', docsMode.classList.contains('active'),
-                    'feats:', featsMode.classList.contains('active'),
-                    'tree:', treeMode.classList.contains('active'));
-        if (mode === 'tree') {
-          console.log('[Mode Switch] Tree mode activated, calling renderTree()');
-          setTreeStatus('Tree構造を解析中...', 'info');
-          renderTree();
-        }
+        activateMode(btn.dataset.mode || 'tree');
       });
     });
     console.log('[Docs Navigator] Mode buttons initialized');
@@ -345,18 +384,8 @@
     if (categoryOrder.length > 0) renderList(categoryOrder[0]);
     else showDocDetailPlaceholder('カテゴリがありません');
 
-    // Treeビューをデフォルト表示にする
-    modeButtons.forEach(btn => {
-      const isTree = btn.dataset.mode === 'tree';
-      btn.classList.toggle('active', isTree);
-      btn.setAttribute('aria-selected', isTree ? 'true' : 'false');
-    });
-    if (modeDescription) modeDescription.textContent = modeDescriptions.tree;
-    docsMode?.classList.remove('active');
-    featsMode?.classList.remove('active');
-    treeMode?.classList.add('active');
-    setTreeStatus('Tree構造を解析中...', 'info');
-    renderTree();
+    // Restore previously selected mode (defaults to tree on first launch)
+    activateMode(initialMode, { skipPersist: true });
   } catch (error) { console.error('Docs Navigator init error:', error); }
 
   function extractSection(text, startHeader, stopHeaderPrefix = '## ') {
