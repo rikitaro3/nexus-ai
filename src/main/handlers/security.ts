@@ -66,25 +66,28 @@ export function getRepoRoot(): string {
 export function validatePath(relPath: string): PathValidationResult {
   try {
     const repoRoot = getRepoRoot();
-    
+    const resolvedRepoRoot = path.resolve(repoRoot);
+
     // 絶対パスの場合はそのまま使用（ファイル選択のケース）
     let target: string;
+    let normalized = relPath;
     if (path.isAbsolute(relPath)) {
-      target = relPath;
+      target = path.resolve(relPath);
+      normalized = path.normalize(relPath);
       logger.info('Using absolute path', { relPath, target });
     } else {
       // 相対パスの場合は検証付きで解決
-      const normalized = path.normalize(relPath);
-      target = path.resolve(repoRoot, normalized);
-      logger.info('Path validation', { 
-        relPath, 
-        repoRoot, 
-        normalized, 
+      normalized = path.normalize(relPath);
+      target = path.resolve(resolvedRepoRoot, normalized);
+      logger.info('Path validation', {
+        relPath,
+        repoRoot: resolvedRepoRoot,
+        normalized,
         target,
-        'repoRoot_basename': path.basename(repoRoot),
+        'repoRoot_basename': path.basename(resolvedRepoRoot),
         'target_basename': path.basename(target)
       });
-      
+
       // ディレクトリトラバーサル攻撃の防止
       if (normalized.includes('..')) {
         logger.warn('ディレクトリトラバーサル攻撃を検出', { relPath, normalized });
@@ -97,36 +100,45 @@ export function validatePath(relPath: string): PathValidationResult {
         };
       }
       
-      // リポジトリ外へのアクセス防止（絶対パスの場合はスキップ）
-      if (!target.startsWith(repoRoot)) {
-        logger.warn('パスがリポジトリ外', { relPath, normalized, target, repoRoot });
-        return {
-          valid: false,
-          repoRoot,
-          normalized,
-          target,
-          error: 'パスがリポジトリ外'
-        };
-      }
     }
-    
-    // ファイルの存在確認
-    if (!fs.existsSync(target)) {
-      logger.warn('File does not exist', { target });
+
+    const resolvedTarget = path.resolve(target);
+    const relativeToRepo = path.relative(resolvedRepoRoot, resolvedTarget);
+
+    if (path.isAbsolute(relativeToRepo) || relativeToRepo.startsWith('..')) {
+      logger.warn('パスがリポジトリ外', {
+        relPath,
+        normalized,
+        target: resolvedTarget,
+        repoRoot: resolvedRepoRoot,
+        relativeToRepo
+      });
       return {
         valid: false,
-        repoRoot,
-        normalized: relPath,
-        target,
+        repoRoot: resolvedRepoRoot,
+        normalized,
+        target: resolvedTarget,
+        error: 'パスがリポジトリ外'
+      };
+    }
+
+    // ファイルの存在確認
+    if (!fs.existsSync(resolvedTarget)) {
+      logger.warn('File does not exist', { target: resolvedTarget });
+      return {
+        valid: false,
+        repoRoot: resolvedRepoRoot,
+        normalized,
+        target: resolvedTarget,
         error: 'File does not exist'
       };
     }
-    
+
     return {
       valid: true,
-      repoRoot,
-      normalized: relPath,
-      target
+      repoRoot: resolvedRepoRoot,
+      normalized,
+      target: resolvedTarget
     };
   } catch (e) {
     logger.error('パス検証中にエラーが発生', { relPath, error: (e as Error).message });
