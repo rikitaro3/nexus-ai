@@ -10,12 +10,19 @@
 
   if (!catEl || !listEl || !detailEl) {
     console.error('[Docs Navigator] Required elements not found!');
+    window.docsNavigatorReady = true;
     return;
   }
 
   // context source (repo or nexus). default repo unless debug & previously saved
   let contextPath = '.cursor/context.mdc';
   let entries = [];
+  let ctx = '';
+  let categoryOrder = [];
+  let traceSection = '';
+  let waypointsSection = '';
+  let meceSection = '';
+  let contextLoaded = false;
   try {
     const dbg = await window.env.isDebug();
     const isDebug = dbg && dbg.success && dbg.isDebug;
@@ -60,41 +67,42 @@
       window.entries = entries;
       // UIの初期化は続行
       catEl.innerHTML = '<li>コンテキスト読み込み失敗: ' + ctxRes.error + '</li>';
-      // entriesは空のまま初期化を続行
-      window.entries = entries;
       console.log('[Docs Navigator] Initialization with empty entries');
-      return; // 早期リターンして処理を続行
-    }
-    console.log('[Docs Navigator] Context loaded, size:', ctxRes.content.length);
-    console.log('[Docs Navigator] Context content preview:', ctxRes.content.substring(0, 200));
-    const ctx = ctxRes.content;
-    const mapSection = extractSection(ctx, '## Context Map', '## ');
-    console.log('[Docs Navigator] Map section found:', !!mapSection, 'length:', mapSection?.length || 0);
-    entries = [];
-    window.entries = entries;
-    const categoryOrder = [];
-    if (mapSection) {
-      const lines = mapSection.split('\n');
-      let currentCat = null;
-      for (const line of lines) {
-        const catMatch = line.match(/^###\s+(.+)$/);
-        if (catMatch) { currentCat = catMatch[1].trim(); if (!categoryOrder.includes(currentCat)) categoryOrder.push(currentCat); continue; }
-        const itemMatch = line.match(/^\-\s+([^\s].*?)\s+…\s+(.*)$/);
-        if (itemMatch && currentCat) entries.push({ category: currentCat, path: itemMatch[1].trim(), desc: itemMatch[2].trim() });
-      }
-      console.log('[Docs Navigator] Parsed entries:', entries.length, 'categories:', categoryOrder);
     } else {
-      console.warn('[Docs Navigator] Map section not found in context');
-    }
+      contextLoaded = true;
+      ctx = ctxRes.content;
+      console.log('[Docs Navigator] Context loaded, size:', ctx.length);
+      console.log('[Docs Navigator] Context content preview:', ctx.substring(0, 200));
+      const mapSection = extractSection(ctx, '## Context Map', '## ');
+      console.log('[Docs Navigator] Map section found:', !!mapSection, 'length:', mapSection?.length || 0);
+      entries = [];
+      window.entries = entries;
+      categoryOrder = [];
+      if (mapSection) {
+        const lines = mapSection.split('\n');
+        let currentCat = null;
+        for (const line of lines) {
+          const catMatch = line.match(/^###\s+(.+)$/);
+          if (catMatch) { currentCat = catMatch[1].trim(); if (!categoryOrder.includes(currentCat)) categoryOrder.push(currentCat); continue; }
+          const itemMatch = line.match(/^\-\s+([^\s].*?)\s+…\s+(.*)$/);
+          if (itemMatch && currentCat) entries.push({ category: currentCat, path: itemMatch[1].trim(), desc: itemMatch[2].trim() });
+        }
+        console.log('[Docs Navigator] Parsed entries:', entries.length, 'categories:', categoryOrder);
+      } else {
+        console.warn('[Docs Navigator] Map section not found in context');
+      }
 
-    const traceSection = extractSection(ctx, '## Traceability Map', '## ');
-    const waypointsSection = extractSection(ctx, '### Waypoints', '### ');
-    const meceSection = extractSection(ctx, '### MECE Domains', '### ');
+      traceSection = extractSection(ctx, '## Traceability Map', '## ');
+      waypointsSection = extractSection(ctx, '### Waypoints', '### ');
+      meceSection = extractSection(ctx, '### MECE Domains', '### ');
+    }
 
     const registry = await parseFeaturesRegistry();
     let filteredFeats = registry.items;
 
-    catEl.innerHTML = '';
+    if (contextLoaded) {
+      catEl.innerHTML = '';
+    }
     for (const cat of categoryOrder) {
       const li = document.createElement('li');
       li.textContent = cat;
