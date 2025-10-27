@@ -27,8 +27,13 @@ contextBridge.exposeInMainWorld('settings', {
 });
 
 contextBridge.exposeInMainWorld('dialog', {
-  selectContextFile: (): Promise<{ filePath?: string; canceled: boolean }> => 
+  selectContextFile: (): Promise<{ filePath?: string; canceled: boolean }> =>
     ipcRenderer.invoke('dialog:selectContextFile')
+});
+
+contextBridge.exposeInMainWorld('analytics', {
+  fetchMetrics: (): Promise<any> => ipcRenderer.invoke('analytics:get'),
+  exportMetrics: (): Promise<any> => ipcRenderer.invoke('analytics:export')
 });
 
 
