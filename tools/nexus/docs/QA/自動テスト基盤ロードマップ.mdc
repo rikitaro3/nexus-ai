@@ -38,7 +38,7 @@ Nexusの品質向上のために、ドキュメント整備から各種自動テ
   1. `npm run test:e2e:smoke` で Playwright を起動。
   2. `test/e2e/fixtures/smoke.html` を読み込み、UI コンポーネントのレンダリングと基本操作（ボタン押下→状態更新）を検証。
   3. 将来的に Electron アプリ本体を操作するテストへ拡張。
-- 成果物: `test/e2e/smoke.spec.ts`。
+- 成果物: `test/e2e/docs-navigator-tree-smoke.spec.ts`。
 
 ## 運用ガイドライン
 - Pull Request では最低でも単体テストをグリーンに保ち、影響範囲が広い変更は結合/E2E を追加で実行。

@@ -1,0 +1,5 @@
+{
+  "specFiles": [
+    "test/e2e/docs-navigator-tree-smoke.spec.ts"
+  ]
+}

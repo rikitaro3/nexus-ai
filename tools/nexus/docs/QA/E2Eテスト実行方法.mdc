@@ -6,7 +6,7 @@
 > Downstream: N/A
 
 ## 目的
-NexusのE2Eテスト（Tree表示＋DAG Quality Gate Check）の実行方法を定義。
+NexusのE2Eテスト（Tree表示＋Docs/Test Quality Gates）の実行方法を定義。
 
 ## 実装状況
 
@@ -47,7 +47,8 @@ No root nodes found  ← ツリー表示なし
 
 ## テスト対象
 - Treeモードのツリー表示機能
-- DAG Quality Gate Check（DOC-01〜04）
+- Docs Quality Gate Check（DOC-01〜08）
+- Test Case Quality Gate Check（TC-01〜04）
 - ノード警告アイコン表示
 - Quality Gates結果パネル
 
@@ -87,13 +88,13 @@ npm start
 
 **Quality Gates結果**:
 - 右下パネルに「Quality Gates」セクション表示
-- 各ゲート（DOC-01〜04）の状態表示
+- 各ゲート（DOC-01〜08, TC-01〜04）の状態表示
   - ✓ PASS（緑）: 違反なし
-  - ✗ N violation(s)（赤）: エラー違反
-  - ✗ N violation(s)（黄）: 警告違反（DOC-04のみ）
+  - ⚠ N warning(s)（黄）: 警告レベルの違反（DOC-04/DOC-08/TC-02/TC-03など）
+  - ✗ N issue(s)（赤）: エラーレベルの違反
 - 違反の詳細表示
-  - 「Open」ボタン: ドキュメントを開く
-  - 「Fix Prompt」ボタン: 修正プロンプト生成＋コピー
+  - 「Open」ボタン: ドキュメント/テストケースを開く
+  - 「Fix Prompt」ボタン: ゲート別の修正プロンプトをコピー
 
 **DevTools確認**（F12）:
 - Consoleタブに以下が表示される
