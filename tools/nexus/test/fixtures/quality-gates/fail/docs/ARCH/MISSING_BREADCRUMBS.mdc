@@ -1,0 +1,18 @@
+# Missing Breadcrumbs Document
+## 目次
+- [1. Section](#1-section)
+- [1.1. Detail](#11-detail)
+- [2. Scope](#2-scope)
+
+## 1. Section
+Breadcrumbs ブロックが存在しないドキュメントのテスト用コンテンツです。
+
+### 1.1. Detail
+必要な情報は揃っていますが、Breadcrumbs が欠落しています。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: テスト対象の要件
+
+#### 扱わない内容
+- 含まれない: テスト対象外の要件

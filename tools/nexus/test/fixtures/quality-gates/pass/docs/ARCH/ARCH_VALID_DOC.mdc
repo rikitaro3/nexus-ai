@@ -1,0 +1,23 @@
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: N/A
+> Downstream: N/A
+
+# Valid Architecture Document
+## 目次
+- [1. Overview](#1-overview)
+- [1.1. Details](#11-details)
+- [2. Scope](#2-scope)
+
+## 1. Overview
+本ドキュメントは品質ゲートの検証用に作成された正常系のアーキテクチャ資料です。
+
+### 1.1. Details
+このセクションではテストが期待通りに動作することを確認するための詳細情報を記載します。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: 期待されるフローの確認
+
+#### 扱わない内容
+- 含まれない: 本テスト範囲外のケース

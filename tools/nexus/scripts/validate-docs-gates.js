@@ -5,6 +5,7 @@ const path = require('path');
 
 const VALID_LAYERS = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
 const DEFAULT_CONTEXT_CANDIDATES = ['.cursor/context.mdc', 'context.mdc', path.join('tools', 'nexus', 'context.mdc')];
+const DEFAULT_TEST_ROOTS = ['test', 'tests', path.join('tools', 'nexus', 'test')];
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -33,6 +34,13 @@ async function main() {
   const { nodes, docStatus, docContents } = await parseAllBreadcrumbs(entries, projectRoot);
   const results = validateGates(nodes, docStatus, docContents);
 
+  const { testFiles, fixtureFiles } = await loadTestCaseFiles(projectRoot, args.testRoots);
+  const testCaseResults = validateTestCaseGates(testFiles, fixtureFiles);
+
+  for (const [gateId, violations] of Object.entries(testCaseResults)) {
+    results[gateId] = violations;
+  }
+
   outputResults({
     results,
     contextPath: path.relative(projectRoot, contextPath) || contextPath,
@@ -40,8 +48,9 @@ async function main() {
     docStatus
   }, args.format);
 
-  const hasErrors = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-05', 'DOC-06', 'DOC-07']
-    .some(gateId => results[gateId].some(v => v.severity !== 'warn'));
+  const fatalGateIds = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-05', 'DOC-06', 'DOC-07', 'TC-01', 'TC-04'];
+  const hasErrors = fatalGateIds
+    .some(gateId => (results[gateId] || []).some(v => v.severity !== 'warn'));
 
   process.exit(hasErrors ? 1 : 0);
 }
@@ -50,7 +59,8 @@ function parseArgs(argv) {
   const args = {
     contextPath: null,
     projectRoot: null,
-    format: 'table'
+    format: 'table',
+    testRoots: []
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -67,6 +77,16 @@ function parseArgs(argv) {
       args.format = 'json';
     } else if (arg === '--table') {
       args.format = 'table';
+    } else if (arg === '--tests' || arg === '--test-root') {
+      const value = argv[++i];
+      if (typeof value === 'string') {
+        args.testRoots.push(...value.split(',').filter(Boolean));
+      }
+    } else if (arg.startsWith('--test-root=')) {
+      const value = arg.split('=')[1];
+      if (value) {
+        args.testRoots.push(...value.split(',').filter(Boolean));
+      }
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -76,11 +96,210 @@ function parseArgs(argv) {
   return args;
 }
 
+async function resolveTestRoots(projectRoot, overrideRoots) {
+  const seen = new Set();
+  const roots = [];
+  const candidates = (overrideRoots && overrideRoots.length > 0) ? overrideRoots : DEFAULT_TEST_ROOTS;
+
+  for (const candidate of candidates) {
+    const absolute = path.isAbsolute(candidate)
+      ? candidate
+      : path.join(projectRoot, candidate);
+
+    const normalized = path.normalize(absolute);
+    if (seen.has(normalized)) continue;
+
+    try {
+      const stats = await fs.stat(normalized);
+      if (stats.isDirectory()) {
+        roots.push(normalized);
+        seen.add(normalized);
+      }
+    } catch {}
+  }
+
+  return roots;
+}
+
+async function loadTestCaseFiles(projectRoot, overrideRoots) {
+  const testRoots = await resolveTestRoots(projectRoot, overrideRoots);
+  if (testRoots.length === 0) {
+    return { testFiles: [], fixtureFiles: [] };
+  }
+
+  const testFiles = [];
+  const fixtureFiles = [];
+
+  for (const root of testRoots) {
+    await collectTestCaseFiles(root, projectRoot, testFiles, fixtureFiles);
+  }
+
+  return { testFiles, fixtureFiles };
+}
+
+async function collectTestCaseFiles(currentDir, projectRoot, testFiles, fixtureFiles) {
+  let entries;
+  try {
+    entries = await fs.readdir(currentDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (entry.name === 'node_modules') continue;
+    const absolutePath = path.join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '.git' || entry.name === '.svn') continue;
+      await collectTestCaseFiles(absolutePath, projectRoot, testFiles, fixtureFiles);
+      continue;
+    }
+
+    const relativePath = path.relative(projectRoot, absolutePath).replace(/\\/g, '/');
+
+    if (relativePath.includes('/fixtures/')) {
+      fixtureFiles.push(relativePath);
+    }
+
+    if (entry.name.endsWith('.spec.ts')) {
+      try {
+        const content = await fs.readFile(absolutePath, 'utf8');
+        testFiles.push({ path: relativePath, content });
+      } catch {}
+    }
+  }
+}
+
+function validateTestCaseGates(testFiles, fixtureFiles) {
+  const results = {
+    'TC-01': [],
+    'TC-02': [],
+    'TC-03': [],
+    'TC-04': []
+  };
+
+  for (const file of testFiles) {
+    const fileName = path.basename(file.path);
+    const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+){2,}\.spec\.ts$/;
+    if (!namePattern.test(fileName)) {
+      results['TC-01'].push({
+        path: file.path,
+        message: 'テストケースファイル名が命名規則に準拠していません',
+        severity: 'error'
+      });
+    }
+
+    if (hasTestCaseDependency(file.content)) {
+      results['TC-02'].push({
+        path: file.path,
+        message: 'テストケース間に依存関係が検出されました',
+        severity: 'warn'
+      });
+    }
+
+    const documentation = evaluateTestDocumentation(file.content);
+    if (!documentation.valid) {
+      results['TC-03'].push({
+        path: file.path,
+        message: documentation.message,
+        severity: 'warn'
+      });
+    }
+
+    const dataManagement = evaluateTestDataManagement(file.content, fixtureFiles);
+    if (!dataManagement.valid) {
+      results['TC-04'].push({
+        path: file.path,
+        message: dataManagement.message,
+        severity: 'error'
+      });
+    }
+  }
+
+  return results;
+}
+
+function hasTestCaseDependency(content) {
+  const blockPatterns = [
+    /afterEach\s*\([^)]*\)\s*\{[\s\S]*?(?:test|it)\(/i,
+    /beforeAll\s*\([^)]*\)\s*\{[\s\S]*?(?:test|it)\(/i
+  ];
+  if (blockPatterns.some(pattern => pattern.test(content))) {
+    return true;
+  }
+
+  const testVarRegex = /const\s+([A-Za-z0-9_$]+)\s*=\s*(?:await\s*)?(?:test|it)\s*\(/g;
+  const referencedVars = new Set();
+  let match;
+  while ((match = testVarRegex.exec(content)) !== null) {
+    referencedVars.add(match[1]);
+  }
+
+  for (const variable of referencedVars) {
+    const dependencyPattern = new RegExp(`${variable}\\s*\\.then\\s*\\(`);
+    if (dependencyPattern.test(content)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function evaluateTestDocumentation(content) {
+  const commentPattern = /\/\*\*[\s\S]*?(?:目的|purpose)[\s\S]*?(?:期待結果|expected)[\s\S]*?\*\//gi;
+  const documented = (content.match(commentPattern) || []).length;
+
+  const testPattern = /\b(?:test|it)\s*\(/gi;
+  const totalTests = (content.match(testPattern) || []).length;
+
+  if (totalTests === 0) {
+    return { valid: true, coverage: 100 };
+  }
+
+  const coverage = (documented / totalTests) * 100;
+  if (coverage < 80) {
+    return {
+      valid: false,
+      coverage,
+      message: `テストドキュメント化率が${Math.round(coverage)}%です（目標: 80%）`
+    };
+  }
+
+  return { valid: true, coverage };
+}
+
+function evaluateTestDataManagement(content, fixtureFiles) {
+  const hasFixtureDir = fixtureFiles.length > 0;
+  const referencesFixture = /fixtures[\\/]/i.test(content);
+  const hasSetup = /(beforeAll|setup)\s*\(/i.test(content);
+  const hasTeardown = /(afterAll|teardown)\s*\(/i.test(content);
+
+  const issues = [];
+  if (!hasFixtureDir) {
+    issues.push('fixtures/ ディレクトリが見つかりません');
+  }
+  if (!referencesFixture) {
+    issues.push('テストでfixtures/配下のデータを参照していません');
+  }
+  if (!hasSetup) {
+    issues.push('beforeAll/setup が実装されていません');
+  }
+  if (!hasTeardown) {
+    issues.push('afterAll/teardown が実装されていません');
+  }
+
+  if (issues.length > 0) {
+    return { valid: false, message: issues.join('、') };
+  }
+
+  return { valid: true };
+}
+
 function printHelp() {
   console.log(`Usage: node scripts/validate-docs-gates.js [options]\n\n` +
     `Options:\n` +
     `  -c, --context <path>        Path to context.mdc (default: .cursor/context.mdc or context.mdc)\n` +
     `  -r, --project-root <path>   Project root for resolving document paths (default: cwd)\n` +
+    `      --tests <paths>         Comma-separated test root directories for TC gates\n` +
     `      --json                  Output results as JSON\n` +
     `      --table                 Output results as a human-readable table (default)\n` +
     `  -h, --help                  Show this help message\n`);
@@ -622,12 +841,13 @@ function outputResults(payload, format) {
   console.log('Context File:', payload.contextPath);
   console.log('');
 
-  const order = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08'];
+  const order = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08', 'TC-01', 'TC-02', 'TC-03', 'TC-04'];
+  const warnGates = new Set(['DOC-04', 'DOC-08', 'TC-02', 'TC-03']);
   for (const gateId of order) {
-    const violations = payload.results[gateId];
+    const violations = payload.results[gateId] || [];
     const status = violations.length === 0
       ? 'PASS'
-      : (gateId === 'DOC-04' || gateId === 'DOC-08' ? 'WARN' : 'FAIL');
+      : (warnGates.has(gateId) ? 'WARN' : 'FAIL');
     console.log(`${gateId}: ${status} (${violations.length}件)`);
     for (const violation of violations) {
       const detail = violation.cycle
@@ -640,7 +860,30 @@ function outputResults(payload, format) {
   }
 }
 
-main().catch(error => {
-  console.error('Unexpected error during validation:', error);
-  process.exit(2);
-});
+if (require.main === module) {
+  main().catch(error => {
+    console.error('Unexpected error during validation:', error);
+    process.exit(2);
+  });
+}
+
+module.exports = {
+  main,
+  parseArgs,
+  resolveContextPath,
+  parseContextEntries,
+  parseAllBreadcrumbs,
+  validateGates,
+  validateHeadings,
+  validateTableOfContents,
+  validateNamingRules,
+  validateScopeSections,
+  detectCycles,
+  loadTestCaseFiles,
+  validateTestCaseGates,
+  resolveTestRoots,
+  evaluateTestDocumentation,
+  evaluateTestDataManagement,
+  hasTestCaseDependency,
+  outputResults
+};

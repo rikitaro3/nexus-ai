@@ -1,0 +1,22 @@
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: N/A
+> Downstream: N/A
+
+# Bad Heading Document
+## 目次
+- [1. Section](#1-section)
+- [2. Scope](#2-scope)
+
+## 1. Section
+章番号の整合性が取れていないサンプルです。
+
+### 2.1 Detail
+親の番号と一致しないため DOC-05 が発生します。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: Heading 検証
+
+#### 扱わない内容
+- 含まれない: 他の検証

@@ -1,0 +1,23 @@
+> Breadcrumbs
+> Layer: UNKNOWN
+> Upstream: N/A
+> Downstream: N/A
+
+# Invalid Layer Document
+## 目次
+- [1. Section](#1-section)
+- [1.1. Detail](#11-detail)
+- [2. Scope](#2-scope)
+
+## 1. Section
+無効な Layer 名を設定したテスト用ドキュメントです。
+
+### 1.1. Detail
+Layer の値が定義済みリストに含まれていないため DOC-02 が発生します。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: テストケースの説明
+
+#### 扱わない内容
+- 含まれない: 本検証に不要な要素

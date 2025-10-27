@@ -1,0 +1,23 @@
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: N/A
+> Downstream: N/A
+
+# Lowercase Name Document
+## 目次
+- [1. Section](#1-section)
+- [1.1. Detail](#11-detail)
+- [2. Scope](#2-scope)
+
+## 1. Section
+ファイル名が小文字で始まるため命名規則に違反します。
+
+### 1.1. Detail
+Layer が ARCH である場合は英大文字で始まる必要があります。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: 命名規則の検証
+
+#### 扱わない内容
+- 含まれない: その他の検証

@@ -1,0 +1,23 @@
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: docs/ARCH/CYCLE_A_DOC.mdc
+> Downstream: docs/ARCH/CYCLE_A_DOC.mdc
+
+# Cycle B Document
+## 目次
+- [1. Section](#1-section)
+- [1.1. Detail](#11-detail)
+- [2. Scope](#2-scope)
+
+## 1. Section
+このドキュメントは循環参照のもう一方です。
+
+### 1.1. Detail
+Upstream と Downstream の両方で CYCLE_A_DOC を参照します。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: 循環参照の検証
+
+#### 扱わない内容
+- 含まれない: その他の検証

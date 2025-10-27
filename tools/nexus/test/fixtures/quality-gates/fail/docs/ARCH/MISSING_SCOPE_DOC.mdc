@@ -1,0 +1,20 @@
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: N/A
+> Downstream: N/A
+
+# Missing Scope Document
+## 目次
+- [1. Section](#1-section)
+- [1.1. Detail](#11-detail)
+- [2. Scope](#2-scope)
+
+## 1. Section
+スコープ情報の片側が欠けているため DOC-08 を誘発します。
+
+### 1.1. Detail
+扱わない内容の記載がありません。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: システムの対象機能

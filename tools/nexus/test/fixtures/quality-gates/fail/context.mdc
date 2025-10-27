@@ -1,0 +1,13 @@
+# Fixture Context (Failing)
+
+## Context Map
+### Architecture
+- docs/ARCH/MISSING_BREADCRUMBS.mdc … Missing breadcrumbs example
+- docs/ARCH/INVALID_LAYER_DOC.mdc … Invalid layer example
+- docs/ARCH/MISSING_LINK_DOC.mdc … Missing link example
+- docs/ARCH/CYCLE_A_DOC.mdc … Cycle entry A
+- docs/ARCH/CYCLE_B_DOC.mdc … Cycle entry B
+- docs/ARCH/BAD_HEADING_DOC.mdc … Heading numbering issue
+- docs/ARCH/MISSING_TOC_DOC.mdc … Missing table of contents
+- docs/ARCH/lowercase-name.mdc … Naming violation
+- docs/ARCH/MISSING_SCOPE_DOC.mdc … Scope section missing

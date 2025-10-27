@@ -1,0 +1,23 @@
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: docs/ARCH/NON_EXISTENT.mdc
+> Downstream: N/A
+
+# Missing Link Document
+## 目次
+- [1. Section](#1-section)
+- [1.1. Detail](#11-detail)
+- [2. Scope](#2-scope)
+
+## 1. Section
+存在しないドキュメントへのリンクを含むため DOC-03 を誘発します。
+
+### 1.1. Detail
+Upstream には実在するファイルを指定する必要があります。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: upstream の検証
+
+#### 扱わない内容
+- 含まれない: downstream の検証

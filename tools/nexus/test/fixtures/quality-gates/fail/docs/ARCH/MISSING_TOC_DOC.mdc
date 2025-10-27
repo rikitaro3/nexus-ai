@@ -1,0 +1,18 @@
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: N/A
+> Downstream: N/A
+
+# Missing TOC Document
+## 1. Section
+目次セクションが存在しないドキュメントです。
+
+### 1.1. Detail
+DOC-06 を誘発するために目次リンクを省略しています。
+
+## 2. Scope
+#### 扱う内容
+- 含まれる: 目次の検証
+
+#### 扱わない内容
+- 含まれない: その他の検証
