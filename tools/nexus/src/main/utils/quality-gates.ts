@@ -77,6 +77,7 @@ export interface QualityGateLogDescriptor {
   exitCode: number;
   relativePath: string;
   absolutePath: string;
+  summary: QualityGateSummaryItem[];
 }
 
 interface RunOptions {
@@ -343,12 +344,17 @@ export async function listQualityGateLogs(projectRoot: string): Promise<QualityG
     try {
       const text = await fs.readFile(absolutePath, 'utf8');
       const payload = JSON.parse(text) as QualityGateLogFile;
+      const summary = Array.isArray(payload.summary)
+        ? payload.summary as QualityGateSummaryItem[]
+        : summarizeGateResults(payload.payload?.results);
+
       descriptors.push({
         timestamp: payload.timestamp,
         mode: payload.mode,
         exitCode: payload.exitCode,
         relativePath: path.relative(projectRoot, absolutePath),
-        absolutePath
+        absolutePath,
+        summary
       });
     } catch (error) {
       logger.warn('Failed to parse Quality Gate log entry', {
