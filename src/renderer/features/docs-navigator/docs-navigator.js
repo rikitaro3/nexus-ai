@@ -219,8 +219,20 @@
     if (categoryOrder.length > 0) renderList(categoryOrder[0]);
   } catch (error) { console.error('Docs Navigator init error:', error); }
 
-  function extractSection(text, startHeader, stopHeaderPrefix) {
-    const startIdx = text.indexOf(startHeader); if (startIdx === -1) return ''; const after = text.slice(startIdx); const nextIdx = after.indexOf('\n## '); if (nextIdx === -1) return after.trim(); return after.slice(0, nextIdx).trim();
+  function extractSection(text, startHeader, stopHeaderPrefix = '## ') {
+    const startIdx = text.indexOf(startHeader);
+    if (startIdx === -1) return '';
+
+    const after = text.slice(startIdx);
+    const rest = after.slice(startHeader.length);
+    if (!stopHeaderPrefix) return after.trim();
+
+    const escapedPrefix = stopHeaderPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\n${escapedPrefix}`);
+    const match = regex.exec(rest);
+    if (!match) return after.trim();
+
+    return after.slice(0, startHeader.length + match.index).trim();
   }
   function extractBreadcrumbs(text) { const m = text.match(/>\s*Breadcrumbs[\s\S]*?(?=\n#|\n##|$)/); return m ? m[0] : ''; }
   function escapeHtml(s) { return String(s).replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
