@@ -65,10 +65,10 @@
     
     // 優先順位: カスタムパス（localStorage） > 環境変数 > デフォルト
     const customContextPath = localStorage.getItem('context-file-path');
-    
+
     // E2Eテスト時はデフォルトでnexusコンテキストを使用
     const saved = localStorage.getItem('nexus.context');
-    const contextToUse = saved || (isDebug ? 'nexus' : 'repo');
+    let contextToUse = saved || (isDebug ? 'nexus' : 'repo');
     
     if (customContextPath) {
       // カスタムパスが設定されている場合は絶対パスを使用
@@ -90,7 +90,26 @@
     }
     console.log('[Docs Navigator] Reading context from:', contextPath);
     console.log('[Docs Navigator] contextToUse:', contextToUse, 'isDebug:', isDebug, 'saved:', saved);
-    const ctxRes = await window.docs.read(contextPath);
+    let ctxRes = await window.docs.read(contextPath);
+    if (!ctxRes.success && contextPath !== 'tools/nexus/context.mdc' && !customContextPath) {
+      console.warn('[Docs Navigator] Context read failed, trying Nexus fallback...', ctxRes.error);
+      const fallbackPath = 'tools/nexus/context.mdc';
+      const fallbackRes = await window.docs.read(fallbackPath);
+      if (fallbackRes.success) {
+        console.log('[Docs Navigator] Fallback context loaded from Nexus package');
+        ctxRes = fallbackRes;
+        contextPath = fallbackPath;
+        contextToUse = 'nexus';
+        try {
+          localStorage.setItem('nexus.context', 'nexus');
+        } catch (err) {
+          console.warn('[Docs Navigator] Failed to persist fallback context selection:', err);
+        }
+      } else {
+        console.error('[Docs Navigator] Fallback context failed:', fallbackRes.error);
+      }
+    }
+
     if (!ctxRes.success) {
       console.error('[Docs Navigator] Failed to read context:', ctxRes.error);
       console.error('[Docs Navigator] contextPath:', contextPath);
