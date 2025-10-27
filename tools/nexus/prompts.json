@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "metadata": {
+    "description": "Nexus prompt dictionary sample for task breakdown, docs, and QA flows",
+    "updatedAt": "2024-12-01T00:00:00.000Z"
+  },
+  "categories": [
+    {
+      "id": "TASK_BREAKDOWN",
+      "label": "タスク分解",
+      "description": "Breakdown prompts used when drafting Cursor auto requests",
+      "items": [
+        {
+          "id": "TASK-BD-01",
+          "title": "MECE分解の指示",
+          "description": "要求をMECEに整理させるための共通フレーズ",
+          "body": "要求をMECE（重複なく漏れなく）に分解してください。",
+          "tags": ["breakdown", "mece"]
+        },
+        {
+          "id": "TASK-BD-02",
+          "title": "完了基準の定義要求",
+          "description": "各サブタスクに受入基準を付与するよう求める",
+          "body": "完了基準を定義してください。",
+          "tags": ["acceptance", "criteria"]
+        },
+        {
+          "id": "TASK-BD-03",
+          "title": "サブタスク生成テンプレート",
+          "description": "タスク概要を渡してサブタスクと完了基準を生成させる雛形",
+          "body": "以下の要求をサブタスクに分解してください：\n[TASK]\n\n出力形式：\n- サブタスク1: [内容], 完了基準: [基準]\n- サブタスク2: [内容], 完了基準: [基準]",
+          "tags": ["template", "subtasks"]
+        }
+      ]
+    },
+    {
+      "id": "DOC_REVIEW",
+      "label": "ドキュメント整備",
+      "description": "docs/PRD配下で使う整備・チェック系プロンプト",
+      "items": [
+        {
+          "id": "DOC-RD-01",
+          "title": "章番号整備",
+          "description": "Markdownセクションに章番号を付与する依頼",
+          "body": "このドキュメントに章番号を追加してください。\nルール：## 1. タイトル のように番号を付与",
+          "tags": ["docs", "format"]
+        },
+        {
+          "id": "DOC-RD-02",
+          "title": "目次追加",
+          "description": "リンク付き目次の生成を依頼",
+          "body": "リンク付きの目次を追加してください。\n形式：[テキスト](#アンカー)",
+          "tags": ["docs", "toc"]
+        },
+        {
+          "id": "DOC-CK-01",
+          "title": "システム要件定義書との比較",
+          "description": "不足項目がないか確認する質問系プロンプト",
+          "body": "一般的なシステム要件定義書と比較して、抜けている項目などはないですか？",
+          "tags": ["review", "consistency"]
+        }
+      ]
+    },
+    {
+      "id": "QUALITY_FLOW",
+      "label": "品質・検証",
+      "description": "コードレビューやE2Eテストに関する共通プロンプト",
+      "items": [
+        {
+          "id": "CODE-QC-01",
+          "title": "コードレビュー依頼",
+          "description": "コードの改善点を列挙してもらう",
+          "body": "以下のコードをレビューしてください。指摘事項を列挙してください。",
+          "tags": ["code", "review"]
+        },
+        {
+          "id": "CODE-QC-02",
+          "title": "型安全性チェック",
+          "description": "TypeScriptの型エラー洗い出し",
+          "body": "TypeScriptの型エラーを確認し、修正してください。",
+          "tags": ["typescript", "quality"]
+        },
+        {
+          "id": "TEST-E2E-01",
+          "title": "E2Eテスト実行依頼",
+          "description": "テストの実行と結果報告を依頼する定型文",
+          "body": "E2Eテストを実行し、結果を報告してください。",
+          "tags": ["e2e", "testing"]
+        }
+      ]
+    }
+  ]
+}

@@ -11,6 +11,11 @@ contextBridge.exposeInMainWorld('tasks', {
   appendMdc: (relPath: string, content: string): Promise<void> => ipcRenderer.invoke('mdc:append', relPath, content)
 });
 
+contextBridge.exposeInMainWorld('prompts', {
+  readJson: (): Promise<any> => ipcRenderer.invoke('prompts:readJson'),
+  writeJson: (data: any): Promise<void> => ipcRenderer.invoke('prompts:writeJson', data)
+});
+
 contextBridge.exposeInMainWorld('env', {
   isDebug: (): Promise<boolean> => ipcRenderer.invoke('env:isDebug')
 });
