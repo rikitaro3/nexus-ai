@@ -1,0 +1,189 @@
+# E2E技術調査報告書
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/QA/index.mdc
+> Downstream: N/A
+
+## 調査目的
+
+NexusのE2Eテスト基盤の実装可能性を検証し、適切な技術選定を行う。
+
+## 調査期間
+
+2025-10-26
+
+## 調査内容
+
+### 1. 技術スタック検証
+
+#### Playwright + CDP（Chrome DevTools Protocol）
+
+**検証結果**: ✅ 実装可能
+
+**詳細**:
+- Electronアプリを `--remote-debugging-port=9222` で起動
+- PlaywrightでCDP経由で接続可能
+- UI操作（クリック、入力）が可能
+- ログキャプチャ（stdout/stderr）が可能
+- スクリーンショット取得が可能
+
+**コード例**:
+```javascript
+const { chromium } = require('playwright');
+const browser = await chromium.connectOverCDP('http://localhost:9222');
+```
+
+#### 技術的課題と対策
+
+**課題1: CDP接続のタイミング問題**
+
+- **問題**: Electron起動直後にCDP接続すると失敗する
+- **原因**: CDPサーバーの準備が完了していない
+- **対策**: 十分な待機時間を設ける（10秒以上）
+- **実装**: `await new Promise(resolve => setTimeout(resolve, 12000))`
+
+**課題2: Windows環境での特殊対応**
+
+- **問題**: Windows環境でElectron起動コマンドが異なる
+- **原因**: パス正規化とコマンド形式の違い
+- **対策**: `electron.cmd` の使用とパス正規化
+- **実装**: `process.platform === 'win32' ? electronCmd : electronPath`
+
+**課題3: 自動終了処理**
+
+- **問題**: E2Eテスト完了後のアプリ自動終了が必要
+- **原因**: テストプロセスが残る
+- **対策**: タイムアウト設定とアプリ終了処理
+- **実装**: `electronProcess.kill()` でプロセスを終了
+
+## 検証結果サマリー
+
+### ✅ 実装可能な機能
+
+1. **Electron起動**: ✅ 成功
+2. **リモートデバッグ**: ✅ 実現可能
+3. **Playwright連携**: ✅ 接続可能
+4. **UI操作**: ✅ 操作可能
+5. **ログキャプチャ**: ✅ キャプチャ可能
+6. **スクリーンショット**: ✅ 取得可能
+
+### ⚠️ 既知の制限事項
+
+1. **タイミング依存**: CDP接続前に十分な待機時間が必要
+2. **プラットフォーム依存**: Windows環境での特殊対応が必要
+3. **テストの断続性**: 複数回の修正が必要な場合がある
+
+## 推奨される実装アプローチ
+
+### フェーズ1: 基本構成（完了）
+
+- ✅ Electron起動とCDP接続
+- ✅ 基本的なUI操作
+- ✅ スクリーンショット取得
+- ✅ ログキャプチャ
+
+**実装済みファイル**:
+- `legacy/tests/test-e2e-v2.js`: 基本E2Eテスト実装
+- `e2e-proof/`: 最小構成の証明アプリ
+
+### フェーズ2: 自動修正機能（実装中）
+
+- ⏳ エラー検出とログ解析
+- ⏳ 自動修正提案
+- ⏳ 自動再実行ループ
+
+**実装予定**:
+- エラーパターン定義
+- 自動修正ロジック
+- リトライ機能
+
+### フェーズ3: CI/CD統合（将来）
+
+- ⏸️ GitHub Actions統合
+- ⏸️ 自動テスト実行
+- ⏸️ レポート生成
+
+## ベストプラクティス
+
+### 1. 待機時間の最適化
+
+```javascript
+// 十分な待機時間を設ける
+await new Promise(resolve => setTimeout(resolve, 12000));
+
+// 明示的な状態チェック
+let ready = await page.evaluate(() => window.docsNavigatorReady === true);
+```
+
+### 2. エラーハンドリング
+
+```javascript
+try {
+  // テスト実行
+} catch (error) {
+  console.error('Test failed:', error.message);
+  // エラーログの保存
+  fs.writeFileSync('e2e-test-logs.txt', logs.join('\n'));
+}
+```
+
+### 3. リトライ機能
+
+```javascript
+async function runTestWithRetry(maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    const result = await testNexus();
+    if (result.success) {
+      return result;
+    }
+    // 再試行
+  }
+}
+```
+
+## 結論
+
+### 技術的な実現可能性
+
+✅ **E2E基盤は技術的に実装可能**
+
+- Electron + Playwright + CDP の組み合わせで実現可能
+- 基本的なE2Eテストは実装済み
+- 自動修正機能は部分的に実装済み
+
+### ✅ 実装完了（2025-01-27）
+
+**完全自動化されたE2Eテストの実装に成功**
+
+- PlaywrightのElectron launch APIを使用
+- DevToolsとアプリウィンドウの自動判別を実装
+- CDP接続の問題を回避した手法を確立
+
+**成功した実装**: `e2e-proof/test-working.js`
+
+### 推奨事項（更新）
+
+1. **完全自動化E2Eテストを優先**
+   - 手動操作不要でテストを実行可能
+   - すべてのステップが自動化
+   - 実行時間: 約10秒
+
+2. **実装ガイド**
+   - `E2E自動テスト実装ガイド.mdc` を参照
+   - NEXUSアプリへの適用方法が記載されています
+
+3. **段階的な実装**
+   - フェーズ1: 基本構成（完了）✅
+   - フェーズ2: NEXUSアプリへの適用（準備完了）
+   - フェーズ3: CI/CD統合（将来）
+
+## 参考資料
+
+- `e2e-proof/test-working.js`: **完全自動化E2Eテスト（動作保証版）** ✅
+- `e2e-proof/SUCCESS_REPORT.md`: 詳細な成功報告
+- `e2e-proof/README.md`: 実装可能性検証結果
+- `docs/QA/E2E自動テスト実装ガイド.mdc`: NEXUSアプリへの適用ガイド
+
+alwaysApply: true
+---

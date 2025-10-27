@@ -16,7 +16,6 @@ Document navigator and tasks management tool for multi-repository development pr
 ### Setup
 
 ```bash
-cd tools/nexus
 npm install
 ```
 
@@ -58,31 +57,26 @@ npm run test:e2e:playwright
 ## File Structure
 
 ```
-tools/
-└── nexus/
-    ├── src/
-    │   ├── main/           # Main Process (TypeScript)
-    │   │   └── main.ts
-    │   ├── preload/        # Preload script (TypeScript)
-    │   │   └── preload.ts
-    │   └── renderer/       # Renderer Process UI (HTML/JS/CSS)
-    │       ├── index.html
-    │       ├── styles/
-    │       │   └── app.css
-    │       ├── features/
-    │       │   ├── docs-navigator/
-    │       │   │   └── docs-navigator.js
-    │       │   └── tasks/
-    │       │       └── tasks.js
-    │       └── shared/
-    │           └── app.js
-    ├── dist/               # Compiled TypeScript output
-    ├── docs/               # Documentation
-    ├── test/
-    │   ├── e2e/            # Playwright smoke tests
-    │   └── unit/           # Placeholder for unit tests
-    ├── legacy/             # Archived pre-TypeScript assets
-    └── context.mdc         # Nexus context map
+src/
+├── main/           # Main Process (TypeScript)
+│   └── main.ts
+├── preload/        # Preload script (TypeScript)
+│   └── preload.ts
+└── renderer/       # Renderer Process UI (HTML/JS/CSS)
+    ├── index.html
+    ├── styles/
+    │   └── app.css
+    ├── features/
+    │   ├── docs-navigator/
+    │   │   └── docs-navigator.js
+    │   └── tasks/
+    │       └── tasks.js
+    └── shared/
+        └── app.js
+docs/               # Documentation
+test/               # Playwright, integration, and unit tests
+legacy/             # Archived pre-TypeScript assets
+context.mdc         # Nexus context map
 ```
 
 ## Current Status

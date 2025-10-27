@@ -1,0 +1,34 @@
+# Nexus PRD index
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: docs/index.mdc
+> Downstream: docs/PRD/PRD_Nexus_2.mdc, docs/PRD/PRD_DocumentTemplate.mdc, docs/PRD/PRD_Strategy.mdc
+
+## PRD Documents
+
+- **システム要件定義書.mdc** … 要求を技術的実装要件に変換
+- **PRD_Nexus.mdc** … Nexus最小MVP要件
+- **PRD_DocumentTemplate.mdc** … ドキュメントテンプレート定義
+- **PRD_DocsNavigator_TasksBreakdown.mdc** … Docs Navigator + Tasks Breakdown
+- **PRD_Strategy.mdc** … Nexus戦略・ビジョン（全体コンセプト、ドキュメント体系、UI、AIワークフロー、品質管理）
+
+## Features Registry（NEX-ID）
+
+### NEX-0001: Nexus最小MVP（Docs/FEATs/Orphans + Tasks/Breakdown UI）
+- PRD: docs/PRD/PRD_Nexus_2.mdc
+- ARCH: docs/ARCH/index.mdc
+- DEVELOPMENT: docs/DEVELOPMENT/index.mdc
+- QA: docs/QA/index.mdc
+
+### NEX-0002: コンテキスト切替（デバッグ時のみ）
+- PRD: docs/PRD/PRD_Nexus_2.mdc
+- ARCH: docs/ARCH/index.mdc
+
+### NEX-0003: 戦略・ビジョン実装（長期）
+- PRD: docs/PRD/PRD_Strategy.mdc
+- スコープ: フェーズ1（Foundation）、フェーズ2（Automation）、フェーズ3（Quality Gate）
+
+## Notes
+- Nexusはデバッグ時のみコンテキスト選択で表示可能
+- 開発ドキュメントは docs/** 配下に集約

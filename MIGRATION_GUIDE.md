@@ -84,7 +84,7 @@ git submodule update
 #### Nexusリポジトリでの開発
 
 ```bash
-cd tools/nexus
+cd nexus-ai
 
 # 通常のGit操作が可能
 git status
@@ -126,8 +126,8 @@ git commit -m "Update nexus submodule"
 
 ### 作成済みファイル
 
-- `tools/nexus/.gitignore` - 独立リポジトリ用の除外設定
-- `tools/nexus/README.md` - サブモジュール使用方法の説明を追加済み
+- `.gitignore` - 独立リポジトリ用の除外設定
+- `README.md` - サブモジュール使用方法の説明を追加済み
 
 ### 更新済みファイル
 
@@ -170,7 +170,7 @@ rm -rf .git/modules/tools/nexus
 
 ## 関連ドキュメント
 
-- `tools/nexus/README.md` - Nexusの使用方法
+- `README.md` - Nexusの使用方法
 - `README.mdc` - プロジェクト全体のセットアップガイド
 - `.cursor/context.mdc` - AI開発者向けコンテキスト
 
