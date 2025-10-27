@@ -1,30 +1,28 @@
 import path from 'path';
 import { test, expect } from '@playwright/test';
 
-test.describe('Nexus smoke test', () => {
-  const fixturePath = path.resolve(__dirname, './fixtures/smoke.html');
+let treeFixtureUrl: string;
 
-  test.beforeAll(async () => {
-    console.log('Preparing smoke test fixture:', fixturePath);
-  });
+test.beforeAll(() => {
+  treeFixtureUrl = 'file://' + path.resolve(__dirname, './fixtures/smoke.html');
+});
 
-  test.afterAll(async () => {
-    console.log('Completed smoke test for fixture:', fixturePath);
-  });
+test.afterAll(() => {
+  treeFixtureUrl = '';
+});
 
+test.describe('Docs Navigator tree smoke', () => {
   /**
-   * 目的: Docs Navigatorのツリービューがデモ用fixtureから正常にレンダリングされることを確認する。
-   * 期待結果: Treeモードに切り替えるとステータスが"Tree view ready"となり、ルートノードが表示される。
+   * 目的: Docs Navigator のツリー表示がデモフィクスチャで描画されることを確認する
+   * 期待結果: ツリーモードを開くとルートノードとステータスが表示される
    */
-  test('renders tree view in demo fixture', async ({ page }) => {
-    const fileUrl = 'file://' + fixturePath;
+  test('renders tree view from demo fixture', async ({ page }) => {
+    await page.goto(treeFixtureUrl);
 
-    await page.goto(fileUrl);
     await expect(page.locator('text=Docs Navigator')).toBeVisible();
 
     const treeButton = page.locator('button[data-mode="tree"]');
     await expect(treeButton).toBeVisible();
-
     await treeButton.click();
 
     const status = page.locator('#tree-status');

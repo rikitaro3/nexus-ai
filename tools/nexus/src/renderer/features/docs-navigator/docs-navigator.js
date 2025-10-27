@@ -14,27 +14,26 @@
   const treeStatusEl = document.getElementById('tree-status');
   const treeDetailPanel = document.getElementById('tree-detail');
   const gateResultsPanel = document.getElementById('gate-results');
-  let currentGateResults = null;
-  const DOC_GATES = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08'];
-  const GATE_ORDER = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08', 'TC-01', 'TC-02', 'TC-03', 'TC-04'];
-  const GATE_SEVERITY = {
-    'DOC-01': 'error',
-    'DOC-02': 'error',
-    'DOC-03': 'error',
-    'DOC-04': 'warn',
-    'DOC-05': 'error',
-    'DOC-06': 'error',
-    'DOC-07': 'error',
-    'DOC-08': 'warn',
-    'TC-01': 'error',
-    'TC-02': 'warn',
-    'TC-03': 'warn',
-    'TC-04': 'error'
-  };
   const modeDescriptions = {
     docs: 'カテゴリからドキュメントを探索します',
     feats: 'FEATのカバレッジと関連ドキュメントを確認します',
     tree: 'Breadcrumbsからリンク構造を検証します'
+  };
+  const VALID_LAYERS = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
+  const GATE_ORDER = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08', 'TC-01', 'TC-02', 'TC-03', 'TC-04'];
+  const GATE_METADATA = {
+    'DOC-01': { severity: 'error' },
+    'DOC-02': { severity: 'error' },
+    'DOC-03': { severity: 'error' },
+    'DOC-04': { severity: 'warn' },
+    'DOC-05': { severity: 'error' },
+    'DOC-06': { severity: 'error' },
+    'DOC-07': { severity: 'error' },
+    'DOC-08': { severity: 'warn' },
+    'TC-01': { severity: 'error' },
+    'TC-02': { severity: 'warn' },
+    'TC-03': { severity: 'warn' },
+    'TC-04': { severity: 'error' }
   };
   let selectedCategory = null;
   let selectedDocPath = null;
@@ -461,20 +460,24 @@
           docStatus.set(entry.path, { status: 'read-error', message: res.error });
           continue;
         }
+
         docContents.set(entry.path, res.content);
+
         const bc = extractBreadcrumbs(res.content);
         if (!bc) {
           console.log('[parseAllBreadcrumbs] No breadcrumbs in:', entry.path);
           docStatus.set(entry.path, { status: 'missing-breadcrumbs' });
           continue;
         }
+
         const layer = (bc.match(/>\s*Layer:\s*(.+)/) || [])[1] || '';
         const upRaw = (bc.match(/>\s*Upstream:\s*(.+)/) || [])[1] || '';
         const downRaw = (bc.match(/>\s*Downstream:\s*(.+)/) || [])[1] || '';
         const upstream = upRaw.split(',').map(s => s.trim()).filter(s => s && s.toUpperCase() !== 'N/A');
         const downstream = downRaw.split(',').map(s => s.trim()).filter(s => s && s.toUpperCase() !== 'N/A');
         console.log('[parseAllBreadcrumbs] Extracted - path:', entry.path, 'layer:', layer, 'upstream:', upstream, 'downstream:', downstream);
-        nodes.set(entry.path, { path: entry.path, layer, upstream, downstream, children: [], expanded: false, content: res.content });
+        nodes.set(entry.path, { path: entry.path, layer, upstream, downstream, children: [], expanded: false });
+
         if (!layer && upstream.length === 0 && downstream.length === 0) {
           docStatus.set(entry.path, { status: 'missing-breadcrumbs' });
         } else {
@@ -569,32 +572,7 @@
     const relatedDocLinks = Object.entries(relatedDocs).map(([key, path]) => {
       return `<button class="btn btn-secondary feat-doc-link" data-path="${escapeHtml(path)}">${key}</button>`;
     }).join(' ');
-
-    let gateSectionHtml = '';
-    if (currentGateResults) {
-      const gateItems = [];
-      for (const gateId of DOC_GATES) {
-        const violations = (currentGateResults[gateId] || []).filter(v => v.path === node.path);
-        if (!violations.length) continue;
-        const defaultSeverity = GATE_SEVERITY[gateId] || 'error';
-        const hasError = violations.some(v => (v.severity || defaultSeverity) === 'error');
-        const severityClass = hasError ? 'error' : 'warn';
-        const violationItems = violations.map(v => {
-          const lineLabel = v.line ? ` <span class="gate-line">L${v.line}</span>` : '';
-          return `<li>${escapeHtml(v.message)}${lineLabel}</li>`;
-        }).join('');
-        gateItems.push(`<li class="gate-detail-${severityClass}"><strong>${gateId}</strong><ul>${violationItems}</ul></li>`);
-      }
-      if (gateItems.length > 0) {
-        gateSectionHtml = `
-          <section class="doc-detail__section">
-            <h4>Gate Violations</h4>
-            <ul class="gate-detail-list">${gateItems.join('')}</ul>
-          </section>
-        `;
-      }
-    }
-
+    
     detailPanel.innerHTML = `
       <div>
         <h4>${escapeHtml(node.path)}</h4>
@@ -611,7 +589,6 @@
         <ul>${downstreamLinks || '<li>なし</li>'}</ul>
         <h4>Children（子ノード）</h4>
         <ul>${childrenLinks || '<li>なし</li>'}</ul>
-        ${gateSectionHtml}
         ${breadcrumbsHtml}
       </div>
     `;
@@ -697,9 +674,8 @@
       }
     }
 
-    const validLayers = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
     for (const [path, node] of nodes) {
-      if (node.layer && !validLayers.includes(node.layer.toUpperCase())) {
+      if (node.layer && !VALID_LAYERS.includes(node.layer.toUpperCase())) {
         results['DOC-02'].push({ path, layer: node.layer, message: `無効なLayer: ${node.layer}`, severity: 'error' });
       }
       for (const upPath of node.upstream) {
@@ -717,23 +693,23 @@
     const cycles = detectCycles(nodes);
     results['DOC-04'] = cycles.map(cycle => ({ ...cycle, severity: 'warn' }));
 
-    for (const [path, content] of docContents.entries()) {
-      const analysis = analyzeHeadingsUi(path, content);
+    for (const [docPath, content] of docContents.entries()) {
+      const analysis = analyzeHeadingsUi(docPath, content);
       if (analysis.violations.length) {
         results['DOC-05'].push(...analysis.violations);
       }
 
-      const tocViolations = validateTableOfContentsUi(path, content, analysis);
+      const tocViolations = validateTableOfContentsUi(docPath, content, analysis);
       if (tocViolations.length) {
         results['DOC-06'].push(...tocViolations);
       }
 
-      const namingViolations = validateFileNamingUi(path, nodes.get(path));
+      const namingViolations = validateFileNamingUi(docPath, nodes.get(docPath));
       if (namingViolations.length) {
         results['DOC-07'].push(...namingViolations);
       }
 
-      const scopeViolations = validateScopeSectionsUi(path, content, analysis);
+      const scopeViolations = validateScopeSectionsUi(docPath, content, analysis);
       if (scopeViolations.length) {
         results['DOC-08'].push(...scopeViolations);
       }
@@ -754,220 +730,11 @@
     return results;
   }
 
-  function analyzeHeadingsUi(path, content) {
-    const lines = content.split('\n');
-    const headingsRaw = [];
-    const headingRegex = /^(#{2,6})\s+(.+)$/;
-    for (let i = 0; i < lines.length; i++) {
-      const match = headingRegex.exec(lines[i]);
-      if (!match) continue;
-      const level = match[1].length;
-      const rest = match[2].trim();
-      const numberMatch = rest.match(/^(\d+(?:\.\d+)*)(?:\.)?\s+(.*)$/);
-      let numbers = null;
-      let title = rest;
-      if (numberMatch) {
-        numbers = numberMatch[1].split('.').map(v => Number(v));
-        title = numberMatch[2] || '';
-      }
-      headingsRaw.push({
-        level,
-        line: i + 1,
-        rest,
-        title,
-        numbers,
-        hasNumbering: Boolean(numbers && numbers.every(n => Number.isFinite(n)))
-      });
-    }
-
-    const hasNumbering = headingsRaw.some(h => h.hasNumbering && h.level <= 3);
-    const headings = headingsRaw.map(heading => ({
-      path,
-      line: heading.line,
-      level: heading.level,
-      title: heading.title,
-      numbers: heading.hasNumbering ? heading.numbers : null,
-      hasNumbering: heading.hasNumbering,
-      anchorKey: heading.hasNumbering ? sanitizeKey(`${heading.numbers.join('-')}-${heading.title}`) : sanitizeKey(heading.title)
-    }));
-
-    return { headings, violations: [], applicable: hasNumbering };
-  }
-
-  function validateTableOfContentsUi(path, content, analysis) {
-    if (!analysis.applicable) return [];
-    const tocSection = extractSection(content, '## 目次', '## ');
-    if (!tocSection) return [];
-
-    const linkRegex = /\[(.+?)\]\(#([^)]+)\)/g;
-    const links = [];
-    let match;
-    while ((match = linkRegex.exec(tocSection)) !== null) {
-      links.push(match[0]);
-    }
-
-    if (!links.length) {
-      return [{ path, message: '目次にリンクが定義されていません', severity: 'error' }];
-    }
-
-    return [];
-  }
-
-  function validateFileNamingUi(path, node) {
-    const violations = [];
-    if (!node) return violations;
-    const segments = path.split('/');
-    const fileName = segments[segments.length - 1] || path;
-    if (fileName.toLowerCase() === 'index.mdc') return violations;
-
-    const lastDot = fileName.lastIndexOf('.');
-    const ext = lastDot >= 0 ? fileName.slice(lastDot).toLowerCase() : '';
-    const layer = node.layer ? node.layer.toUpperCase() : null;
-
-    if (!ext) {
-      violations.push({ path, message: '拡張子が存在しません', severity: 'error' });
-    } else if (ext !== '.mdc' && !(layer === 'ARCH' && ext === '.md')) {
-      violations.push({ path, message: `無効な拡張子: ${ext}`, severity: 'error' });
-    }
-
-    if (/\s/.test(fileName)) {
-      violations.push({ path, message: 'ファイル名に空白が含まれています', severity: 'error' });
-    }
-
-    const allowedPattern = /^[\p{L}\p{N}_\-\.]+$/u;
-    if (!allowedPattern.test(fileName)) {
-      violations.push({ path, message: 'ファイル名に使用できない文字が含まれています', severity: 'error' });
-    }
-
-    if (layer === 'PRD' && ext !== '.mdc') {
-      violations.push({ path, message: 'PRD層のドキュメントは.mdc拡張子を使用してください', severity: 'error' });
-    }
-
-    if (layer === 'QA' && ext !== '.mdc') {
-      violations.push({ path, message: 'QA層のドキュメントは.mdc拡張子を使用してください', severity: 'error' });
-    }
-
-    return violations;
-  }
-
-  function validateScopeSectionsUi(path, content, analysis) {
-    if (!analysis.applicable) return [];
-    const sections = [
-      { label: '扱う内容', regex: /^##+\s*(扱う内容|Scope)\s*$/m },
-      { label: '扱わない内容', regex: /^##+\s*(扱わない内容|Out of Scope)\s*$/m }
-    ];
-
-    const violations = [];
-    for (const section of sections) {
-      const match = section.regex.exec(content);
-      if (!match) continue;
-      const startIndex = match.index + match[0].length;
-      const rest = content.slice(startIndex);
-      const nextSectionMatch = rest.match(/\n##\s+/);
-      const block = nextSectionMatch ? rest.slice(0, nextSectionMatch.index) : rest;
-      const hasList = /(^|\n)\s*[-\*]\s+/.test(block);
-      const hasText = block.trim().length > 0;
-      if (!hasList || !hasText) {
-        violations.push({ path, message: `${section.label} セクションの内容が不足しています`, severity: 'warn' });
-      }
-    }
-    return violations;
-  }
-
-  async function loadTestCasesUi() {
-    try {
-      const manifestRes = await window.docs.read('test/test-cases.json');
-      let specFiles = [];
-      if (manifestRes.success) {
-        try {
-          const parsed = JSON.parse(manifestRes.content);
-          if (Array.isArray(parsed.specFiles)) {
-            specFiles = parsed.specFiles.filter(p => typeof p === 'string');
-          }
-        } catch (error) {
-          console.warn('[validateGates] Failed to parse test-cases.json:', error);
-        }
-      }
-
-      const cases = [];
-      const errors = [];
-      for (const specPath of specFiles) {
-        const res = await window.docs.read(specPath);
-        if (res.success) {
-          cases.push({ path: specPath, content: res.content });
-        } else {
-          errors.push({ path: specPath, message: res.error || '読み込み失敗' });
-        }
-      }
-      return { cases, errors };
-    } catch (error) {
-      console.warn('[validateGates] loadTestCasesUi failed:', error);
-      return { cases: [], errors: [] };
-    }
-  }
-
-  function validateTestCasesUi(testCases) {
-    const results = {
-      'TC-01': [],
-      'TC-02': [],
-      'TC-03': [],
-      'TC-04': []
-    };
-    const namePattern = /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*\.spec\.ts$/;
-    const dependencyPatterns = [
-      /(test|it)\([^)]*\)\s*\.then/si,
-      /afterEach[\s\S]*?(test|it)\(/si
-    ];
-
-    for (const testCase of testCases) {
-      const fileName = testCase.path.split('/').pop() || testCase.path;
-      if (!namePattern.test(fileName.toLowerCase())) {
-        results['TC-01'].push({ path: testCase.path, message: 'ファイル名が `[分類]-[機能]-[シナリオ].spec.ts` 形式に一致しません', severity: 'error' });
-      }
-
-      for (const pattern of dependencyPatterns) {
-        if (pattern.test(testCase.content)) {
-          results['TC-02'].push({ path: testCase.path, message: 'テストケース間の依存関係が検出されました', severity: 'warn' });
-          break;
-        }
-      }
-
-      const tests = (testCase.content.match(/\b(test|it)\s*\(/g) || []).length;
-      if (tests > 0) {
-        const documented = (testCase.content.match(/\/\*\*[\s\S]*?目的[\s\S]*?期待結果[\s\S]*?\*\//g) || []).length;
-        const coverage = Math.round((documented / tests) * 100);
-        if (coverage < 80) {
-          results['TC-03'].push({ path: testCase.path, message: `テストドキュメント化率が不足しています (${coverage}% < 80%)`, severity: 'warn' });
-        }
-      }
-
-      const hasFixture = /fixtures\//.test(testCase.content);
-      const hasSetup = /(beforeAll|test\.beforeAll)/.test(testCase.content);
-      const hasTeardown = /(afterAll|test\.afterAll)/.test(testCase.content);
-      if (!hasFixture || !hasSetup || !hasTeardown) {
-        const missing = [];
-        if (!hasFixture) missing.push('fixtures参照');
-        if (!hasSetup) missing.push('beforeAll');
-        if (!hasTeardown) missing.push('afterAll');
-        results['TC-04'].push({ path: testCase.path, message: `テストデータ管理が不十分です (${missing.join(', ')})`, severity: 'error' });
-      }
-    }
-
-    return results;
-  }
-
-  function sanitizeKey(value) {
-    return (value || '')
-      .normalize('NFKC')
-      .toLowerCase()
-      .replace(/[^a-z0-9一-龠ぁ-んァ-ヶー]/g, '');
-  }
-
   function detectCycles(nodes) {
     const visited = new Set();
     const recStack = new Set();
     const cycles = [];
-    
+
     function dfs(path, stack) {
       if (recStack.has(path)) {
         const cycle = [...stack, path];
@@ -995,37 +762,375 @@
     return cycles;
   }
 
+  function analyzeHeadingsUi(pathKey, content) {
+    const lines = content.split('\n');
+    const headingRegex = /^(#{2,6})\s+(.+)$/;
+    const rawHeadings = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const match = headingRegex.exec(lines[i]);
+      if (!match) continue;
+
+      const level = match[1].length;
+      if (level > 3) continue;
+      const rest = match[2].trim();
+      const numberMatch = rest.match(/^(\d+(?:\.\d+)*)(?:\.)?\s+(.*)$/);
+      rawHeadings.push({
+        level,
+        line: i + 1,
+        numbers: numberMatch ? numberMatch[1].split('.').map(v => Number(v)) : null,
+        title: numberMatch ? numberMatch[2].trim() : rest,
+        raw: rest
+      });
+    }
+
+    const hasNumbering = rawHeadings.some(h => Array.isArray(h.numbers));
+    const counters = [0, 0, 0, 0, 0];
+    const headings = [];
+    const violations = [];
+
+    for (const heading of rawHeadings) {
+      const depth = heading.level - 2;
+      const numbers = heading.numbers;
+
+      if (!numbers) {
+        const isToc = /^目次$/i.test(heading.raw) || /^table of contents$/i.test(heading.raw);
+        headings.push(createHeadingMetaUi(pathKey, heading.level, null, heading.raw));
+        if (hasNumbering && !isToc) {
+          violations.push({
+            path: pathKey,
+            line: heading.line,
+            message: `見出しに章番号がありません: ${heading.raw}`,
+            severity: 'error'
+          });
+        }
+        continue;
+      }
+
+      if (numbers.some(n => !Number.isFinite(n))) {
+        violations.push({
+          path: pathKey,
+          line: heading.line,
+          message: `章番号が数値ではありません: ${heading.raw}`,
+          severity: 'error'
+        });
+        headings.push(createHeadingMetaUi(pathKey, heading.level, numbers, heading.title));
+        continue;
+      }
+
+      if (depth >= 0 && numbers.length !== depth + 1) {
+        violations.push({
+          path: pathKey,
+          line: heading.line,
+          message: `章番号の桁数が見出し階層と一致しません (期待: ${depth + 1}桁)`,
+          severity: 'error'
+        });
+      }
+
+      let parentMismatch = false;
+      for (let idx = 0; idx < depth; idx++) {
+        if (numbers[idx] !== counters[idx]) {
+          parentMismatch = true;
+          break;
+        }
+      }
+      if (parentMismatch) {
+        violations.push({
+          path: pathKey,
+          line: heading.line,
+          message: '章番号の親階層が直前の番号と一致しません',
+          severity: 'error'
+        });
+      }
+
+      if (depth >= 0) {
+        const expected = counters[depth] === 0 ? numbers[depth] : counters[depth] + 1;
+        if (counters[depth] !== 0 && numbers[depth] !== expected) {
+          violations.push({
+            path: pathKey,
+            line: heading.line,
+            message: `章番号の連番が不正です (期待: ${expected}, 実際: ${numbers[depth]})`,
+            severity: 'error'
+          });
+        }
+
+        counters[depth] = numbers[depth];
+        for (let j = depth + 1; j < counters.length; j++) {
+          counters[j] = 0;
+        }
+      }
+
+      headings.push(createHeadingMetaUi(pathKey, heading.level, numbers, heading.title));
+    }
+
+    return { headings, violations, applicable: hasNumbering };
+  }
+
+  function createHeadingMetaUi(pathKey, level, numbers, title) {
+    return {
+      path: pathKey,
+      level,
+      numbers: numbers || null,
+      title,
+      anchorKey: numbers ? `${numbers.join('')}-${slugifyHeading(title)}` : slugifyHeading(title)
+    };
+  }
+
+  function slugifyHeading(value) {
+    return (value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s]+/g, '-')
+      .replace(/[^\p{L}\p{N}\-ー一-龠ぁ-んァ-ヶ]/gu, '');
+  }
+
+  function validateTableOfContentsUi(pathKey, content, analysis) {
+    if (!analysis.applicable) return [];
+    const tocSection = extractSection(content, '## 目次', '## ');
+    if (!tocSection) {
+      return [{ path: pathKey, message: '目次セクション (## 目次) が見つかりません', severity: 'error' }];
+    }
+
+    const linkRegex = /\[(.+?)\]\(#([^)]+)\)/g;
+    const anchors = new Set(analysis.headings.filter(h => h.numbers).map(h => h.anchorKey));
+    const missing = [];
+    let hasLink = false;
+    let match;
+    while ((match = linkRegex.exec(tocSection)) !== null) {
+      hasLink = true;
+      const anchor = match[2];
+      if (!anchors.has(anchor)) {
+        missing.push(anchor);
+      }
+    }
+
+    if (!hasLink) {
+      return [{ path: pathKey, message: '目次にリンクが定義されていません', severity: 'error' }];
+    }
+
+    if (missing.length > 0) {
+      return [{ path: pathKey, message: `目次リンクのアンカーが存在しません: ${missing.join(', ')}`, severity: 'error' }];
+    }
+
+    return [];
+  }
+
+  function validateFileNamingUi(pathKey, node) {
+    const violations = [];
+    if (!node) return violations;
+    const fileName = basename(pathKey);
+    if (fileName.toLowerCase() === 'index.mdc') {
+      return violations;
+    }
+
+    const ext = extname(fileName).toLowerCase();
+    const baseName = ext ? fileName.slice(0, -ext.length) : fileName;
+    const severity = 'error';
+
+    if (!ext) {
+      violations.push({ path: pathKey, message: '拡張子が存在しません', severity });
+    } else if (ext !== '.mdc' && !(node.layer?.toUpperCase() === 'ARCH' && ext === '.md')) {
+      violations.push({ path: pathKey, message: `無効な拡張子: ${ext}`, severity });
+    }
+
+    if (/\s/.test(fileName)) {
+      violations.push({ path: pathKey, message: 'ファイル名に空白が含まれています', severity });
+    }
+
+    const basePattern = /^[\p{L}\p{N}][\p{L}\p{N}_\-]*$/u;
+    if (!basePattern.test(baseName)) {
+      violations.push({ path: pathKey, message: 'ファイル名は英数字または日本語で始まり、英数字/ハイフン/アンダースコアのみ使用してください', severity });
+    }
+
+    const layer = node.layer ? node.layer.toUpperCase() : null;
+    if (layer === 'PRD' && !/^PRD_[A-Za-z0-9_-]+$/.test(baseName)) {
+      violations.push({ path: pathKey, message: 'PRD層のファイル名は PRD_ で始まる必要があります', severity });
+    }
+
+    if (layer === 'QA' && ext !== '.mdc') {
+      violations.push({ path: pathKey, message: 'QA層のドキュメントは .mdc 拡張子を使用してください', severity });
+    }
+
+    return violations;
+  }
+
+  function validateScopeSectionsUi(pathKey, content, analysis) {
+    if (!analysis.applicable) return [];
+
+    const sections = [
+      { label: '扱う内容', regex: /^##+\s*(扱う内容|Scope)\s*$/m },
+      { label: '扱わない内容', regex: /^##+\s*(扱わない内容|Out of Scope)\s*$/m }
+    ];
+
+    const violations = [];
+    for (const section of sections) {
+      const match = section.regex.exec(content);
+      if (!match) {
+        violations.push({ path: pathKey, message: `${section.label} セクションが見つかりません`, severity: 'warn' });
+        continue;
+      }
+
+      const startIndex = match.index + match[0].length;
+      const rest = content.slice(startIndex);
+      const nextSection = rest.search(/\n##\s+/);
+      const block = nextSection === -1 ? rest : rest.slice(0, nextSection);
+      const hasBullet = /(^|\n)\s*[-\*]\s+/.test(block);
+      const hasText = block.trim().length > 0;
+      if (!hasBullet || !hasText) {
+        violations.push({ path: pathKey, message: `${section.label} セクションの内容が不足しています`, severity: 'warn' });
+      }
+    }
+
+    return violations;
+  }
+
+  async function loadTestCasesUi() {
+    const manifestPath = 'test/test-cases.json';
+    const errors = [];
+    let specFiles = [];
+
+    try {
+      const manifestRes = await window.docs.read(manifestPath);
+      if (!manifestRes.success) {
+        errors.push({ path: manifestPath, message: `テストマニフェストを読み込めません: ${manifestRes.error}` });
+      } else {
+        try {
+          const manifest = JSON.parse(manifestRes.content);
+          if (Array.isArray(manifest.specFiles)) {
+            specFiles = manifest.specFiles.filter(p => typeof p === 'string');
+          }
+        } catch (err) {
+          errors.push({ path: manifestPath, message: `テストマニフェストの解析に失敗しました: ${err.message}` });
+        }
+      }
+    } catch (err) {
+      errors.push({ path: manifestPath, message: `テストマニフェストの読み込みで例外が発生しました: ${err.message}` });
+    }
+
+    const uniquePaths = [...new Set(specFiles)];
+    const cases = [];
+    for (const relPath of uniquePaths) {
+      try {
+        const res = await window.docs.read(relPath);
+        if (!res.success) {
+          errors.push({ path: relPath, message: `テストファイルを読み込めません: ${res.error}` });
+        } else {
+          cases.push({ path: relPath, content: res.content });
+        }
+      } catch (err) {
+        errors.push({ path: relPath, message: `テストファイル読込中に例外が発生しました: ${err.message}` });
+      }
+    }
+
+    return { cases, errors };
+  }
+
+  function validateTestCasesUi(testCases) {
+    const results = {
+      'TC-01': [],
+      'TC-02': [],
+      'TC-03': [],
+      'TC-04': []
+    };
+
+    for (const testCase of testCases) {
+      const fileName = basename(testCase.path);
+      const namingPattern = /^[a-z0-9]+(?:-[a-z0-9]+)+\.spec\.ts$/;
+      if (!namingPattern.test(fileName)) {
+        results['TC-01'].push({
+          path: testCase.path,
+          message: 'テストケースファイル名が命名規則に準拠していません (例: docs-navigator-tree-smoke.spec.ts)',
+          severity: 'error'
+        });
+      }
+
+      const dependencyPatterns = [
+        /test\.describe\.serial/,
+        /\btest\s*\([^)]*\)\s*\.then/
+      ];
+      if (dependencyPatterns.some(re => re.test(testCase.content))) {
+        results['TC-02'].push({
+          path: testCase.path,
+          message: 'テストケース間に依存関係が存在する可能性があります (serial describe や test(...).then(...) の使用を見直してください)',
+          severity: 'warn'
+        });
+      }
+
+      const testCount = [...testCase.content.matchAll(/\b(test|it)\s*\(/g)].length;
+      const documentedCount = (testCase.content.match(/\/\*\*[\s\S]*?目的[\s\S]*?期待結果[\s\S]*?\*\//g) || []).length;
+      if (testCount > 0) {
+        const coverage = Math.round((documentedCount / testCount) * 100);
+        if (coverage < 80) {
+          results['TC-03'].push({
+            path: testCase.path,
+            message: `テストドキュメント化率が不足しています (${coverage}% < 80%)`,
+            severity: 'warn'
+          });
+        }
+      }
+
+      const hasFixture = /fixtures\//.test(testCase.content);
+      const hasSetup = /(beforeAll|test\.beforeAll)/.test(testCase.content);
+      const hasTeardown = /(afterAll|test\.afterAll)/.test(testCase.content);
+      if (!hasFixture || !hasSetup || !hasTeardown) {
+        const missing = [];
+        if (!hasFixture) missing.push('fixtures参照');
+        if (!hasSetup) missing.push('beforeAll');
+        if (!hasTeardown) missing.push('afterAll');
+        results['TC-04'].push({
+          path: testCase.path,
+          message: `テストデータ管理が不十分です (${missing.join(', ')})`,
+          severity: 'error'
+        });
+      }
+    }
+
+    return results;
+  }
+
+  function basename(filePath) {
+    const parts = filePath.split(/[/\\]/);
+    return parts[parts.length - 1] || '';
+  }
+
+  function extname(fileName) {
+    const idx = fileName.lastIndexOf('.');
+    return idx === -1 ? '' : fileName.slice(idx);
+  }
+
   function renderGateResults(results) {
     const panel = gateResultsPanel || document.getElementById('gate-results');
     if (!panel) return;
     panel.classList.remove('empty-state');
     panel.innerHTML = '';
-
     for (const gateId of GATE_ORDER) {
       const violations = results[gateId] || [];
-      const defaultSeverity = GATE_SEVERITY[gateId] || 'error';
+      const defaultSeverity = GATE_METADATA[gateId]?.severity || 'error';
       const hasError = violations.some(v => (v.severity || defaultSeverity) === 'error');
       const hasViolations = violations.length > 0;
-      const status = hasViolations ? (hasError ? 'error' : 'warn') : 'pass';
+      const statusClass = hasViolations ? (hasError ? 'error' : 'warn') : 'pass';
       const statusText = hasViolations
-        ? (hasError ? `✗ ${violations.length} issue(s)` : `⚠ ${violations.length} warning(s)`)
+        ? hasError
+          ? `✗ ${violations.length}件`
+          : `△ ${violations.length}件`
         : '✓ PASS';
 
       const gateDiv = document.createElement('div');
-      gateDiv.className = `gate-result ${status}`;
+      gateDiv.className = `gate-result ${statusClass}`;
       gateDiv.innerHTML = `<strong>${gateId}</strong>: ${statusText}`;
 
       if (violations.length > 0) {
         for (const v of violations) {
+          const severity = v.severity || defaultSeverity;
           const vDiv = document.createElement('div');
           vDiv.className = 'gate-violation';
-          const lineLabel = v.line ? `<span class="gate-line">L${v.line}</span>` : '';
           vDiv.innerHTML = `
-            <div>${escapeHtml(v.path)} ${lineLabel}</div>
+            <div>${escapeHtml(v.path)}</div>
             <div style="font-size:12px;color:#6b7280;">${escapeHtml(v.message)}</div>
             <div class="gate-actions">
               <button class="btn btn-sm btn-secondary" data-action="open" data-path="${escapeHtml(v.path)}">Open</button>
               <button class="btn btn-sm btn-secondary" data-action="fix" data-gate="${gateId}" data-path="${escapeHtml(v.path)}">Fix Prompt</button>
+              <span class="status status-${severity === 'error' ? 'error' : 'warn'}">${severity.toUpperCase()}</span>
             </div>
           `;
           gateDiv.appendChild(vDiv);
@@ -1056,16 +1161,16 @@
       'DOC-02': `以下のドキュメントのLayerを修正してください。\n\nファイル: ${path}\n\n有効なLayer: STRATEGY, PRD, UX, API, DATA, ARCH, DEVELOPMENT, QA`,
       'DOC-03': `以下のドキュメントのUpstream/Downstreamパスを修正してください。\n\nファイル: ${path}\n\n存在しないパスを削除または修正してください。`,
       'DOC-04': `以下のドキュメントで循環参照を解消してください。\n\nファイル: ${path}\n\nUpstream/Downstreamリンクを見直し、循環を解消してください。`,
-      'DOC-05': `以下のドキュメントの見出しに章番号を付与し、連番になるよう修正してください。\n\nファイル: ${path}\n\n例:\n## 1. セクションタイトル\n### 1.1 サブセクション`,
-      'DOC-06': `以下のドキュメントに有効な目次を追加してください。\n\nファイル: ${path}\n\n手順:\n1. \"## 目次\" セクションを追加\n2. 各見出しに対応するリンク [1. タイトル](#1-タイトル) を列挙\n3. リンク先のアンカーが実際の見出しと一致していることを確認`,
-      'DOC-07': `以下のドキュメントのファイル名を命名規則に合わせてください。\n\nファイル: ${path}\n\n命名ルール:\n- PRD/QA層: *.mdc\n- ARCH層: *.mdc または *.md\n- 空白や禁則文字を含めない`,
-      'DOC-08': `以下のドキュメントに扱う内容/扱わない内容のセクションを整備してください。\n\nファイル: ${path}\n\n推奨構成:\n## 扱う内容\n- 箇条書きで範囲を記載\n## 扱わない内容\n- 箇条書きで非対象を記載`,
-      'TC-01': `以下のテストケースファイルを命名規則に合わせてリネームしてください。\n\nファイル: ${path}\n\n形式: [分類]-[機能]-[シナリオ].spec.ts （例: docs-navigator-tree-smoke.spec.ts）`,
-      'TC-02': `以下のテストケースから他テストへの依存関係を排除してください。\n\nファイル: ${path}\n\n依存パターン（test.then, beforeAllで他テスト参照 など）を解消し、各テストが独立して動作するようにしてください。`,
-      'TC-03': `以下のテストケースに目的と期待結果のコメントを追加してください。\n\nファイル: ${path}\n\n各 test/it の直前に /** 目的: ... 期待結果: ... */ 形式のコメントを記述し、80%以上のカバレッジを確保してください。`,
-      'TC-04': `以下のテストケースでテストデータ管理を整備してください。\n\nファイル: ${path}\n\nチェック項目:\n- fixtures/ 配下のテストデータを参照しているか\n- beforeAll/test.beforeAll でセットアップ済みか\n- afterAll/test.afterAll で後処理しているか`
+      'DOC-05': `見出しに章番号を追加してください。\n\nファイル: ${path}\n\n例:\n## 1. セクションタイトル\n### 1.1 サブセクション`,
+      'DOC-06': `目次を更新してください。\n\nファイル: ${path}\n\n手順:\n1. ## 目次 ブロックを用意\n2. 各見出しに対応するリンク (例: [1. 概要](#1-概要)) を整備`,
+      'DOC-07': `ファイル名を命名規則に合わせてリネームしてください。\n\nファイル: ${path}\n\n例:\n- PRD層: PRD_*.mdc\n- その他: 先頭を大文字にし、英数字/ハイフン/アンダースコアのみ`,
+      'DOC-08': `「扱う内容」と「扱わない内容」のセクションを見直してください。\n\nファイル: ${path}\n\n両方のセクションに箇条書きで内容を記載してください。`,
+      'TC-01': `テストケースのファイル名を命名規則に合わせてください。\n\nファイル: ${path}\n\n形式: <ドメイン>-<対象>-<シナリオ>.spec.ts (全て小文字とハイフン)`,
+      'TC-02': `テストケース間の依存を解消してください。\n\nファイル: ${path}\n\nserial describe や test(...).then(...) の使用を避け、各テストを独立させてください。`,
+      'TC-03': `各テストに目的と期待結果のコメントを追記してください。\n\nファイル: ${path}\n\n例:\n/**\n * 目的: ...\n * 期待結果: ...\n */`,
+      'TC-04': `テストデータ管理を見直してください。\n\nファイル: ${path}\n\nfixtures/ データを利用し、beforeAll/afterAll でセットアップと後処理を実装してください。`
     };
-    
+
     const prompt = prompts[gateId] || '';
     navigator.clipboard.writeText(prompt).then(() => {
       alert('修正プロンプトをコピーしました（Cursor autoに貼り付けてください）');
@@ -1076,16 +1181,18 @@
 
   function addGateIconToNode(nodeDiv, path, gateResults) {
     const violations = [];
-    for (const gateId of DOC_GATES) {
+    const docGateIds = GATE_ORDER.filter(id => id.startsWith('DOC-'));
+    for (const gateId of docGateIds) {
       const matches = (gateResults[gateId] || []).filter(v => v.path === path);
-      for (const v of matches) {
-        violations.push({ gateId, severity: v.severity || GATE_SEVERITY[gateId] || 'error' });
-      }
+      if (!matches.length) continue;
+      const defaultSeverity = GATE_METADATA[gateId]?.severity || 'error';
+      const hasError = matches.some(v => (v.severity || defaultSeverity) === 'error');
+      violations.push({ gateId, severity: hasError ? 'error' : 'warn' });
     }
 
     if (violations.length > 0) {
       const hasError = violations.some(v => v.severity === 'error');
-      const icon = hasError ? '⛔' : '⚠';
+      const icon = hasError ? '⚠️' : '⚠';
       const span = document.createElement('span');
       span.className = `tree-node-icon ${hasError ? 'error' : 'warn'}`;
       span.textContent = icon;
@@ -1127,9 +1234,8 @@
       }
       const rootNodes = buildTree(nodes, direction);
       console.log('[renderTree] buildTree returned rootNodes:', rootNodes.length);
-      
+
       const gateResults = await validateGates(nodes, docStatus, docContents);
-      currentGateResults = gateResults;
       renderGateResults(gateResults);
       
       // Save test results to file for E2E validation
