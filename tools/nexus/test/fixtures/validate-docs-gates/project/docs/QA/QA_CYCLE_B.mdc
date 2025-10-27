@@ -1,0 +1,16 @@
+# QA Cycle B
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/QA/QA_CYCLE_A.mdc
+> Downstream: docs/QA/QA_CYCLE_A.mdc
+
+## 目次
+- [1. QA Step B](#1-qa-step-b)
+
+## 1. QA Step B
+試験手順Bの説明です。
+
+## Scope
+- 対象: 回帰試験
+- 除外: 長期試験

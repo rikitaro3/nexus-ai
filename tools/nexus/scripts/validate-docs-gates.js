@@ -14,8 +14,8 @@ const DOC_GATE_IDS = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06'
 const TEST_GATE_IDS = ['TC-01', 'TC-02', 'TC-03', 'TC-04'];
 const ALL_GATE_IDS = [...DOC_GATE_IDS, ...TEST_GATE_IDS];
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
   const projectRoot = path.resolve(args.projectRoot || process.cwd());
   const contextPath = await resolveContextPath(projectRoot, args.contextPath);
 
@@ -41,7 +41,7 @@ async function main() {
   const { nodes, docStatus, docContents } = await parseAllBreadcrumbs(entries, projectRoot);
   const results = createEmptyGateResults();
   validateDocumentGates(nodes, docStatus, docContents, results);
-  await validateTestCaseGates(projectRoot, results);
+  await validateTestCaseGates(projectRoot, results, { testRoots: args.testRoots });
 
   outputResults({
     results,
@@ -56,11 +56,12 @@ async function main() {
   process.exit(hasErrors ? 1 : 0);
 }
 
-function parseArgs(argv) {
+function parseArgs(argv = []) {
   const args = {
     contextPath: null,
     projectRoot: null,
-    format: 'table'
+    format: 'table',
+    testRoots: []
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -73,6 +74,12 @@ function parseArgs(argv) {
       args.projectRoot = argv[++i];
     } else if (arg.startsWith('--project-root=')) {
       args.projectRoot = arg.split('=')[1];
+    } else if (arg === '--tests' || arg === '--test-root' || arg === '-t') {
+      addTestRoots(args, argv[++i]);
+    } else if (arg.startsWith('--tests=')) {
+      addTestRoots(args, arg.split('=')[1]);
+    } else if (arg.startsWith('--test-root=')) {
+      addTestRoots(args, arg.split('=')[1]);
     } else if (arg === '--json') {
       args.format = 'json';
     } else if (arg === '--table') {
@@ -86,11 +93,23 @@ function parseArgs(argv) {
   return args;
 }
 
+function addTestRoots(args, raw) {
+  if (!raw) return;
+  const values = Array.isArray(raw) ? raw : String(raw);
+  const parts = (typeof values === 'string' ? values.split(',') : values)
+    .map(value => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean);
+  if (parts.length > 0) {
+    args.testRoots.push(...parts);
+  }
+}
+
 function printHelp() {
   console.log(`Usage: node scripts/validate-docs-gates.js [options]\n\n` +
     `Options:\n` +
     `  -c, --context <path>        Path to context.mdc (default: .cursor/context.mdc or context.mdc)\n` +
     `  -r, --project-root <path>   Project root for resolving document paths (default: cwd)\n` +
+    `  -t, --tests <paths>         Comma-separated test roots relative to the project root\n` +
     `      --json                  Output results as JSON\n` +
     `      --table                 Output results as a human-readable table (default)\n` +
     `  -h, --help                  Show this help message\n`);
@@ -248,8 +267,11 @@ function validateDocumentGates(nodes, docStatus, docContents, results) {
   results['DOC-08'].push(...scopeViolations.map(v => ({ ...v, severity: 'warn' })));
 }
 
-async function validateTestCaseGates(projectRoot, results) {
-  const testArtifacts = await collectTestCaseArtifacts(projectRoot);
+async function validateTestCaseGates(projectRoot, results, options = {}) {
+  const candidates = Array.isArray(options.testRoots) && options.testRoots.length > 0
+    ? options.testRoots
+    : TEST_CASE_ROOT_CANDIDATES;
+  const testArtifacts = await collectTestCaseArtifacts(projectRoot, candidates);
   const testCases = await loadTestCaseSources(testArtifacts.testCases);
 
   for (const tc of testCases) {
@@ -298,27 +320,31 @@ async function validateTestCaseGates(projectRoot, results) {
   results['TC-04'].push(...dataViolations);
 
   if (testArtifacts.testCases.length === 0) {
-    const fallbackRoot = testArtifacts.detectedRoots[0] || path.join('tools', 'nexus', 'test');
+    const fallbackRoot = testArtifacts.detectedRoots[0]
+      || (Array.isArray(candidates) && candidates.length > 0 ? candidates[0] : path.join('tools', 'nexus', 'test'));
     results['TC-01'].push({
       path: fallbackRoot,
       message: 'テストケース（*.spec.ts）が検出されませんでした',
       severity: 'warn'
     });
   }
+
+  return results;
 }
 
-async function collectTestCaseArtifacts(projectRoot) {
+async function collectTestCaseArtifacts(projectRoot, testRootCandidates = TEST_CASE_ROOT_CANDIDATES) {
   const detectedRoots = [];
   const testCases = [];
   const fixtureDirs = new Set();
   const fixtureFiles = [];
 
-  for (const relRoot of TEST_CASE_ROOT_CANDIDATES) {
-    const absoluteRoot = path.join(projectRoot, relRoot);
+  for (const relRoot of testRootCandidates) {
+    const absoluteRoot = path.isAbsolute(relRoot) ? relRoot : path.join(projectRoot, relRoot);
     try {
       const stat = await fs.stat(absoluteRoot);
       if (!stat.isDirectory()) continue;
-      detectedRoots.push(path.relative(projectRoot, absoluteRoot) || relRoot);
+      const relativeName = path.relative(projectRoot, absoluteRoot) || relRoot;
+      detectedRoots.push(relativeName.split(path.sep).join('/'));
     } catch {
       continue;
     }
@@ -878,7 +904,50 @@ function outputResults(payload, format) {
   }
 }
 
-main().catch(error => {
-  console.error('Unexpected error during validation:', error);
-  process.exit(2);
-});
+const exported = {
+  main,
+  parseArgs,
+  resolveContextPath,
+  parseContextEntries,
+  parseAllBreadcrumbs,
+  createEmptyGateResults,
+  validateDocumentGates,
+  validateTestCaseGates,
+  collectTestCaseArtifacts,
+  loadTestCaseSources,
+  validateTestCaseName,
+  validateTestIndependence,
+  validateTestDocumentation,
+  validateTestDataManagement,
+  detectCycles,
+  validateHeadings,
+  validateTableOfContents,
+  validateNamingRules,
+  validateScopeSections,
+  extractHeadings,
+  extractSectionByTitle,
+  extractSection,
+  extractBreadcrumbs,
+  extractField,
+  splitLinks,
+  walkTestDirectory,
+  outputResults,
+  constants: {
+    VALID_LAYERS,
+    TEST_CASE_CATEGORIES,
+    DEFAULT_CONTEXT_CANDIDATES,
+    TEST_CASE_ROOT_CANDIDATES,
+    DOC_GATE_IDS,
+    TEST_GATE_IDS,
+    ALL_GATE_IDS
+  }
+};
+
+module.exports = exported;
+
+if (require.main === module) {
+  main().catch(error => {
+    console.error('Unexpected error during validation:', error);
+    process.exit(2);
+  });
+}
