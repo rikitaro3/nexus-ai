@@ -3,8 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getRepoRoot, withPathValidation } from './handlers/security.js';
 import { logger } from './utils/logger.js';
+import { createRulesWatcher, RulesWatcherController, RulesWatcherEvent } from './watchers/rules-watcher.js';
 
 let mainWindow: BrowserWindow | null = null;
+let rulesWatcher: RulesWatcherController | null = null;
 
 // プロジェクトルートを計算（main.jsから見た場合）
 // 環境変数を最優先
@@ -27,6 +29,15 @@ const PROJECT_ROOT = process.env.NEXUS_PROJECT_ROOT
 
 const NEXUS_DIR = path.dirname(path.dirname(__dirname)); // dist/src/main -> dist
 const PROMPTS_JSON_PATH = path.join(PROJECT_ROOT, 'tools', 'nexus', 'prompts.json');
+
+rulesWatcher = createRulesWatcher({
+  projectRoot: PROJECT_ROOT,
+  notify: (event: RulesWatcherEvent) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('rules:watcher:event', event);
+    }
+  }
+});
 
 logger.info('Project root initialized', { 
   __dirname,
@@ -70,6 +81,17 @@ function createWindow() {
   }
   
   mainWindow.loadFile(path.join(rendererPath, 'index.html'));
+
+  mainWindow.webContents.once('did-finish-load', async () => {
+    try {
+      if (rulesWatcher) {
+        const snapshot = await rulesWatcher.getLatest();
+        mainWindow?.webContents.send('rules:watcher:event', snapshot);
+      }
+    } catch (error) {
+      logger.error('Failed to push initial rules watcher snapshot', { error: (error as Error).message });
+    }
+  });
   
   // Catch uncaught exceptions and log them instead of showing popup
   (mainWindow.webContents as any).on('unresponsive', () => {
@@ -142,6 +164,12 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+app.on('before-quit', () => {
+  if (rulesWatcher) {
+    rulesWatcher.dispose();
+  }
 });
 
 // Global variable to store custom project root
@@ -360,6 +388,51 @@ ipcMain.handle('prompts:writeJson', async (_event, data: unknown) => {
   } catch (e) {
     logger.error('Failed to write prompts.json', { error: (e as Error).message });
     return { success: false, error: (e as Error).message };
+  }
+});
+
+ipcMain.handle('rules:getLatestState', async () => {
+  try {
+    if (!rulesWatcher) throw new Error('Rules watcher is not initialized');
+    const snapshot = await rulesWatcher.getLatest();
+    return { success: true, event: snapshot };
+  } catch (error) {
+    logger.error('Failed to get latest rules watcher state', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('rules:revalidate', async (_event, payload: { mode?: 'manual' | 'bulk' }) => {
+  try {
+    if (!rulesWatcher) throw new Error('Rules watcher is not initialized');
+    const mode = payload?.mode === 'bulk' ? 'bulk' : 'manual';
+    const snapshot = await rulesWatcher.revalidate(mode);
+    return { success: true, event: snapshot };
+  } catch (error) {
+    logger.error('Failed to revalidate Quality Gates', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('rules:scanImpacts', async () => {
+  try {
+    if (!rulesWatcher) throw new Error('Rules watcher is not initialized');
+    const snapshot = await rulesWatcher.scanOnly();
+    return { success: true, event: snapshot };
+  } catch (error) {
+    logger.error('Failed to scan Quality Gates impacts', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('rules:listLogs', async () => {
+  try {
+    if (!rulesWatcher) throw new Error('Rules watcher is not initialized');
+    const logs = await rulesWatcher.listLogs();
+    return { success: true, logs };
+  } catch (error) {
+    logger.error('Failed to list Quality Gates logs', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
   }
 });
 
