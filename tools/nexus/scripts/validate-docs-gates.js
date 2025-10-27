@@ -4,7 +4,15 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const VALID_LAYERS = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
+const TEST_CASE_CATEGORIES = ['docs-navigator', 'tree-view', 'tasks', 'integration'];
 const DEFAULT_CONTEXT_CANDIDATES = ['.cursor/context.mdc', 'context.mdc', path.join('tools', 'nexus', 'context.mdc')];
+const TEST_CASE_ROOT_CANDIDATES = [
+  path.join('tools', 'nexus', 'test'),
+  path.join('tools', 'nexus', 'tests')
+];
+const DOC_GATE_IDS = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08'];
+const TEST_GATE_IDS = ['TC-01', 'TC-02', 'TC-03', 'TC-04'];
+const ALL_GATE_IDS = [...DOC_GATE_IDS, ...TEST_GATE_IDS];
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -31,7 +39,9 @@ async function main() {
   }
 
   const { nodes, docStatus, docContents } = await parseAllBreadcrumbs(entries, projectRoot);
-  const results = validateGates(nodes, docStatus, docContents);
+  const results = createEmptyGateResults();
+  validateDocumentGates(nodes, docStatus, docContents, results);
+  await validateTestCaseGates(projectRoot, results);
 
   outputResults({
     results,
@@ -40,7 +50,7 @@ async function main() {
     docStatus
   }, args.format);
 
-  const hasErrors = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-05', 'DOC-06', 'DOC-07']
+  const hasErrors = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-05', 'DOC-06', 'DOC-07', 'TC-01', 'TC-04']
     .some(gateId => results[gateId].some(v => v.severity !== 'warn'));
 
   process.exit(hasErrors ? 1 : 0);
@@ -184,17 +194,17 @@ async function parseAllBreadcrumbs(entries, projectRoot) {
   return { nodes, docStatus, docContents };
 }
 
-function validateGates(nodes, docStatus, docContents) {
-  const results = {
-    'DOC-01': [],
-    'DOC-02': [],
-    'DOC-03': [],
-    'DOC-04': [],
-    'DOC-05': [],
-    'DOC-06': [],
-    'DOC-07': [],
-    'DOC-08': []
-  };
+function createEmptyGateResults() {
+  return ALL_GATE_IDS.reduce((acc, gateId) => {
+    acc[gateId] = [];
+    return acc;
+  }, {});
+}
+
+function validateDocumentGates(nodes, docStatus, docContents, results) {
+  if (!results || typeof results !== 'object') {
+    throw new Error('validateDocumentGates requires a results object');
+  }
 
   for (const [pathKey, status] of docStatus.entries()) {
     if (status.status === 'missing-breadcrumbs') {
@@ -236,8 +246,236 @@ function validateGates(nodes, docStatus, docContents) {
 
   const scopeViolations = validateScopeSections(docContents);
   results['DOC-08'].push(...scopeViolations.map(v => ({ ...v, severity: 'warn' })));
+}
 
-  return results;
+async function validateTestCaseGates(projectRoot, results) {
+  const testArtifacts = await collectTestCaseArtifacts(projectRoot);
+  const testCases = await loadTestCaseSources(testArtifacts.testCases);
+
+  for (const tc of testCases) {
+    const naming = validateTestCaseName(tc.relativePath);
+    if (!naming.valid) {
+      results['TC-01'].push({
+        path: tc.relativePath,
+        message: naming.error,
+        severity: 'error'
+      });
+    }
+
+    if (tc.readError) {
+      results['TC-01'].push({
+        path: tc.relativePath,
+        message: `テストケースを読み込めません: ${tc.readError}`,
+        severity: 'error'
+      });
+      continue;
+    }
+
+    const independence = validateTestIndependence(tc.content);
+    if (!independence.valid) {
+      results['TC-02'].push({
+        path: tc.relativePath,
+        message: independence.error,
+        severity: 'warn'
+      });
+    }
+
+    const documentation = validateTestDocumentation(tc.content);
+    if (!documentation.valid) {
+      const coverage = Number.isFinite(documentation.coverage)
+        ? Math.round(documentation.coverage * 10) / 10
+        : 0;
+      results['TC-03'].push({
+        path: tc.relativePath,
+        message: documentation.error || `テストドキュメント化率が${coverage}%です（目標: 80%）`,
+        severity: 'warn',
+        coverage
+      });
+    }
+  }
+
+  const dataViolations = validateTestDataManagement(testCases, testArtifacts.fixtureDirs, testArtifacts.fixtureFiles);
+  results['TC-04'].push(...dataViolations);
+
+  if (testArtifacts.testCases.length === 0) {
+    const fallbackRoot = testArtifacts.detectedRoots[0] || path.join('tools', 'nexus', 'test');
+    results['TC-01'].push({
+      path: fallbackRoot,
+      message: 'テストケース（*.spec.ts）が検出されませんでした',
+      severity: 'warn'
+    });
+  }
+}
+
+async function collectTestCaseArtifacts(projectRoot) {
+  const detectedRoots = [];
+  const testCases = [];
+  const fixtureDirs = new Set();
+  const fixtureFiles = [];
+
+  for (const relRoot of TEST_CASE_ROOT_CANDIDATES) {
+    const absoluteRoot = path.join(projectRoot, relRoot);
+    try {
+      const stat = await fs.stat(absoluteRoot);
+      if (!stat.isDirectory()) continue;
+      detectedRoots.push(path.relative(projectRoot, absoluteRoot) || relRoot);
+    } catch {
+      continue;
+    }
+
+    await walkTestDirectory(absoluteRoot, async (entryPath, dirent) => {
+      if (dirent.isDirectory()) {
+        if (dirent.name.toLowerCase() === 'fixtures') {
+          fixtureDirs.add(path.relative(projectRoot, entryPath) || dirent.name);
+        }
+        return;
+      }
+
+      if (!dirent.isFile()) return;
+      if (entryPath.endsWith('.spec.ts')) {
+        testCases.push({
+          absolutePath: entryPath,
+          relativePath: path.relative(projectRoot, entryPath).split(path.sep).join('/'),
+          content: null,
+          readError: null
+        });
+      } else if (entryPath.includes(`${path.sep}fixtures${path.sep}`) || entryPath.includes('/fixtures/')) {
+        fixtureFiles.push(path.relative(projectRoot, entryPath).split(path.sep).join('/'));
+      }
+    });
+  }
+
+  return { testCases, fixtureDirs, fixtureFiles, detectedRoots };
+}
+
+async function walkTestDirectory(dir, onEntry) {
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const dirent of entries) {
+    const fullPath = path.join(dir, dirent.name);
+    if (dirent.isDirectory()) {
+      await onEntry(fullPath, dirent);
+      await walkTestDirectory(fullPath, onEntry);
+    } else {
+      await onEntry(fullPath, dirent);
+    }
+  }
+}
+
+async function loadTestCaseSources(testCases) {
+  const loaded = [];
+  for (const testCase of testCases) {
+    const record = { ...testCase };
+    try {
+      record.content = await fs.readFile(testCase.absolutePath, 'utf8');
+    } catch (error) {
+      record.readError = error instanceof Error ? error.message : 'unknown error';
+    }
+    loaded.push(record);
+  }
+  return loaded;
+}
+
+function validateTestCaseName(relativePath) {
+  const baseName = path.basename(relativePath);
+  const match = /^([a-z0-9-]+)-([a-z0-9-]+)-([a-z0-9-]+)\.spec\.ts$/i.exec(baseName);
+  if (!match) {
+    return { valid: false, error: 'ファイル名が命名規則に準拠していません ([分類]-[機能]-[シナリオ].spec.ts)' };
+  }
+
+  const category = match[1].toLowerCase();
+  if (!TEST_CASE_CATEGORIES.includes(category)) {
+    return { valid: false, error: `分類が無効です: ${match[1]}（有効: ${TEST_CASE_CATEGORIES.join(', ')}）` };
+  }
+
+  if (!match[2] || !match[3]) {
+    return { valid: false, error: '分類と機能とシナリオをハイフンで区切って指定してください' };
+  }
+
+  return { valid: true };
+}
+
+function validateTestIndependence(source) {
+  if (!source) return { valid: true };
+  const patterns = [
+    /\btest\s*\([^)]*\)\s*\.then[\s\S]*?\btest\s*\(/i,
+    /\bit\s*\([^)]*\)\s*\.then[\s\S]*?\bit\s*\(/i,
+    /afterEach[\s\S]*?(\btest\s*\(|\bit\s*\()/i,
+    /beforeAll[\s\S]*?order[\s\S]*?(\btest\s*\(|\bit\s*\()/i
+  ];
+
+  for (const pattern of patterns) {
+    if (pattern.test(source)) {
+      return { valid: false, error: 'テストケース間に依存関係があります' };
+    }
+  }
+
+  return { valid: true };
+}
+
+function validateTestDocumentation(source) {
+  if (!source) {
+    return { valid: false, coverage: 0, error: 'テストソースが空です' };
+  }
+
+  const commentPattern = /\/\*\*[\s\S]*?目的[\s\S]*?期待結果[\s\S]*?\*\//g;
+  const testPattern = /(test|it)\s*\(\s*['"](.*?)['"]/g;
+
+  const comments = source.match(commentPattern) || [];
+  const tests = [...source.matchAll(testPattern)];
+  const totalTests = tests.length;
+
+  if (totalTests === 0) {
+    return { valid: true, coverage: 100 };
+  }
+
+  const coverage = (comments.length / totalTests) * 100;
+  if (coverage < 80) {
+    return {
+      valid: false,
+      coverage,
+      error: `テストドキュメント化率が${Math.round(coverage * 10) / 10}%です（目標: 80%）`
+    };
+  }
+
+  return { valid: true, coverage };
+}
+
+function validateTestDataManagement(testCases, fixtureDirs, fixtureFiles) {
+  const violations = [];
+  const hasFixturesDir = fixtureDirs && fixtureDirs.size > 0;
+  const hasFixtureFiles = Array.isArray(fixtureFiles) && fixtureFiles.length > 0;
+
+  if (!hasFixturesDir || !hasFixtureFiles) {
+    violations.push({
+      path: hasFixturesDir ? Array.from(fixtureDirs)[0] : 'tools/nexus/test',
+      message: 'fixtures/ディレクトリ内のテストデータが確認できません',
+      severity: 'error'
+    });
+  }
+
+  for (const testCase of testCases) {
+    if (testCase.readError || !testCase.content) continue;
+    const usesFixtures = /fixtures\//.test(testCase.content) || /fixtures\\/.test(testCase.content);
+    if (!usesFixtures) continue;
+
+    const hasSetup = /(setup|beforeAll|beforeEach)\s*\(/i.test(testCase.content);
+    const hasTeardown = /(teardown|afterAll|afterEach)\s*\(/i.test(testCase.content);
+    if (!hasSetup || !hasTeardown) {
+      violations.push({
+        path: testCase.relativePath,
+        message: 'fixtures/を利用するテストにsetup/teardownが実装されていません',
+        severity: 'error'
+      });
+    }
+  }
+
+  return violations;
 }
 
 function detectCycles(nodes) {
@@ -622,12 +860,12 @@ function outputResults(payload, format) {
   console.log('Context File:', payload.contextPath);
   console.log('');
 
-  const order = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08'];
-  for (const gateId of order) {
-    const violations = payload.results[gateId];
+  const warnOnlyGates = new Set(['DOC-04', 'DOC-08', 'TC-02', 'TC-03']);
+  for (const gateId of ALL_GATE_IDS) {
+    const violations = Array.isArray(payload.results[gateId]) ? payload.results[gateId] : [];
     const status = violations.length === 0
       ? 'PASS'
-      : (gateId === 'DOC-04' || gateId === 'DOC-08' ? 'WARN' : 'FAIL');
+      : (warnOnlyGates.has(gateId) ? 'WARN' : 'FAIL');
     console.log(`${gateId}: ${status} (${violations.length}件)`);
     for (const violation of violations) {
       const detail = violation.cycle

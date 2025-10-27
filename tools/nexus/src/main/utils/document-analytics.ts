@@ -37,7 +37,7 @@ type DocStatusEntry = {
   status: string;
 };
 
-const GATE_IDS = [
+const DOCUMENT_GATE_IDS = [
   'DOC-01',
   'DOC-02',
   'DOC-03',
@@ -47,6 +47,10 @@ const GATE_IDS = [
   'DOC-07',
   'DOC-08'
 ] as const;
+
+const TEST_CASE_GATE_IDS = ['TC-01', 'TC-02', 'TC-03', 'TC-04'] as const;
+
+const GATE_IDS = [...DOCUMENT_GATE_IDS, ...TEST_CASE_GATE_IDS] as const;
 
 function normalizeDocStatus(input: unknown, fallbackPaths: Set<string>): DocStatusEntry[] {
   if (!input) {
@@ -169,16 +173,18 @@ function summarizeTasks(tasks: unknown[]): { total: number; byStatus: Record<str
 function buildGateSummary(
   results: QualityGateResults,
   taskRefs: Map<number, Set<string>>
-): { summaries: DocumentAnalyticsGateSummary[]; allDocs: Set<string> } {
+): { summaries: DocumentAnalyticsGateSummary[]; docPaths: Set<string> } {
   const summaries: DocumentAnalyticsGateSummary[] = [];
-  const allDocs = new Set<string>();
+  const docPaths = new Set<string>();
 
   for (const gateId of GATE_IDS) {
     const violations = Array.isArray(results?.[gateId]) ? results[gateId] : [];
     const severity = { error: 0, warn: 0, info: 0 } as const;
     const counts = { ...severity };
     const docs = collectViolationDocuments(violations);
-    docs.forEach(doc => allDocs.add(doc));
+    if (gateId.startsWith('DOC-')) {
+      docs.forEach(doc => docPaths.add(doc));
+    }
 
     for (const violation of violations) {
       const sev = extractSeverity(violation);
@@ -206,7 +212,7 @@ function buildGateSummary(
     });
   }
 
-  return { summaries, allDocs };
+  return { summaries, docPaths };
 }
 
 export function collectDocumentAnalytics(input: CollectDocumentAnalyticsInput): DocumentAnalyticsSnapshot {
@@ -214,8 +220,8 @@ export function collectDocumentAnalytics(input: CollectDocumentAnalyticsInput): 
   const tasks = Array.isArray(input.tasks) ? input.tasks : [];
   const taskSummary = summarizeTasks(tasks);
 
-  const { summaries, allDocs } = buildGateSummary(results, taskSummary.references);
-  const docStatusEntries = normalizeDocStatus(input.docStatus, allDocs);
+  const { summaries, docPaths } = buildGateSummary(results, taskSummary.references);
+  const docStatusEntries = normalizeDocStatus(input.docStatus, docPaths);
 
   const docStatusCounts: Record<string, number> = {};
   for (const entry of docStatusEntries) {
@@ -227,7 +233,7 @@ export function collectDocumentAnalytics(input: CollectDocumentAnalyticsInput): 
     documents: {
       total: docStatusEntries.length,
       byStatus: docStatusCounts,
-      withViolations: allDocs.size
+      withViolations: docPaths.size
     },
     tasks: {
       total: taskSummary.total,
@@ -239,4 +245,4 @@ export function collectDocumentAnalytics(input: CollectDocumentAnalyticsInput): 
   return snapshot;
 }
 
-export { GATE_IDS as DOCUMENT_GATE_ORDER };
+export { DOCUMENT_GATE_IDS as DOCUMENT_GATE_ORDER };

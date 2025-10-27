@@ -244,7 +244,7 @@
     if (fromViolation === 'error' || fromViolation === 'warn' || fromViolation === 'info') {
       return fromViolation;
     }
-    if (gateId === 'DOC-04' || gateId === 'DOC-08') {
+    if (gateId === 'DOC-04' || gateId === 'DOC-08' || gateId === 'TC-02' || gateId === 'TC-03') {
       return 'warn';
     }
     return 'error';
@@ -343,7 +343,7 @@
       .map(([status, count]) => `${escapeHtml(status)}: ${count}`)
       .join(' ／ ');
 
-    const rows = DOCUMENT_GATE_ORDER.map(gateId => {
+    const rows = ALL_QUALITY_GATES.map(gateId => {
       const gate = Array.isArray(analytics.gates)
         ? analytics.gates.find(item => item?.gateId === gateId)
         : null;
@@ -407,11 +407,11 @@
     if (!Array.isArray(logs) || logs.length === 0) {
       return '<span class="rules-pipeline__diff-empty">ログはまだありません。</span>';
     }
-    const headerCells = DOCUMENT_GATE_ORDER.map(gateId => `<th>${escapeHtml(gateId)}</th>`).join('');
+    const headerCells = ALL_QUALITY_GATES.map(gateId => `<th>${escapeHtml(gateId)}</th>`).join('');
     const rows = logs.slice(0, 5).map(log => {
       const modeLabel = (log.mode || '').toUpperCase();
       const summaryMap = new Map((Array.isArray(log.summary) ? log.summary : []).map(item => [item.gateId, item]));
-      const gateCells = DOCUMENT_GATE_ORDER.map(gateId => {
+      const gateCells = ALL_QUALITY_GATES.map(gateId => {
         const entry = summaryMap.get(gateId) || { total: 0, severity: { error: 0, warn: 0, info: 0 } };
         const total = entry.total ?? 0;
         const severity = entry.severity || { error: 0, warn: 0, info: 0 };
