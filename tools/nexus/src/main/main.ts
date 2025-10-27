@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getRepoRoot, withPathValidation } from './handlers/security.js';
+import { collectAnalytics } from '../common/analytics-service.js';
 import { logger } from './utils/logger.js';
 
 let mainWindow: BrowserWindow | null = null;
@@ -360,6 +361,41 @@ ipcMain.handle('prompts:writeJson', async (_event, data: unknown) => {
   } catch (e) {
     logger.error('Failed to write prompts.json', { error: (e as Error).message });
     return { success: false, error: (e as Error).message };
+  }
+});
+
+// Analytics
+ipcMain.handle('analytics:get', async () => {
+  try {
+    const repoRoot = getRepoRoot();
+    const metrics = await collectAnalytics({ projectRoot: repoRoot, persistHistory: true });
+    logger.info('Analytics metrics generated', {
+      entries: metrics.context.entries,
+      dagNodes: metrics.dag.totalNodes,
+      tasks: metrics.tasks.total,
+      passRate: metrics.qualityGates.passRate,
+    });
+    return { success: true, data: metrics };
+  } catch (e) {
+    const error = e as Error;
+    logger.error('Failed to generate analytics metrics', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('analytics:export', async () => {
+  try {
+    const repoRoot = getRepoRoot();
+    const metrics = await collectAnalytics({ projectRoot: repoRoot, persistHistory: true });
+    const target = path.join(repoRoot, 'tools', 'nexus', 'analytics-report.json');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(metrics, null, 2), 'utf8');
+    logger.info('Analytics metrics exported', { target });
+    return { success: true, target };
+  } catch (e) {
+    const error = e as Error;
+    logger.error('Failed to export analytics metrics', { error: error.message });
+    return { success: false, error: error.message };
   }
 });
 

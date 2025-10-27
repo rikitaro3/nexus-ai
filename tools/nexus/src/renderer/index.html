@@ -25,6 +25,7 @@
     </header>
     <nav class="tabs">
       <button class="tab-btn active" data-tab="docs">Docs</button>
+      <button class="tab-btn" data-tab="analytics">Analytics</button>
       <button class="tab-btn" data-tab="tasks">Tasks</button>
       <button class="tab-btn" data-tab="settings">Settings</button>
     </nav>
@@ -153,6 +154,46 @@
           </div>
         </section>
       </div>
+      <div id="analytics" class="tab-content">
+        <section class="card">
+          <h2>📈 Analytics Dashboard</h2>
+          <p class="text-muted">DAG・タスク・Quality Gateの最新状況を確認します。</p>
+          <div class="analytics-toolbar">
+            <span id="analytics-status" class="status status-info">メトリクスを読み込み中...</span>
+            <div class="analytics-actions">
+              <button id="analytics-refresh" class="btn btn-secondary">Refresh</button>
+              <button id="analytics-export" class="btn btn-secondary">Export JSON</button>
+            </div>
+          </div>
+          <div id="analytics-content" class="analytics-content hidden">
+            <div class="analytics-grid">
+              <div class="analytics-panel">
+                <h3>タスク進捗</h3>
+                <p id="analytics-progress-completion" class="analytics-highlight">0% 完了 (0 / 0)</p>
+                <div id="analytics-progress-chart"></div>
+              </div>
+              <div class="analytics-panel">
+                <h3>DAGサマリー</h3>
+                <div id="analytics-dag-summary"></div>
+              </div>
+              <div class="analytics-panel">
+                <h3>Quality Gatesサマリー</h3>
+                <div id="analytics-gate-summary"></div>
+              </div>
+            </div>
+            <div class="analytics-grid analytics-grid--wide">
+              <div class="analytics-panel">
+                <h3>欠損ノード一覧</h3>
+                <div id="analytics-missing-nodes"></div>
+              </div>
+              <div class="analytics-panel">
+                <h3>Quality Gate推移</h3>
+                <div id="analytics-gate-history"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
       <div id="settings" class="tab-content">
         <section class="card">
           <h2>⚙️ Settings</h2>
@@ -203,6 +244,7 @@
     });
   </script>
   <script src="shared/app.js"></script>
+  <script src="features/analytics/analytics.js"></script>
   <script src="features/docs-navigator/docs-navigator.js"></script>
   <script src="features/tasks/tasks.js"></script>
   <script src="features/settings/settings.js"></script>
