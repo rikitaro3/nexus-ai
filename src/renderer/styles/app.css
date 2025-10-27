@@ -20,12 +20,24 @@ main { flex: 1; overflow: auto; padding: 16px; }
 .btn.btn-primary { background: #2563eb; color: #fff; }
 .status { font-size: 12px; padding: 2px 8px; border-radius: 9999px; background: #eef2ff; color: #1e40af; }
 .status.hidden { display: none; }
+.status-ok { background: #d1fae5; color: #047857; }
+.status-error { background: #fee2e2; color: #b91c1c; }
 .hidden { display: none; }
 .span-2 { grid-column: span 2; }
 .form-group { margin-bottom: 10px; }
 .form-group input[type="text"], .form-group textarea, .feats-toolbar input[type="text"], .tasks-inputs input[type="text"], .tasks-inputs textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 8px; }
 .control-group { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .tasks-inputs { margin-bottom: 12px; }
+.settings-section { margin-bottom: 18px; }
+.settings-test-results { margin-top: 8px; font-size: 13px; }
+.settings-test-list { list-style: none; margin: 0; padding: 0; }
+.settings-test-list li { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+.settings-test-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; font-weight: bold; }
+.settings-test-icon.ok { color: #047857; }
+.settings-test-icon.ng { color: #b91c1c; }
+.settings-test-warning { color: #b45309; margin-bottom: 4px; }
+.settings-context-path { font-family: 'Courier New', monospace; font-size: 13px; background: #f9fafb; padding: 6px 8px; border-radius: 6px; border: 1px solid #e5e7eb; }
+.text-muted { color: #6b7280; font-size: 12px; margin-top: 4px; }
 
 /* Tree view styles */
 #tree-view { font-family: 'Courier New', monospace; font-size: 13px; }
