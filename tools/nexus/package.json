@@ -24,6 +24,9 @@
     "validate:docs": "node scripts/validate-docs-gates.js",
     "capture:screenshots": "node scripts/capture-screenshots.js"
   },
+  "dependencies": {
+    "chokidar": "^3.6.0"
+  },
   "devDependencies": {
     "@babel/preset-env": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
