@@ -1,0 +1,25 @@
+# システム概要
+
+> Breadcrumbs
+> Layer: ARCH
+> Upstream: docs/ARCH/index.mdc
+> Downstream: docs/ARCH/システム構成.mdc
+
+## 1. アーキテクチャ全体像
+
+NexusはElectronをベースにしたデスクトップアプリケーションであり、ドキュメントのトレーサビリティとタスク管理を支援するために以下の3層で構成されています。
+
+1. **Main Process** – アプリケーションのエントリーポイント。ウィンドウ生成、IPCハンドラー登録、セキュリティ検証を担います。
+2. **Renderer Process** – UIレンダリングとユーザー操作の制御を担当します。Docs NavigatorやTasksビューなどの機能を実装します。
+3. **Preload** – MainとRendererの橋渡しを行い、安全なAPI（`window.docs`, `window.tasks`, `window.env`）を公開します。
+
+## 2. コンテキストマップとの連携
+
+アプリは`context.mdc`を読み込み、Breadcrumbs情報を解析することでドキュメント間の関係を構築します。メインプロセスのIPCハンドラーがファイルを読み込み、レンダラープロセスが分類・可視化を行うことで、PRD・ARCH・QAなど複数レイヤーを横断したトレースを可能にしています。
+
+## 3. セキュリティと拡張性の前提
+
+- **セキュリティ**: `contextIsolation: true` や `nodeIntegration: false` を徹底し、任意のファイルアクセスを防止します。また、IPC経由でのI/O時にリポジトリルート外アクセスを拒否します。
+- **拡張性**: Docs NavigatorのカテゴリはContext Mapに依存するため、新しいドキュメントを追加するだけでUIに反映されます。Tasks機能もJSON設定を基準に拡張できます。
+
+これらの前提のもとで、詳細な構成やセキュリティ制御は`docs/ARCH/システム構成.mdc`および関連ドキュメントに委譲されます。

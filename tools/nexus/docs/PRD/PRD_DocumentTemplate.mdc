@@ -2,8 +2,8 @@
 
 > Breadcrumbs
 > Layer: PRD
-> Upstream: tools/nexus/docs/index.mdc
-> Downstream: tools/nexus/docs/GATES/document.mdc
+> Upstream: docs/index.mdc
+> Downstream: docs/GATES/document.mdc
 
 ## Purpose
 - Nexus配下およびRepo全体で統一されたドキュメント記法を定義
@@ -97,8 +97,8 @@ FEAT-ID関連ドキュメントの場合：
 
 > Breadcrumbs
 > Layer: PRD
-> Upstream: tools/nexus/docs/PRD/index.mdc
-> Downstream: tools/nexus/docs/ARCH/index.mdc
+> Upstream: docs/PRD/index.mdc
+> Downstream: docs/ARCH/index.mdc
 
 ## Purpose
 - プロジェクト横断のドキュメント/タスク運用を一元化

@@ -8,20 +8,36 @@ Nexusは「ドキュメントトレーサビリティとタスク生成・分解
 
 ## Context Map
 
+### INDEX
+- docs/index.mdc … Nexusドキュメント索引
+
 ### PRD
-- tools/nexus/docs/PRD/要求仕様書.mdc … 要求仕様（FR-01〜FR-08）
-- tools/nexus/docs/PRD/システム要件定義書.mdc … システム要件定義
-- tools/nexus/docs/PRD/プロンプト辞書ドラフト.mdc … プロンプト辞書
+- docs/PRD/index.mdc … Features Registry（NEX-ID管理）
+- docs/PRD/要求仕様書.mdc … 要求仕様（FR-01〜FR-08）
+- docs/PRD/システム要件定義書.mdc … システム要件定義
+- docs/PRD/プロンプト辞書ドラフト.mdc … プロンプト辞書
+- docs/PRD/PRD_Nexus_2.mdc … Nexus要求仕様
+- docs/PRD/PRD_Strategy.mdc … プロダクト戦略
+- docs/PRD/PRD_DocumentTemplate.mdc … ドキュメントテンプレート
 
 ### ARCH
-- tools/nexus/docs/ARCH/index.mdc … アーキテクチャ索引
-- tools/nexus/docs/ARCH/システム概要.mdc … システム概要
-- tools/nexus/docs/ARCH/システム構成.mdc … システム構成
-- tools/nexus/docs/ARCH/セキュリティ設計.mdc … セキュリティ設計
-- tools/nexus/docs/ARCH/技術選定.md … 技術選定（Electron + TypeScript）
+- docs/ARCH/index.mdc … アーキテクチャ索引
+- docs/ARCH/システム概要.mdc … システム概要
+- docs/ARCH/システム構成.mdc … システム構成
+- docs/ARCH/セキュリティ設計.mdc … セキュリティ設計
+- docs/ARCH/共通コンポーネント設計.mdc … 共通コンポーネント方針
+- docs/ARCH/技術選定.md … 技術選定（Electron + TypeScript）
+- docs/ARCH/IPC設計.mdc … IPCインターフェース
+
+### DEVELOPMENT
+- docs/DEVELOPMENT/index.mdc … 開発ガイド
+
+### QA
+- docs/QA/index.mdc … QA方針・シナリオ
 
 ### GATES
-- tools/nexus/docs/GATES/document.mdc … Quality Gates（DOC-01〜DOC-08）
+- docs/GATES/document.mdc … Quality Gates（DOC-01〜DOC-08）
+- docs/GATES/index.mdc … Quality Gates索引
 
 ## Layer Structure
 

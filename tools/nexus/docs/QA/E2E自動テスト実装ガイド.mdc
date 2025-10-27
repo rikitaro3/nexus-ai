@@ -2,7 +2,7 @@
 
 > Breadcrumbs
 > Layer: QA
-> Upstream: tools/nexus/docs/QA/index.mdc
+> Upstream: docs/QA/index.mdc
 > Downstream: 実装（tools/nexus/legacy/tests/test-nexus-e2e.js）
 
 ## 目的

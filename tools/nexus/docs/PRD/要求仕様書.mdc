@@ -2,8 +2,8 @@
 
 > Breadcrumbs
 > Layer: PRD
-> Upstream: tools/nexus/docs/PRD/index.mdc
-> Downstream: tools/nexus/docs/ARCH/index.mdc, tools/nexus/docs/DEVELOPMENT/index.mdc, tools/nexus/docs/QA/index.mdc
+> Upstream: docs/PRD/index.mdc
+> Downstream: docs/ARCH/index.mdc, docs/DEVELOPMENT/index.mdc, docs/QA/index.mdc
 
 ## 文書情報
 
