@@ -165,6 +165,13 @@
   const SEGMENT_LABELS = { auto: '自動', semiAuto: '半自動', manual: '手動' };
   const STATUS_LABELS = { idle: '待機中', running: '実行中', completed: '完了', error: 'エラー' };
   const DOCUMENT_GATE_ORDER = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08'];
+  const TEST_CASE_GATE_ORDER = ['TC-01', 'TC-02', 'TC-03', 'TC-04'];
+  const ALL_QUALITY_GATES = [...DOCUMENT_GATE_ORDER, ...TEST_CASE_GATE_ORDER];
+
+  let latestGateResults = null;
+  let latestGateResultsSource = 'unknown';
+  let latestGateResultsTimestamp = null;
+  let latestGateContextPath = null;
 
   function formatTimestamp(value) {
     if (!value) return '';
@@ -176,6 +183,89 @@
       console.warn('[Docs Navigator] Failed to format timestamp', err);
       return value;
     }
+  }
+
+  function normalizeGatePath(value) {
+    if (!value || typeof value !== 'string') return '';
+    return value.replace(/\\/g, '/').trim();
+  }
+
+  function sanitizeGateViolation(gateId, violation) {
+    if (!violation || typeof violation !== 'object') {
+      return { gateId, message: '不明な違反', severity: 'info' };
+    }
+    const normalized = { ...violation };
+    if (violation.path) {
+      normalized.path = normalizeGatePath(violation.path);
+    }
+    if (!normalized.gateId) {
+      normalized.gateId = gateId;
+    }
+    return normalized;
+  }
+
+  function sanitizeGateResults(rawResults) {
+    if (!rawResults || typeof rawResults !== 'object') {
+      return ALL_QUALITY_GATES.reduce((acc, gateId) => {
+        acc[gateId] = [];
+        return acc;
+      }, {});
+    }
+    const sanitized = {};
+    for (const [gateId, list] of Object.entries(rawResults)) {
+      const array = Array.isArray(list) ? list : [];
+      sanitized[gateId] = array.map(item => sanitizeGateViolation(gateId, item));
+    }
+    for (const gateId of ALL_QUALITY_GATES) {
+      if (!Array.isArray(sanitized[gateId])) {
+        sanitized[gateId] = [];
+      }
+    }
+    return sanitized;
+  }
+
+  function setLatestGateResults(results, { source = 'unknown', timestamp = null, contextPath = null } = {}) {
+    latestGateResults = sanitizeGateResults(results);
+    latestGateResultsSource = source;
+    latestGateResultsTimestamp = timestamp || null;
+    latestGateContextPath = contextPath || null;
+    console.log('[Docs Navigator] Quality Gates snapshot updated', {
+      source,
+      timestamp: latestGateResultsTimestamp,
+      context: latestGateContextPath,
+      gates: Object.keys(latestGateResults || {}).length
+    });
+  }
+
+  function getViolationSeverity(violation, gateId) {
+    const fromViolation = violation && typeof violation.severity === 'string'
+      ? violation.severity.toLowerCase()
+      : null;
+    if (fromViolation === 'error' || fromViolation === 'warn' || fromViolation === 'info') {
+      return fromViolation;
+    }
+    if (gateId === 'DOC-04' || gateId === 'DOC-08') {
+      return 'warn';
+    }
+    return 'error';
+  }
+
+  function pickWorstSeverity(violations, gateId) {
+    if (!Array.isArray(violations) || violations.length === 0) return null;
+    let worst = 'info';
+    for (const violation of violations) {
+      const severity = getViolationSeverity(violation, violation?.gateId || gateId);
+      if (severity === 'error') return 'error';
+      if (severity === 'warn') worst = worst === 'info' ? 'warn' : worst;
+    }
+    return worst;
+  }
+
+  function severityToStatusClass(severity) {
+    if (severity === 'error') return { css: 'error', label: 'ERROR' };
+    if (severity === 'warn') return { css: 'warn', label: 'WARN' };
+    if (severity === 'info') return { css: 'info', label: 'INFO' };
+    return { css: 'pass', label: 'PASS' };
   }
 
   function renderPipelineSegments(state) {
@@ -401,8 +491,17 @@
       pipelineStatusEl.classList.add('rules-pipeline__status--error');
       pipelineStatusEl.innerHTML += `<div>${escapeHtml(event.error.message || 'Quality Gates監視でエラーが発生しました。')}</div>`;
     }
-    pipelineSummaryEl.innerHTML = renderSummary(event.pipeline?.lastRun || null);
-    pipelineDiffEl.innerHTML = renderDiff(event.pipeline?.lastRun || null);
+    const snapshot = event.pipeline?.lastRun || null;
+    if (snapshot && snapshot.results) {
+      setLatestGateResults(snapshot.results, {
+        source: event.trigger || 'event',
+        timestamp: snapshot.timestamp,
+        contextPath: snapshot.contextPath || null
+      });
+      renderGateResults(latestGateResults);
+    }
+    pipelineSummaryEl.innerHTML = renderSummary(snapshot);
+    pipelineDiffEl.innerHTML = renderDiff(snapshot);
     if (pipelineAnalyticsEl) {
       pipelineAnalyticsEl.innerHTML = renderAnalytics(event.analytics);
     }
@@ -416,7 +515,6 @@
         await openLog(rel);
       });
     });
-    const snapshot = event.pipeline?.lastRun;
     if (event.trigger === 'auto' && snapshot && typeof snapshot.exitCode === 'number') {
       const tone = snapshot.exitCode === 0 ? 'success' : 'warn';
       setTreeStatus(`Quality Gatesを自動再検証しました (exit ${snapshot.exitCode})`, tone);
@@ -1119,36 +1217,96 @@
   }
 
   async function validateGates(nodes) {
-    const results = {
-      'DOC-01': [],
-      'DOC-02': [],
-      'DOC-03': [],
-      'DOC-04': []
-    };
-    const validLayers = ['STRATEGY','PRD','UX','API','DATA','ARCH','DEVELOPMENT','QA'];
-    
+    if (latestGateResults) {
+      console.log('[Docs Navigator] Using cached Quality Gates results', {
+        source: latestGateResultsSource,
+        timestamp: latestGateResultsTimestamp,
+        context: latestGateContextPath
+      });
+      return latestGateResults;
+    }
+
+    if (rulesWatcherApi && typeof rulesWatcherApi.getState === 'function') {
+      try {
+        console.log('[Docs Navigator] Fetching Quality Gates snapshot from rulesWatcher');
+        const res = await rulesWatcherApi.getState();
+        if (res && res.success && res.event?.pipeline?.lastRun?.results) {
+          const snapshot = res.event.pipeline.lastRun;
+          setLatestGateResults(snapshot.results, {
+            source: 'getState',
+            timestamp: snapshot.timestamp,
+            contextPath: snapshot.contextPath || null
+          });
+          renderGateResults(latestGateResults);
+          return latestGateResults;
+        }
+      } catch (err) {
+        console.warn('[Docs Navigator] Failed to fetch Quality Gates snapshot from rulesWatcher', err);
+      }
+    }
+
+    console.log('[Docs Navigator] Falling back to local Quality Gates validation');
+    const local = computeLocalGateResults(nodes);
+    setLatestGateResults(local, { source: 'local-compute', timestamp: new Date().toISOString() });
+    renderGateResults(latestGateResults);
+    return latestGateResults;
+  }
+
+  function computeLocalGateResults(nodes) {
+    const results = sanitizeGateResults({});
+    const validLayers = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
+
     for (const [path, node] of nodes) {
+      const normalizedPath = normalizeGatePath(path);
       if (!node.layer && !node.upstream.length && !node.downstream.length) {
-        results['DOC-01'].push({ path, message: 'Breadcrumbsブロックが見つかりません' });
+        results['DOC-01'].push({
+          gateId: 'DOC-01',
+          path: normalizedPath,
+          message: 'Breadcrumbsブロックが見つかりません',
+          severity: 'error'
+        });
       }
       if (node.layer && !validLayers.includes(node.layer.toUpperCase())) {
-        results['DOC-02'].push({ path, layer: node.layer, message: `無効なLayer: ${node.layer}` });
+        results['DOC-02'].push({
+          gateId: 'DOC-02',
+          path: normalizedPath,
+          layer: node.layer,
+          message: `無効なLayer: ${node.layer}`,
+          severity: 'error'
+        });
       }
       for (const upPath of node.upstream) {
         if (!nodes.has(upPath)) {
-          results['DOC-03'].push({ path, link: upPath, message: `Upstreamパスが存在しません: ${upPath}` });
+          results['DOC-03'].push({
+            gateId: 'DOC-03',
+            path: normalizedPath,
+            link: upPath,
+            message: `Upstreamパスが存在しません: ${upPath}`,
+            severity: 'error'
+          });
         }
       }
       for (const downPath of node.downstream) {
         if (!nodes.has(downPath)) {
-          results['DOC-03'].push({ path, link: downPath, message: `Downstreamパスが存在しません: ${downPath}` });
+          results['DOC-03'].push({
+            gateId: 'DOC-03',
+            path: normalizedPath,
+            link: downPath,
+            message: `Downstreamパスが存在しません: ${downPath}`,
+            severity: 'error'
+          });
         }
       }
     }
-    
+
     const cycles = detectCycles(nodes);
-    results['DOC-04'] = cycles;
-    
+    results['DOC-04'] = cycles.map(cycle => ({
+      ...cycle,
+      gateId: 'DOC-04',
+      severity: 'warn',
+      path: normalizeGatePath(cycle.path)
+    }));
+
     return results;
   }
 
@@ -1187,44 +1345,48 @@
   function renderGateResults(results) {
     const panel = gateResultsPanel || document.getElementById('gate-results');
     if (!panel) return;
+    const sanitized = sanitizeGateResults(results);
+    const documentViolations = DOCUMENT_GATE_ORDER.map(gateId => ({
+      gateId,
+      violations: sanitized[gateId] || []
+    }));
+    const testViolations = TEST_CASE_GATE_ORDER.map(gateId => ({
+      gateId,
+      violations: sanitized[gateId] || []
+    }));
+
     panel.classList.remove('empty-state');
     panel.innerHTML = '';
-    const gates = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04'];
-    
-    for (const gateId of gates) {
-      const violations = results[gateId];
-      const status = violations.length === 0 ? 'pass' : (gateId === 'DOC-04' ? 'warn' : 'error');
-      const statusText = violations.length === 0 ? '✓ PASS' : `✗ ${violations.length} violation(s)`;
-      
-      const gateDiv = document.createElement('div');
-      gateDiv.className = `gate-result ${status}`;
-      gateDiv.innerHTML = `<strong>${gateId}</strong>: ${statusText}`;
-      
-      if (violations.length > 0) {
-        for (const v of violations) {
-          const vDiv = document.createElement('div');
-          vDiv.className = 'gate-violation';
-          vDiv.innerHTML = `
-            <div>${escapeHtml(v.path)}</div>
-            <div style="font-size:12px;color:#6b7280;">${escapeHtml(v.message)}</div>
-            <div class="gate-actions">
-              <button class="btn btn-sm btn-secondary" data-action="open" data-path="${escapeHtml(v.path)}">Open</button>
-              <button class="btn btn-sm btn-secondary" data-action="fix" data-gate="${gateId}" data-path="${escapeHtml(v.path)}">Fix Prompt</button>
-            </div>
-          `;
-          gateDiv.appendChild(vDiv);
-        }
-      }
-      panel.appendChild(gateDiv);
+
+    const docGroup = document.createElement('div');
+    docGroup.className = 'gate-group';
+    docGroup.innerHTML = '<h4 class="gate-group__title">Docs Quality Gates</h4>';
+    for (const entry of documentViolations) {
+      docGroup.appendChild(renderGateBlock(entry.gateId, entry.violations));
     }
-    
+
+    const tcGroup = document.createElement('div');
+    tcGroup.className = 'gate-group';
+    tcGroup.innerHTML = '<h4 class="gate-group__title">Test Case Quality Gates</h4>';
+    for (const entry of testViolations) {
+      tcGroup.appendChild(renderGateBlock(entry.gateId, entry.violations, { showTestActions: true }));
+    }
+
+    panel.appendChild(docGroup);
+    panel.appendChild(tcGroup);
+
     panel.querySelectorAll('button[data-action="open"]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const path = btn.getAttribute('data-path');
-        await window.docs.open(path);
+        if (!path) return;
+        try {
+          await window.docs.open(path);
+        } catch (err) {
+          console.warn('[Docs Navigator] Failed to open path from Quality Gates panel', err);
+        }
       });
     });
-    
+
     panel.querySelectorAll('button[data-action="fix"]').forEach(btn => {
       btn.addEventListener('click', () => {
         const gate = btn.getAttribute('data-gate');
@@ -1232,6 +1394,101 @@
         generateFixPrompt(gate, path);
       });
     });
+
+    panel.querySelectorAll('button[data-action="execute"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const actionId = btn.getAttribute('data-action-id');
+        console.log('[Docs Navigator] Triggered custom Quality Gates action', { actionId, gateResultsSource: latestGateResultsSource });
+      });
+    });
+  }
+
+  function renderGateBlock(gateId, violations, { showTestActions = false } = {}) {
+    const worstSeverity = pickWorstSeverity(violations, gateId);
+    const status = violations.length === 0 ? 'pass' : severityToStatusClass(worstSeverity).css;
+    const statusLabel = violations.length === 0
+      ? '✓ PASS'
+      : `✗ ${violations.length}件 (${severityToStatusClass(worstSeverity).label})`;
+
+    const gateDiv = document.createElement('div');
+    gateDiv.className = `gate-result ${status}`;
+    const metaParts = [];
+    if (latestGateResultsTimestamp) metaParts.push(`最終更新: ${formatTimestamp(latestGateResultsTimestamp)}`);
+    if (latestGateContextPath) metaParts.push(`Context: ${escapeHtml(latestGateContextPath)}`);
+    gateDiv.innerHTML = `
+      <div class="gate-result__header">
+        <strong>${escapeHtml(gateId)}</strong>
+        <span class="gate-result__status">${statusLabel}</span>
+      </div>
+      ${metaParts.length && violations.length === 0 ? `<div class="gate-result__meta">${metaParts.join(' ／ ')}</div>` : ''}
+    `;
+
+    if (violations.length > 0) {
+      const list = document.createElement('div');
+      list.className = 'gate-violations';
+      for (const violation of violations) {
+        list.appendChild(renderGateViolation(gateId, violation, { showTestActions }));
+      }
+      gateDiv.appendChild(list);
+    }
+
+    return gateDiv;
+  }
+
+  function renderGateViolation(gateId, violation, { showTestActions = false } = {}) {
+    const container = document.createElement('div');
+    container.className = 'gate-violation';
+    const severity = getViolationSeverity(violation, gateId);
+    const severityInfo = severityToStatusClass(severity);
+    const path = violation?.path ? escapeHtml(violation.path) : '(path not provided)';
+    const message = violation?.message ? escapeHtml(violation.message) : '詳細情報が不足しています';
+    const hintLines = [];
+    if (violation?.link) {
+      hintLines.push(`リンク: ${escapeHtml(violation.link)}`);
+    }
+    if (violation?.heading) {
+      hintLines.push(`見出し: ${escapeHtml(violation.heading)}`);
+    }
+    if (Array.isArray(violation?.cycle) && violation.cycle.length) {
+      hintLines.push(`循環: ${escapeHtml(violation.cycle.join(' → '))}`);
+    }
+    if (violation?.layer) {
+      hintLines.push(`Layer: ${escapeHtml(violation.layer)}`);
+    }
+    const hintHtml = hintLines.length ? `<div class="gate-violation__hints">${hintLines.join(' ／ ')}</div>` : '';
+
+    container.innerHTML = `
+      <div class="gate-violation__summary">
+        <span class="gate-violation__badge gate-violation__badge--${severityInfo.css}">${severityInfo.label}</span>
+        <span class="gate-violation__path">${path}</span>
+      </div>
+      <div class="gate-violation__message">${message}</div>
+      ${hintHtml}
+      <div class="gate-actions">
+        ${violation?.path ? `<button class="btn btn-sm btn-secondary" data-action="open" data-path="${escapeHtml(violation.path)}">Open</button>` : ''}
+        <button class="btn btn-sm btn-secondary" data-action="fix" data-gate="${escapeHtml(gateId)}" data-path="${escapeHtml(violation?.path || '')}">Fix Prompt</button>
+        ${showTestActions && violation?.action ? `<button class="btn btn-sm btn-secondary" data-action="execute" data-action-id="${escapeHtml(String(violation.action))}">Action</button>` : ''}
+      </div>
+    `;
+
+    if (showTestActions && Array.isArray(violation?.actions) && violation.actions.length) {
+      const actionsList = document.createElement('ul');
+      actionsList.className = 'gate-violation__actions-list';
+      for (const action of violation.actions) {
+        if (!action || typeof action !== 'object') continue;
+        const li = document.createElement('li');
+        const label = action.label ? escapeHtml(action.label) : 'アクション';
+        if (action.command) {
+          li.innerHTML = `<code>${escapeHtml(action.command)}</code> — ${label}`;
+        } else {
+          li.textContent = label;
+        }
+        actionsList.appendChild(li);
+      }
+      container.appendChild(actionsList);
+    }
+
+    return container;
   }
 
   function generateFixPrompt(gateId, path) {
@@ -1239,9 +1496,17 @@
       'DOC-01': `以下のドキュメントにBreadcrumbsブロックを追加してください。\n\nファイル: ${path}\n\nフォーマット:\n> Breadcrumbs\n> Layer: [STRATEGY|PRD|UX|API|DATA|ARCH|DEVELOPMENT|QA]\n> Upstream: [上位ドキュメントパス or N/A]\n> Downstream: [下位ドキュメントパス or N/A]`,
       'DOC-02': `以下のドキュメントのLayerを修正してください。\n\nファイル: ${path}\n\n有効なLayer: STRATEGY, PRD, UX, API, DATA, ARCH, DEVELOPMENT, QA`,
       'DOC-03': `以下のドキュメントのUpstream/Downstreamパスを修正してください。\n\nファイル: ${path}\n\n存在しないパスを削除または修正してください。`,
-      'DOC-04': `以下のドキュメントで循環参照を解消してください。\n\nファイル: ${path}\n\nUpstream/Downstreamリンクを見直し、循環を解消してください。`
+      'DOC-04': `以下のドキュメントで循環参照を解消してください。\n\nファイル: ${path}\n\nUpstream/Downstreamリンクを見直し、循環を解消してください。`,
+      'DOC-05': `以下のドキュメントの見出し番号を修正してください。\n\nファイル: ${path}\n\n##/### 見出しの章番号が連番になるように整えてください。`,
+      'DOC-06': `以下のドキュメントの目次リンクを修正してください。\n\nファイル: ${path}\n\n## 目次 セクションのリンクが本文の見出しアンカーと一致するように更新してください。`,
+      'DOC-07': `以下のドキュメント名を命名規則に合わせてください。\n\nファイル: ${path}\n\nレイヤーに対応したファイル名（PRD_xxx.mdc等）へリネームしてください。`,
+      'DOC-08': `以下のドキュメントのScopeセクションを補完してください。\n\nファイル: ${path}\n\n「扱う内容」「扱わない内容」が明示されるように箇条書きを追加してください。`,
+      'TC-01': `以下のテストケースファイルの命名規則を修正してください。\n\nファイル: ${path}\n\ndocs-navigator-basic.spec.ts のように機能を表すスネークケースで命名してください。`,
+      'TC-02': `以下のテストケースの独立性を確保してください。\n\nファイル: ${path}\n\n他テストの状態に依存しないようbeforeEach/afterEachでセットアップとクリーンアップを実装してください。`,
+      'TC-03': `以下のテストケースに目的と期待結果をコメントで記述してください。\n\nファイル: ${path}\n\n/** ... */ 形式でドキュメント化してください。`,
+      'TC-04': `以下のテストケースで使用するデータをfixtures/配下に移動し、setup/teardownで管理してください。\n\nファイル: ${path}`
     };
-    
+
     const prompt = prompts[gateId] || '';
     navigator.clipboard.writeText(prompt).then(() => {
       alert('修正プロンプトをコピーしました（Cursor autoに貼り付けてください）');
@@ -1251,21 +1516,44 @@
   }
 
   function addGateIconToNode(nodeDiv, path, gateResults) {
-    const violations = [];
-    for (const gateId of ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04']) {
-      const v = gateResults[gateId].find(v => v.path === path);
-      if (v) violations.push({ gateId, severity: gateId === 'DOC-04' ? 'warn' : 'error' });
+    if (!gateResults) return;
+    const sanitized = sanitizeGateResults(gateResults);
+    const normalizedPath = normalizeGatePath(path);
+    const matched = [];
+
+    for (const gateId of Object.keys(sanitized)) {
+      const list = Array.isArray(sanitized[gateId]) ? sanitized[gateId] : [];
+      for (const violation of list) {
+        if (!violation?.path) continue;
+        if (normalizeGatePath(violation.path) === normalizedPath) {
+          matched.push({ gateId, violation });
+        }
+      }
     }
-    
-    if (violations.length > 0) {
-      const hasError = violations.some(v => v.severity === 'error');
-      const icon = hasError ? '⚠️' : '⚠';
-      const span = document.createElement('span');
-      span.className = `tree-node-icon ${hasError ? 'error' : 'warn'}`;
-      span.textContent = icon;
-      span.title = violations.map(v => v.gateId).join(', ');
-      nodeDiv.querySelector('.tree-node-content').appendChild(span);
+
+    if (matched.length === 0) return;
+
+    let worst = 'info';
+    for (const entry of matched) {
+      const severity = getViolationSeverity(entry.violation, entry.gateId);
+      if (severity === 'error') {
+        worst = 'error';
+        break;
+      }
+      if (severity === 'warn' && worst !== 'error') {
+        worst = 'warn';
+      } else if (severity === 'info' && worst === 'info') {
+        worst = 'info';
+      }
     }
+
+    const icon = worst === 'error' ? '⛔' : worst === 'warn' ? '⚠' : 'ℹ';
+    const span = document.createElement('span');
+    span.className = `tree-node-icon ${worst}`;
+    span.textContent = icon;
+    span.title = matched.map(entry => entry.gateId).join(', ');
+    span.dataset.gateSeverity = worst;
+    nodeDiv.querySelector('.tree-node-content').appendChild(span);
   }
 
   async function renderTree() {
@@ -1286,7 +1574,7 @@
     }
     if (gateResultsPanel) {
       gateResultsPanel.classList.add('empty-state');
-      gateResultsPanel.textContent = 'Validateを押してGate結果を確認しましょう';
+      gateResultsPanel.textContent = 'Quality Gatesの結果を取得しています...';
     }
     try {
       console.log('[renderTree] Calling parseAllBreadcrumbs()...');
