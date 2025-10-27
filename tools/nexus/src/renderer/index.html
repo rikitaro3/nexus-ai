@@ -25,6 +25,7 @@
     </header>
     <nav class="tabs">
       <button class="tab-btn active" data-tab="docs">Docs</button>
+      <button class="tab-btn" data-tab="analytics">Analytics</button>
       <button class="tab-btn" data-tab="tasks">Tasks</button>
       <button class="tab-btn" data-tab="settings">Settings</button>
     </nav>
@@ -107,6 +108,41 @@
               </div>
             </div>
           </div>
+        </section>
+      </div>
+      <div id="analytics" class="tab-content">
+        <section class="card analytics-card">
+          <div class="analytics-card__header">
+            <h2>📈 Analytics Dashboard</h2>
+            <div class="analytics-toolbar">
+              <button class="btn btn-secondary btn-sm" data-role="refresh">Refresh</button>
+              <button class="btn btn-secondary btn-sm" data-role="export">Export JSON</button>
+              <span class="status status-info hidden" data-role="status"></span>
+            </div>
+          </div>
+          <p class="text-muted analytics-meta">最新更新: <span data-role="updated">-</span> ／ コンテキスト: <span data-role="context">-</span></p>
+          <div class="analytics-grid">
+            <section class="analytics-panel">
+              <header>
+                <h3>Task Progress</h3>
+              </header>
+              <div class="analytics-progress" data-role="progress"></div>
+              <div class="analytics-status-summary" data-role="status-summary"></div>
+            </section>
+            <section class="analytics-panel">
+              <header>
+                <h3>Missing DAG Nodes</h3>
+              </header>
+              <div class="analytics-missing" data-role="missing"></div>
+            </section>
+            <section class="analytics-panel span-2">
+              <header>
+                <h3>Quality Gate Trend</h3>
+              </header>
+              <div class="analytics-trend" data-role="trend"></div>
+            </section>
+          </div>
+          <div class="analytics-warnings" data-role="warnings"></div>
         </section>
       </div>
       <div id="tasks" class="tab-content">
@@ -227,6 +263,7 @@
   <script src="services/ai/registry.js"></script>
   <script src="services/ai/providers/cursor.js"></script>
   <script src="shared/app.js"></script>
+  <script src="features/analytics/analytics.js"></script>
   <script src="features/docs-navigator/docs-navigator.js"></script>
   <script src="features/tasks/tasks.js"></script>
   <script src="features/settings/settings.js"></script>

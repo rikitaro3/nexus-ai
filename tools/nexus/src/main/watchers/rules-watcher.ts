@@ -12,6 +12,7 @@ import {
   runQualityGatesValidation,
   summarizeGateResults
 } from '../utils/quality-gates.js';
+import { loadTasksForAnalytics } from '../../shared/analytics-service.js';
 
 export type RulesWatcherTrigger = 'init' | 'auto' | 'manual' | 'bulk';
 
@@ -224,9 +225,17 @@ export class RulesWatcherController {
     }
 
     const logs = await listQualityGateLogs(this.projectRoot);
+    const tasksResult = await loadTasksForAnalytics(this.projectRoot);
+    if (tasksResult.warnings.length) {
+      for (const warning of tasksResult.warnings) {
+        logger.warn('Analytics tasks load warning', { warning });
+      }
+    }
+
     const analytics = collectDocumentAnalytics({
       results: runResult?.payload?.results ?? null,
-      docStatus: runResult?.payload?.docStatus ?? null
+      docStatus: runResult?.payload?.docStatus ?? null,
+      tasks: tasksResult.tasks
     });
 
     const event: RulesWatcherEvent = {

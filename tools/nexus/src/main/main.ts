@@ -4,6 +4,7 @@ import * as path from 'path';
 import { getRepoRoot, withPathValidation } from './handlers/security.js';
 import { logger } from './utils/logger.js';
 import { createRulesWatcher, RulesWatcherController, RulesWatcherEvent } from './watchers/rules-watcher.js';
+import { collectNexusAnalyticsDataset } from '../shared/analytics-service.js';
 
 let mainWindow: BrowserWindow | null = null;
 let rulesWatcher: RulesWatcherController | null = null;
@@ -554,6 +555,27 @@ ipcMain.handle('rules:listLogs', async () => {
     return { success: true, logs };
   } catch (error) {
     logger.error('Failed to list Quality Gates logs', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('analytics:getSnapshot', async () => {
+  try {
+    const dataset = await collectNexusAnalyticsDataset(PROJECT_ROOT);
+    return { success: true, data: dataset };
+  } catch (error) {
+    logger.error('Failed to collect analytics snapshot', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('analytics:exportJson', async () => {
+  try {
+    const dataset = await collectNexusAnalyticsDataset(PROJECT_ROOT);
+    const json = JSON.stringify(dataset, null, 2);
+    return { success: true, data: dataset, json };
+  } catch (error) {
+    logger.error('Failed to export analytics snapshot', { error: (error as Error).message });
     return { success: false, error: (error as Error).message };
   }
 });

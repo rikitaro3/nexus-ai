@@ -48,4 +48,9 @@ contextBridge.exposeInMainWorld('rulesWatcher', {
   listLogs: () => ipcRenderer.invoke('rules:listLogs')
 });
 
+contextBridge.exposeInMainWorld('analytics', {
+  getSnapshot: () => ipcRenderer.invoke('analytics:getSnapshot'),
+  exportJson: () => ipcRenderer.invoke('analytics:exportJson')
+});
+
 

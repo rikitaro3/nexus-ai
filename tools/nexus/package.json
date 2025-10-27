@@ -22,7 +22,8 @@
     "test:e2e:smoke": "playwright test",
     "test:e2e:playwright": "node legacy/tests/test-e2e-playwright.js",
     "validate:docs": "node scripts/validate-docs-gates.js",
-    "capture:screenshots": "node scripts/capture-screenshots.js"
+    "capture:screenshots": "node scripts/capture-screenshots.js",
+    "analytics:export": "npm run build --silent && node dist/src/scripts/export-analytics.js"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.28.5",
