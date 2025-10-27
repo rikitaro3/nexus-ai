@@ -4,11 +4,14 @@ import { logger } from '../utils/logger.js';
 import { ImpactScanResult, scanQualityGateImpacts } from '../utils/document-impact.js';
 import { collectDocumentAnalytics, DocumentAnalyticsSnapshot } from '../utils/document-analytics.js';
 import {
+  DocsAutofixSummary,
   listQualityGateLogs,
   loadLatestQualityGateLog,
   QualityGateDiffSummary,
   QualityGateResults,
   QualityGateRunResult,
+  RepoDiffSummary,
+  runQualityGatesAutofix,
   runQualityGatesValidation,
   summarizeGateResults
 } from '../utils/quality-gates.js';
@@ -33,6 +36,8 @@ export interface QualityGateSnapshot {
   logPath: string | null;
   results: QualityGateResults;
   contextPath: string | null;
+  autofix: DocsAutofixSummary | null;
+  repoDiff: RepoDiffSummary | null;
 }
 
 export interface RulesWatcherEvent {
@@ -52,6 +57,8 @@ export interface RulesWatcherEvent {
   analytics: DocumentAnalyticsSnapshot;
   message?: string;
   error?: { message: string; stack?: string };
+  autofix?: DocsAutofixSummary | null;
+  repoDiff?: RepoDiffSummary | null;
 }
 
 interface RulesWatcherOptions {
@@ -184,7 +191,9 @@ export class RulesWatcherController {
       diff: run.diff ?? null,
       logPath: run.relativeLogPath,
       results: sanitizeResults(run.payload?.results),
-      contextPath: run.payload?.contextPath ?? null
+      contextPath: run.payload?.contextPath ?? null,
+      autofix: run.autofix ?? null,
+      repoDiff: run.repoDiff ?? null
     };
   }
 
@@ -206,11 +215,18 @@ export class RulesWatcherController {
       segment.lastRunAt = new Date().toISOString();
       try {
         const previousResults = this.lastRun?.payload?.results ?? null;
-        runResult = await runQualityGatesValidation(this.projectRoot, {
-          mode: segment.mode,
-          contextPath: impact.contextPath ?? undefined,
-          previousResults
-        });
+        if (segment.mode === 'bulk') {
+          runResult = await runQualityGatesAutofix(this.projectRoot, {
+            contextPath: impact.contextPath ?? undefined,
+            previousResults
+          });
+        } else {
+          runResult = await runQualityGatesValidation(this.projectRoot, {
+            mode: segment.mode,
+            contextPath: impact.contextPath ?? undefined,
+            previousResults
+          });
+        }
         this.lastRun = runResult;
         segment.status = 'completed';
         segment.lastRunAt = runResult.timestamp;
@@ -242,7 +258,9 @@ export class RulesWatcherController {
       logs,
       analytics,
       message: options.reason,
-      error
+      error,
+      autofix: runResult?.autofix ?? null,
+      repoDiff: runResult?.repoDiff ?? null
     };
 
     this.latestEvent = event;

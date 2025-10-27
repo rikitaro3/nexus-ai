@@ -695,18 +695,18 @@ function validateScopeSections(docContents) {
     let hasInclude = false;
     let hasExclude = false;
 
-    const includeSection = extractSectionByTitle(content, [/^(扱う内容|in\s*scope)$/i]);
+    const includeSection = extractSectionByTitle(content, [/^(?:\d+(?:\.\d+)*\.\s*)?(扱う内容|in\s*scope)$/i]);
     if (includeSection) {
       hasInclude = hasListWithContent(includeSection.content);
     }
 
-    const excludeSection = extractSectionByTitle(content, [/^(扱わない内容|out\s*of\s*scope|非スコープ)$/i]);
+    const excludeSection = extractSectionByTitle(content, [/^(?:\d+(?:\.\d+)*\.\s*)?(扱わない内容|out\s*of\s*scope|非スコープ)$/i]);
     if (excludeSection) {
       hasExclude = hasListWithContent(excludeSection.content);
     }
 
     if (!hasInclude || !hasExclude) {
-      const scopeSection = extractSectionByTitle(content, [/^scope$/i]);
+      const scopeSection = extractSectionByTitle(content, [/^(?:\d+(?:\.\d+)*\.\s*)?scope$/i]);
       if (scopeSection) {
         const bullets = extractListLines(scopeSection.content);
         const includeKeywords = bullets.some(line => /(含まれる|in\s*scope|対象)/i.test(line));

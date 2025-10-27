@@ -45,6 +45,42 @@ export interface QualityGatePayload {
   docStatus?: Record<string, unknown>;
 }
 
+export interface DocsAutofixRenameEntry {
+  from: string;
+  to: string;
+  reason?: string;
+}
+
+export interface DocsAutofixOperation {
+  type: 'modify' | 'rename';
+  path?: string;
+  actions?: string[];
+  from?: string;
+  to?: string;
+  reason?: string;
+}
+
+export interface DocsAutofixSummary {
+  status: 'ok' | 'failed';
+  timestamp: string;
+  projectRoot: string;
+  contextPath?: string | null;
+  dryRun: boolean;
+  operations: DocsAutofixOperation[];
+  renameMap: DocsAutofixRenameEntry[];
+  warnings: string[];
+  errors: string[];
+  rawOutput: string;
+  stderr: string;
+  exitCode: number;
+}
+
+export interface RepoDiffSummary {
+  nameStatus: string;
+  patch: string;
+  files: string[];
+}
+
 export interface QualityGateRunResult {
   timestamp: string;
   mode: 'auto' | 'manual' | 'bulk';
@@ -52,6 +88,8 @@ export interface QualityGateRunResult {
   payload: QualityGatePayload;
   summary: QualityGateSummaryItem[];
   diff: QualityGateDiffSummary | null;
+  autofix: DocsAutofixSummary | null;
+  repoDiff: RepoDiffSummary | null;
   logPath: string;
   relativeLogPath: string;
   rawOutput: string;
@@ -65,6 +103,8 @@ interface QualityGateLogFile {
   payload: QualityGatePayload;
   summary: QualityGateSummaryItem[];
   diff: QualityGateDiffSummary | null;
+  autofix?: DocsAutofixSummary | null;
+  repoDiff?: RepoDiffSummary | null;
   stdout?: string;
   rawOutput?: string;
   stderr?: string;
@@ -84,6 +124,7 @@ interface RunOptions {
   mode: 'auto' | 'manual' | 'bulk';
   contextPath?: string | null;
   previousResults?: QualityGateResults | null;
+  autofixDryRun?: boolean;
 }
 
 const LOG_DIR = path.join('tools', 'nexus', 'logs', 'quality-gates');
@@ -229,10 +270,201 @@ async function resolveScriptPath(projectRoot: string): Promise<string> {
   return scriptPath;
 }
 
+async function resolveAutofixScriptPath(projectRoot: string): Promise<string> {
+  const scriptPath = path.join(projectRoot, 'tools', 'nexus', 'scripts', 'apply-docs-gates.js');
+  await fs.access(scriptPath);
+  return scriptPath;
+}
+
+async function runDocsAutofix(projectRoot: string, options: { contextPath?: string | null; dryRun?: boolean } = {}): Promise<DocsAutofixSummary> {
+  const scriptPath = await resolveAutofixScriptPath(projectRoot);
+  const args = [
+    scriptPath,
+    '--project-root',
+    projectRoot,
+    '--json'
+  ];
+
+  if (options.contextPath) {
+    args.push('--context', options.contextPath);
+  }
+
+  if (options.dryRun) {
+    args.push('--dry-run');
+  }
+
+  logger.info('Running Docs Quality Gates autofix', {
+    projectRoot,
+    contextPath: options.contextPath,
+    dryRun: !!options.dryRun,
+    scriptPath
+  });
+
+  const child = spawn(process.execPath, args, { cwd: projectRoot });
+
+  let stdout = '';
+  let stderr = '';
+
+  child.stdout?.on('data', chunk => {
+    stdout += chunk.toString();
+  });
+
+  child.stderr?.on('data', chunk => {
+    stderr += chunk.toString();
+  });
+
+  const exitCode: number = await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', code => resolve(code ?? 0));
+  });
+
+  let summary: DocsAutofixSummary;
+  try {
+    summary = stdout.trim()
+      ? JSON.parse(stdout) as DocsAutofixSummary
+      : {
+          status: exitCode === 0 ? 'ok' : 'failed',
+          timestamp: new Date().toISOString(),
+          projectRoot,
+          contextPath: options.contextPath ?? null,
+          dryRun: !!options.dryRun,
+          operations: [],
+          renameMap: [],
+          warnings: [],
+          errors: [],
+          rawOutput: '',
+          stderr: '',
+          exitCode
+        };
+  } catch (error) {
+    logger.error('Failed to parse Docs autofix output', {
+      error: (error as Error).message,
+      stdout
+    });
+    throw new Error(`Failed to parse Docs autofix output: ${(error as Error).message}`);
+  }
+
+  if (!Array.isArray(summary.operations)) {
+    summary.operations = [];
+  }
+  if (!Array.isArray(summary.renameMap)) {
+    summary.renameMap = [];
+  }
+  if (!Array.isArray(summary.warnings)) {
+    summary.warnings = [];
+  }
+  if (!Array.isArray(summary.errors)) {
+    summary.errors = [];
+  }
+
+  summary.rawOutput = stdout.trim();
+  summary.stderr = stderr.trim();
+  summary.exitCode = exitCode;
+  summary.status = summary.status ?? (exitCode === 0 ? 'ok' : 'failed');
+  summary.projectRoot = summary.projectRoot ?? projectRoot;
+  summary.contextPath = summary.contextPath ?? options.contextPath ?? null;
+  summary.dryRun = !!options.dryRun;
+
+  if (exitCode !== 0 || summary.status !== 'ok') {
+    const message = summary.errors.length > 0
+      ? summary.errors[0]
+      : `Docs autofix failed with exit code ${exitCode}`;
+    const error = new Error(message) as Error & { autofix?: DocsAutofixSummary };
+    error.autofix = summary;
+    throw error;
+  }
+
+  return summary;
+}
+
+async function runGitCommand(projectRoot: string, args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd: projectRoot });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', chunk => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr?.on('data', chunk => {
+      stderr += chunk.toString();
+    });
+
+    child.once('error', reject);
+    child.once('close', code => {
+      resolve({ stdout, stderr, exitCode: code ?? 0 });
+    });
+  });
+}
+
+async function collectRepoDiff(projectRoot: string): Promise<RepoDiffSummary | null> {
+  try {
+    const nameStatusResult = await runGitCommand(projectRoot, ['diff', '--name-status']);
+    if (nameStatusResult.exitCode !== 0) {
+      logger.warn('Failed to collect git name-status diff', {
+        exitCode: nameStatusResult.exitCode,
+        stderr: nameStatusResult.stderr.trim()
+      });
+      return null;
+    }
+
+    const trimmedNameStatus = nameStatusResult.stdout.trim();
+    if (!trimmedNameStatus) {
+      return { nameStatus: '', patch: '', files: [] };
+    }
+
+    const patchResult = await runGitCommand(projectRoot, ['diff']);
+    if (patchResult.exitCode !== 0) {
+      logger.warn('Failed to collect git diff patch', {
+        exitCode: patchResult.exitCode,
+        stderr: patchResult.stderr.trim()
+      });
+    }
+
+    const files = trimmedNameStatus
+      .split('\n')
+      .map(line => line.trim().split(/\s+/)[1])
+      .filter((line): line is string => Boolean(line));
+
+    return {
+      nameStatus: trimmedNameStatus,
+      patch: patchResult.exitCode === 0 ? patchResult.stdout : '',
+      files
+    };
+  } catch (error) {
+    logger.warn('Failed to collect repository diff', { error: (error as Error).message });
+    return null;
+  }
+}
+
 export async function runQualityGatesValidation(projectRoot: string, options: RunOptions): Promise<QualityGateRunResult> {
   const timestamp = new Date().toISOString();
   const scriptPath = await resolveScriptPath(projectRoot);
   const logDir = await ensureLogDirectory(projectRoot);
+  const shouldAutofix = options.mode === 'bulk' || !!options.autofixDryRun;
+  let autofix: DocsAutofixSummary | null = null;
+  let repoDiff: RepoDiffSummary | null = null;
+
+  if (shouldAutofix) {
+    try {
+      autofix = await runDocsAutofix(projectRoot, {
+        contextPath: options.contextPath ?? null,
+        dryRun: !!options.autofixDryRun
+      });
+      repoDiff = await collectRepoDiff(projectRoot);
+    } catch (error) {
+      const autofixSummary = (error as Error & { autofix?: DocsAutofixSummary }).autofix;
+      if (autofixSummary) {
+        logger.error('Docs Quality Gates autofix failed', {
+          errors: autofixSummary.errors,
+          status: autofixSummary.status,
+          exitCode: autofixSummary.exitCode
+        });
+      }
+      throw error;
+    }
+  }
 
   const args = [
     scriptPath,
@@ -295,6 +527,8 @@ export async function runQualityGatesValidation(projectRoot: string, options: Ru
     payload,
     summary,
     diff,
+    autofix,
+    repoDiff,
     rawOutput: stdout.trim(),
     stderr: stderr.trim(),
     relativeLogPath
@@ -315,11 +549,22 @@ export async function runQualityGatesValidation(projectRoot: string, options: Ru
     payload,
     summary,
     diff,
+    autofix,
+    repoDiff,
     logPath,
     relativeLogPath,
     rawOutput: stdout.trim(),
     stderr: stderr.trim()
   };
+}
+
+export async function runQualityGatesAutofix(projectRoot: string, options: Omit<RunOptions, 'mode'> & { dryRun?: boolean } = {}): Promise<QualityGateRunResult> {
+  return runQualityGatesValidation(projectRoot, {
+    mode: 'bulk',
+    contextPath: options.contextPath ?? null,
+    previousResults: options.previousResults ?? null,
+    autofixDryRun: options.dryRun ?? false
+  });
 }
 
 export async function loadLatestQualityGateLog(projectRoot: string): Promise<QualityGateRunResult | null> {
@@ -356,6 +601,8 @@ export async function loadLatestQualityGateLog(projectRoot: string): Promise<Qua
     payload: data.payload,
     summary: data.summary,
     diff: data.diff ?? null,
+    autofix: data.autofix ?? null,
+    repoDiff: data.repoDiff ?? null,
     logPath: latest.absolutePath,
     relativeLogPath: path.relative(projectRoot, latest.absolutePath),
     rawOutput: data.rawOutput ?? data.stdout ?? '',
