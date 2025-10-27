@@ -937,6 +937,26 @@
       const breakdownMeta = t.breakdownStatus ? ` / BD:${t.breakdownStatus}` : '';
       meta.textContent = `${t.category} / ${t.priority} / ${t.status}${t.featId ? ' / ' + t.featId : ''}${breakdownMeta}`;
       li.appendChild(meta);
+
+      const actions = document.createElement('div');
+      actions.className = 'tasks-actions';
+      const breakdownBtn = document.createElement('button');
+      breakdownBtn.type = 'button';
+      breakdownBtn.className = 'btn btn-secondary btn-sm';
+      breakdownBtn.textContent = 'Breakdown';
+      breakdownBtn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        selectedTaskId = t.id;
+        updateTaskSelection();
+        await renderDetail(t.id);
+        const genBtn = document.getElementById('task-generate-breakdown');
+        if (genBtn) {
+          genBtn.click();
+        }
+      });
+      actions.appendChild(breakdownBtn);
+      li.appendChild(actions);
       li.addEventListener('click', (ev) => {
         ev.preventDefault();
         selectedTaskId = t.id;
