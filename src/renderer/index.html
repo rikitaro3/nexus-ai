@@ -23,12 +23,11 @@
         </div>
       </div>
     </header>
-    <div class="primary-toolbar">
-      <nav class="tabs" role="tablist" aria-label="Main navigation">
-        <button class="tab-btn active" data-tab="docs" role="tab" aria-selected="true">Docs</button>
-        <button class="tab-btn" data-tab="tasks" role="tab" aria-selected="false">Tasks</button>
-      </nav>
-    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="docs">Docs</button>
+      <button class="tab-btn" data-tab="tasks">Tasks</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </nav>
     <main>
       <div id="docs" class="tab-content active">
         <section class="card">
@@ -154,6 +153,35 @@
           </div>
         </section>
       </div>
+      <div id="settings" class="tab-content">
+        <section class="card">
+          <h2>⚙️ Settings</h2>
+          <div class="settings-section">
+            <h3>プロジェクトルート</h3>
+            <div class="form-group">
+              <label for="settings-project-root">Project Root Path</label>
+              <input id="settings-project-root" type="text" placeholder="/path/to/project" />
+            </div>
+            <div class="control-group">
+              <button id="settings-save-root" class="btn btn-primary">Save Project Root</button>
+              <button id="settings-test-root" class="btn btn-secondary">Test Path</button>
+              <span id="settings-project-root-status" class="status hidden"></span>
+            </div>
+            <div id="settings-test-results" class="settings-test-results"></div>
+          </div>
+          <hr />
+          <div class="settings-section">
+            <h3>Context File</h3>
+            <p id="settings-context-path" class="settings-context-path">(未設定)</p>
+            <div class="control-group">
+              <button id="settings-select-context" class="btn btn-secondary">Select Context File</button>
+              <button id="settings-clear-context" class="btn btn-secondary">Clear</button>
+              <span id="settings-context-status" class="status hidden"></span>
+            </div>
+            <p class="text-muted">変更後はDocsタブを再読み込みしてください（ツールを再起動すると確実です）。</p>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
   <script>
@@ -177,6 +205,7 @@
   <script src="shared/app.js"></script>
   <script src="features/docs-navigator/docs-navigator.js"></script>
   <script src="features/tasks/tasks.js"></script>
+  <script src="features/settings/settings.js"></script>
 </body>
 </html>
 

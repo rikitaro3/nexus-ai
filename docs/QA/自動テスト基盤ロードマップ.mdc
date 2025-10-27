@@ -1,0 +1,49 @@
+# 自動テスト基盤ロードマップ
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/QA/index.mdc
+> Downstream: N/A
+
+Nexusの品質向上のために、ドキュメント整備から各種自動テストを段階的に構築するための実行計画を示す。
+
+## フェーズ1: ドキュメント整備
+- QAポリシーとテストスコープの定義を [docs/QA/index.mdc](index.mdc) に反映。
+- 各テストレイヤー（単体/結合/E2E）の目的・対象・実行手順を本ドキュメントに記録。
+- テスト実行ログは `E2E_TEST_RESULTS.md` などの成果物に追記し、ナレッジを蓄積。
+
+## フェーズ2: 自動テスト基盤構築
+- `jest` を利用した単体/結合テスト実行環境を `package.json` の `test` スクリプトで標準化。
+- `@playwright/test` を利用した E2E スモークテストのエントリポイントとして `npx playwright test` を追加。
+- `tests/` 配下に E2E テスト用ディレクトリを新設し、Playwright の設定ファイル `playwright.config.ts` で集中管理。
+- CI から実行する場合は `npm run test` → `npm run test:integration`（必要に応じて追加）→ `npm run test:e2e:smoke` の順で連鎖させる。
+
+## フェーズ3: 単体テスト
+- 対象: `src/main/utils` など純粋関数や副作用の小さいモジュール。
+- 手順:
+  1. `npm test` を実行し、Jest が TypeScript を `ts-jest` でトランスパイル。
+  2. ロガーのログレベル制御やエラーハンドリングのフォーマットを検証。
+- 成果物: `src/main/utils/__tests__` 配下にテストケースを追加。
+
+## フェーズ4: 結合テスト
+- 対象: `src/main/handlers/security.ts` の `validatePath` + `withPathValidation` のように複数ユーティリティの協調動作を確認するロジック。
+- 手順:
+  1. テスト毎に一時ディレクトリを生成し、`process.env.NEXUS_PROJECT_ROOT` を差し替え。
+  2. 実際のファイル IO（`fs.existsSync`）を伴うパスバリデーションの成功/失敗パターンを検証。
+- 成果物: `src/main/handlers/__tests__/security.test.ts`。
+
+## フェーズ5: E2E テスト
+- 対象: レンダラ HTML をブラウザ自動操作で検証するスモークテスト。
+- 手順:
+  1. `npm run test:e2e:smoke` で Playwright を起動。
+  2. `tests/e2e/fixtures/smoke.html` を読み込み、UI コンポーネントのレンダリングと基本操作（ボタン押下→状態更新）を検証。
+  3. 将来的に Electron アプリ本体を操作するテストへ拡張。
+- 成果物: `tests/e2e/smoke.spec.ts`。
+
+## 運用ガイドライン
+- Pull Request では最低でも単体テストをグリーンに保ち、影響範囲が広い変更は結合/E2E を追加で実行。
+- テストデータや一時ファイルは `afterEach` で確実に削除し、CI 環境への副作用を防ぐ。
+- 新規機能追加時は本ロードマップのどの層にテストを追加したかを記録し、欠落がないかレビューで確認する。
+
+alwaysApply: true
+---

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { withPathValidation } from './handlers/security.js';
+import { getRepoRoot, withPathValidation } from './handlers/security.js';
 import { logger } from './utils/logger.js';
 
 let mainWindow: BrowserWindow | null = null;
@@ -168,6 +168,47 @@ ipcMain.handle('settings:setProjectRoot', async (event, root: string) => {
   customProjectRoot = root;
   logger.info('Custom project root set', { root });
   return { success: true };
+});
+
+ipcMain.handle('settings:testProjectRoot', async (_event, root?: string) => {
+  try {
+    const baseRoot = root && root.trim() ? root.trim() : getRepoRoot();
+    const resolvedRoot = path.resolve(baseRoot);
+
+    if (!fs.existsSync(resolvedRoot)) {
+      return {
+        success: false,
+        error: `Path does not exist: ${resolvedRoot}`
+      };
+    }
+
+    const requiredPaths = [
+      'apps/mobile/pubspec.yaml',
+      'docs/PRD/index.mdc',
+      'human_todo.mdc'
+    ];
+
+    const results: Record<string, boolean> = {};
+    for (const rel of requiredPaths) {
+      const target = path.join(resolvedRoot, rel);
+      results[rel] = fs.existsSync(target);
+    }
+
+    const missing = Object.entries(results)
+      .filter(([, ok]) => !ok)
+      .map(([rel]) => rel);
+
+    return {
+      success: true,
+      root: resolvedRoot,
+      results,
+      missing
+    };
+  } catch (e) {
+    const message = (e as Error).message;
+    logger.error('Failed to test project root', { error: message, root });
+    return { success: false, error: message };
+  }
 });
 
 // Dialog: select context file

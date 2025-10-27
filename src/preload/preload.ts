@@ -17,7 +17,8 @@ contextBridge.exposeInMainWorld('env', {
 
 contextBridge.exposeInMainWorld('settings', {
   getProjectRoot: (): Promise<{ root: string }> => ipcRenderer.invoke('settings:getProjectRoot'),
-  setProjectRoot: (root: string): Promise<void> => ipcRenderer.invoke('settings:setProjectRoot', root)
+  setProjectRoot: (root: string): Promise<void> => ipcRenderer.invoke('settings:setProjectRoot', root),
+  testProjectRoot: (root: string): Promise<any> => ipcRenderer.invoke('settings:testProjectRoot', root)
 });
 
 contextBridge.exposeInMainWorld('dialog', {
