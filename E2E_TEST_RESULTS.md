@@ -12,6 +12,12 @@ NEXUSアプリに完全自動化されたE2Eテストを実装しました。
 2. **tools/nexus/package.json**: `test:e2e`スクリプトを追加
 3. **完全自動化**: 手動操作不要で実行可能
 
+## 2025-02-XX アップデート
+
+- Playwrightスモークテストを `test/e2e/docs-navigator-tree-smoke.spec.ts` にリネームし、命名規則/ドキュメント化/テストデータ管理のゲート（TC-01〜TC-04）を満たすよう整備。
+- `tools/nexus/test/test-cases.json` を追加し、GUI/CLI双方でテストケースのQuality Gates検証結果（DOC-05〜DOC-08, TC-01〜TC-04）が一致するようにした。
+- Docs Navigator UIのQuality Gatesパネルを拡張し、ドキュメント/テストケースの違反内容とFix Promptが参照できるよう更新。
+
 ### 実行結果
 
 ```bash
