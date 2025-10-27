@@ -5,7 +5,8 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts', '<rootDir>/test/**/*.spec.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^(\\.{1,2}/.*)\\.js$': '$1'
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^chokidar$': '<rootDir>/test/utils/mock-chokidar.ts'
   },
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }]
