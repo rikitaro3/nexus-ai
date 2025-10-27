@@ -117,6 +117,16 @@
             <button id="tasks-export" class="btn btn-secondary">Export to human_todo.mdc</button>
             <input id="tasks-filter" type="text" placeholder="キーワード/FEAT-ID/カテゴリでフィルタ">
           </div>
+          <div class="tasks-recommendations" id="tasks-recommendations">
+            <div class="tasks-recommendations__header">
+              <h3>推奨アクション</h3>
+              <div class="tasks-recommendations__actions">
+                <button id="tasks-recommendations-refresh" class="btn btn-secondary btn-sm">再計算</button>
+              </div>
+            </div>
+            <p class="tasks-recommendations__status" id="tasks-recommendations-status">解析準備中...</p>
+            <ul class="tasks-recommendations__list" id="tasks-recommendations-list"></ul>
+          </div>
           <div class="tasks-inputs">
             <div class="form-group">
               <label for="tasks-bulk">複数行貼り付け（1行=1件、例: 【機能改善】タイトル）</label>

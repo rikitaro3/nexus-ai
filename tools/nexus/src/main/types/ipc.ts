@@ -24,6 +24,8 @@ export interface TasksAPI {
   readJson(): Promise<ApiResponse<any>>;
   writeJson(data: any): Promise<ApiResponse<void>>;
   appendMdc(relPath: string, content: string): Promise<ApiResponse<void>>;
+  recordRecommendationSelection(data: any): Promise<ApiResponse<void>>;
+  readRecommendationHistory(): Promise<ApiResponse<any>>;
 }
 
 /**

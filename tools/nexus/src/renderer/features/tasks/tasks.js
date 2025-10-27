@@ -338,6 +338,10 @@
   const addOneBtn = document.getElementById('tasks-add-one');
   const catsEmptyEl = document.getElementById('tasks-categories-empty');
   const listEmptyEl = document.getElementById('tasks-list-empty');
+  const recommendationPanel = document.getElementById('tasks-recommendations');
+  const recommendationListEl = document.getElementById('tasks-recommendations-list');
+  const recommendationStatusEl = document.getElementById('tasks-recommendations-status');
+  const recommendationRefreshBtn = document.getElementById('tasks-recommendations-refresh');
 
   const persistedFilterRaw = filterPreference.read();
   const persistedCategoryRaw = categoryPreference.read();
@@ -360,6 +364,23 @@
   let selectedTaskId = null;
   let featsRegistry = null;
 
+  const recommendationAnalysisState = {
+    artifacts: null,
+    loadingPromise: null,
+    lastError: null,
+    lastUpdated: null
+  };
+  let recommendationRefreshPromise = null;
+  let recommendationRefreshQueued = false;
+  let latestRecommendations = [];
+
+  const PRIORITY_WEIGHTS = { HIGH: 5, MEDIUM: 3, LOW: 1 };
+  const STATUS_WEIGHTS = { TODO: 4, READY: 3, IN_PROGRESS: 2, REVIEW: 2, BLOCKED: 5, BACKLOG: 1 };
+  const COVERAGE_WEIGHT = 2;
+  const GATE_ERROR_WEIGHT = 3;
+  const GATE_WARN_WEIGHT = 2;
+  const LAYER_GATE_WEIGHT = 2;
+
   function toggleEmpty(el, show, message) {
     if (!el) return;
     if (typeof message === 'string') el.textContent = message;
@@ -380,6 +401,561 @@
     const lines = body.split('\n'); let cur = null;
     for (const raw of lines) { const line = raw.trim(); const h = line.match(/^\-\s*(FEAT-\d{4}):\s*(.+)$/); if (h) { cur = { id: h[1], title: h[2], links: {} }; out.items.push(cur); continue; } if (!cur) continue; const lk = line.match(/^\-\s*(PRD|UX|API|DATA|QA):\s*(.+)$/); if (lk) cur.links[lk[1]] = lk[2]; }
     featsRegistry = out; return out;
+  }
+
+  function safeLocalStorageGet(key) {
+    if (typeof window === 'undefined' || !window.localStorage) return '';
+    try { return window.localStorage.getItem(key) || ''; } catch { return ''; }
+  }
+
+  function extractSection(text, startHeader, stopHeaderPrefix = '## ') {
+    if (!text || !startHeader) return '';
+    const startIdx = text.indexOf(startHeader);
+    if (startIdx === -1) return '';
+    const after = text.slice(startIdx);
+    const rest = after.slice(startHeader.length);
+    if (!stopHeaderPrefix) return after.trim();
+    const escapedPrefix = stopHeaderPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\n${escapedPrefix}`);
+    const match = regex.exec(rest);
+    if (!match) return after.trim();
+    return after.slice(0, startHeader.length + match.index).trim();
+  }
+
+  function extractBreadcrumbs(text) {
+    if (!text) return '';
+    const match = text.match(/>\s*Breadcrumbs[\s\S]*?(?=\n#|\n##|$)/);
+    return match ? match[0] : '';
+  }
+
+  function parseContextEntriesFromSection(sectionText) {
+    const entries = [];
+    if (!sectionText) return entries;
+    const lines = sectionText.split('\n');
+    let currentCategory = null;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      const catMatch = line.match(/^###\s+(.+)$/);
+      if (catMatch) {
+        currentCategory = catMatch[1].trim();
+        continue;
+      }
+      const itemMatch = line.match(/^\-\s+([^\s].*?)\s+…\s+(.*)$/);
+      if (itemMatch && currentCategory) {
+        entries.push({
+          category: currentCategory,
+          path: itemMatch[1].trim(),
+          desc: itemMatch[2].trim()
+        });
+      }
+    }
+    return entries;
+  }
+
+  async function loadContextEntriesForRecommendations() {
+    if (Array.isArray(window?.entries) && window.entries.length) {
+      return window.entries;
+    }
+    const customPath = safeLocalStorageGet('context-file-path');
+    const savedContext = safeLocalStorageGet('nexus.context');
+    let contextPath = customPath || (savedContext === 'nexus' ? 'tools/nexus/context.mdc' : '.cursor/context.mdc');
+    let ctxRes = await window.docs.read(contextPath);
+    if (!ctxRes.success && contextPath !== 'tools/nexus/context.mdc') {
+      const fallbackRes = await window.docs.read('tools/nexus/context.mdc');
+      if (fallbackRes.success) {
+        ctxRes = fallbackRes;
+        contextPath = 'tools/nexus/context.mdc';
+      }
+    }
+    if (!ctxRes.success) {
+      throw new Error(ctxRes.error || 'コンテキストの読み込みに失敗しました');
+    }
+    const mapSection = extractSection(ctxRes.content, '## Context Map', '## ');
+    if (!mapSection) return [];
+    return parseContextEntriesFromSection(mapSection);
+  }
+
+  async function buildDagNodesForRecommendations(entries) {
+    const nodes = new Map();
+    for (const entry of entries) {
+      if (!entry?.path) continue;
+      try {
+        const res = await window.docs.read(entry.path);
+        if (!res.success) continue;
+        const bc = extractBreadcrumbs(res.content);
+        if (!bc) continue;
+        const layer = ((bc.match(/>\s*Layer:\s*(.+)/) || [])[1] || '').trim();
+        const upstreamRaw = ((bc.match(/>\s*Upstream:\s*(.+)/) || [])[1] || '').trim();
+        const downstreamRaw = ((bc.match(/>\s*Downstream:\s*(.+)/) || [])[1] || '').trim();
+        const splitLinks = (raw) => raw
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s && s.toUpperCase() !== 'N/A');
+        nodes.set(entry.path, {
+          path: entry.path,
+          layer,
+          upstream: splitLinks(upstreamRaw),
+          downstream: splitLinks(downstreamRaw),
+          children: []
+        });
+      } catch (err) {
+        console.warn('[Tasks] Failed to parse breadcrumbs for', entry.path, err);
+      }
+    }
+    return nodes;
+  }
+
+  function detectCyclesForRecommendations(nodes) {
+    const visited = new Set();
+    const recStack = new Set();
+    const cycles = [];
+
+    function dfs(path, stack) {
+      if (recStack.has(path)) {
+        const cycle = [...stack, path];
+        cycles.push({ path, cycle, message: `循環参照: ${cycle.join(' → ')}` });
+        return;
+      }
+      if (visited.has(path)) return;
+      visited.add(path);
+      recStack.add(path);
+      stack.push(path);
+      const node = nodes.get(path);
+      if (node) {
+        for (const downPath of node.downstream) {
+          dfs(downPath, [...stack]);
+        }
+      }
+      recStack.delete(path);
+    }
+
+    for (const [path] of nodes) {
+      if (!visited.has(path)) dfs(path, []);
+    }
+    return cycles;
+  }
+
+  function computeGateResultsForRecommendations(nodes) {
+    const results = {
+      'DOC-01': [],
+      'DOC-02': [],
+      'DOC-03': [],
+      'DOC-04': []
+    };
+    const validLayers = ['STRATEGY','PRD','UX','API','DATA','ARCH','DEVELOPMENT','QA'];
+
+    for (const [path, node] of nodes) {
+      if (!node.layer && !node.upstream.length && !node.downstream.length) {
+        results['DOC-01'].push({ path, message: 'Breadcrumbsブロックが見つかりません' });
+      }
+      if (node.layer && !validLayers.includes(node.layer.toUpperCase())) {
+        results['DOC-02'].push({ path, layer: node.layer, message: `無効なLayer: ${node.layer}` });
+      }
+      for (const upPath of node.upstream) {
+        if (!nodes.has(upPath)) {
+          results['DOC-03'].push({ path, link: upPath, message: `Upstreamパスが存在しません: ${upPath}` });
+        }
+      }
+      for (const downPath of node.downstream) {
+        if (!nodes.has(downPath)) {
+          results['DOC-03'].push({ path, link: downPath, message: `Downstreamパスが存在しません: ${downPath}` });
+        }
+      }
+    }
+
+    results['DOC-04'] = detectCyclesForRecommendations(nodes);
+    return results;
+  }
+
+  function summarizeGateResults(gateResults, nodes) {
+    const byPath = new Map();
+    const byLayer = new Map();
+    let errorCount = 0;
+    let warnCount = 0;
+
+    const pushIssue = (path, issue) => {
+      if (!path) return;
+      if (!byPath.has(path)) {
+        byPath.set(path, { path, issues: [] });
+      }
+      byPath.get(path).issues.push(issue);
+
+      const node = nodes.get(path);
+      const layer = node?.layer ? node.layer.toUpperCase() : null;
+      if (layer) {
+        if (!byLayer.has(layer)) {
+          byLayer.set(layer, { layer, issues: [] });
+        }
+        byLayer.get(layer).issues.push(issue);
+      }
+    };
+
+    for (const gateId of Object.keys(gateResults || {})) {
+      const violations = gateResults[gateId] || [];
+      const severity = gateId === 'DOC-04' ? 'warn' : 'error';
+      for (const violation of violations) {
+        const issue = {
+          gateId,
+          message: violation.message || '',
+          path: violation.path || '',
+          severity
+        };
+        pushIssue(violation.path, issue);
+        if (severity === 'error') errorCount += 1;
+        else warnCount += 1;
+      }
+    }
+
+    return {
+      byPath,
+      byLayer,
+      totals: { errorCount, warnCount }
+    };
+  }
+
+  function computeFeatCoverage(links) {
+    const keys = ['PRD','UX','API','DATA','QA'];
+    const missing = [];
+    for (const key of keys) {
+      const value = links?.[key];
+      if (!value || !value.trim()) missing.push(key);
+    }
+    return {
+      passed: keys.length - missing.length,
+      missing
+    };
+  }
+
+  function normalizeDocPath(value) {
+    if (!value) return '';
+    return value.split('#')[0].trim();
+  }
+
+  function escapeSelector(value) {
+    if (typeof value !== 'string') return '';
+    if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(value);
+    return value.replace(/([ "#%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+  }
+
+  async function ensureRecommendationArtifacts({ forceReload = false } = {}) {
+    if (forceReload) {
+      recommendationAnalysisState.artifacts = null;
+      recommendationAnalysisState.loadingPromise = null;
+      recommendationAnalysisState.lastError = null;
+    }
+
+    if (recommendationAnalysisState.artifacts && !forceReload) {
+      return recommendationAnalysisState.artifacts;
+    }
+
+    if (recommendationAnalysisState.loadingPromise) {
+      return recommendationAnalysisState.loadingPromise;
+    }
+
+    const promise = (async () => {
+      const entries = await loadContextEntriesForRecommendations();
+      const nodes = await buildDagNodesForRecommendations(entries);
+      const gateResults = await computeGateResultsForRecommendations(nodes);
+      const gateSummary = summarizeGateResults(gateResults, nodes);
+      const feats = await loadFeats();
+      const artifacts = { entries, nodes, gateResults, gateSummary, feats };
+      recommendationAnalysisState.artifacts = artifacts;
+      recommendationAnalysisState.lastUpdated = new Date();
+      recommendationAnalysisState.lastError = null;
+      return artifacts;
+    })().catch(err => {
+      recommendationAnalysisState.artifacts = null;
+      recommendationAnalysisState.lastError = err;
+      throw err;
+    }).finally(() => {
+      recommendationAnalysisState.loadingPromise = null;
+    });
+
+    recommendationAnalysisState.loadingPromise = promise;
+    return promise;
+  }
+
+  function computeTaskRecommendations(taskList, artifacts) {
+    if (!Array.isArray(taskList) || !artifacts) return [];
+    const results = [];
+    const featItems = Array.isArray(artifacts?.feats?.items) ? artifacts.feats.items : [];
+    const featMap = new Map();
+    for (const item of featItems) {
+      if (!item?.id) continue;
+      const coverage = computeFeatCoverage(item.links || {});
+      const docPaths = Object.values(item.links || {})
+        .map(normalizeDocPath)
+        .filter(Boolean);
+      const issues = [];
+      const missingDag = [];
+      for (const path of docPaths) {
+        if (artifacts.gateSummary.byPath.has(path)) {
+          issues.push({ path, issues: artifacts.gateSummary.byPath.get(path).issues });
+        }
+        if (!artifacts.nodes.has(path)) {
+          missingDag.push(path);
+        }
+      }
+      featMap.set(item.id, { item, coverage, docPaths, issues, missingDag });
+    }
+
+    const layerGateCounts = new Map();
+    artifacts.gateSummary.byLayer.forEach((value, layer) => {
+      const errorCount = value.issues.filter(issue => issue.severity === 'error').length;
+      const warnCount = value.issues.filter(issue => issue.severity === 'warn').length;
+      layerGateCounts.set(layer, { errorCount, warnCount });
+    });
+
+    for (const task of taskList) {
+      if (!task || typeof task !== 'object') continue;
+      const normalizedStatus = (task.status || '').toUpperCase();
+      if (['DONE', 'CANCELLED', 'ARCHIVED'].includes(normalizedStatus)) continue;
+
+      const normalizedPriority = (task.priority || '').toUpperCase();
+      const normalizedCategory = (task.category || '').toUpperCase();
+
+      let score = 0;
+      const reasons = [];
+      const priorityWeight = PRIORITY_WEIGHTS[normalizedPriority] ?? 2;
+      if (priorityWeight > 0) {
+        score += priorityWeight;
+        reasons.push(`優先度が${task.priority || '未設定'} (+${priorityWeight})`);
+      }
+
+      const statusWeight = STATUS_WEIGHTS[normalizedStatus] || 0;
+      if (statusWeight > 0) {
+        score += statusWeight;
+        const label = normalizedStatus === 'BLOCKED' ? 'ブロック中' : (task.status || '未設定');
+        reasons.push(`ステータス: ${label} (+${statusWeight})`);
+      }
+
+      let featWeight = 0;
+      if (task.featId) {
+        const featData = featMap.get(task.featId);
+        if (featData) {
+          if (featData.coverage.missing.length) {
+            const coverageScore = featData.coverage.missing.length * COVERAGE_WEIGHT;
+            score += coverageScore;
+            featWeight += coverageScore;
+            reasons.push(`FEAT ${task.featId} の未リンク: ${featData.coverage.missing.join(', ')} (+${coverageScore})`);
+          }
+          const gateHighlights = [];
+          for (const entry of featData.issues) {
+            for (const issue of entry.issues) {
+              const weight = issue.severity === 'error' ? GATE_ERROR_WEIGHT : GATE_WARN_WEIGHT;
+              score += weight;
+              featWeight += weight;
+              gateHighlights.push(`${issue.gateId}:${entry.path.split('/').pop()}`);
+            }
+          }
+          if (gateHighlights.length) {
+            const text = gateHighlights.slice(0, 3).join(', ');
+            reasons.push(`Quality Gate違反: ${text}`);
+          }
+          if (featData.missingDag.length) {
+            const missingScore = featData.missingDag.length * COVERAGE_WEIGHT;
+            score += missingScore;
+            featWeight += missingScore;
+            reasons.push(`DAG未登録ドキュメント: ${featData.missingDag.map(p => p.split('/').pop()).join(', ')}`);
+          }
+        } else {
+          score += COVERAGE_WEIGHT;
+          featWeight += COVERAGE_WEIGHT;
+          reasons.push(`FEAT ${task.featId} がRegistry未登録 (要確認)`);
+        }
+      } else if (artifacts.gateSummary.totals.errorCount > 0 && task.category && /DOC|文書|仕様|QA/i.test(task.category)) {
+        const docPressure = Math.min(artifacts.gateSummary.totals.errorCount, 5);
+        if (docPressure > 0) {
+          score += docPressure;
+          reasons.push('Quality Gate違反が発生中 (ドキュメント整備を優先)');
+        }
+      }
+
+      let layerWeight = 0;
+      if (normalizedCategory && layerGateCounts.has(normalizedCategory)) {
+        const layerSummary = layerGateCounts.get(normalizedCategory);
+        const layerScore = (layerSummary.errorCount * LAYER_GATE_WEIGHT)
+          + (layerSummary.warnCount * Math.max(1, LAYER_GATE_WEIGHT - 1));
+        if (layerScore > 0) {
+          score += layerScore;
+          layerWeight += layerScore;
+          reasons.push(`カテゴリ${task.category}でGate課題 ${layerSummary.errorCount + layerSummary.warnCount}件`);
+        }
+      }
+
+      if (score <= 0) continue;
+
+      const updatedAt = Date.parse(task.updatedAt || '') || Date.parse(task.createdAt || '') || 0;
+
+      results.push({
+        task,
+        taskId: task.id,
+        title: task.title || '(無題)',
+        score: Math.round(score),
+        reasons,
+        summary: reasons.join(' / '),
+        priority: task.priority || '',
+        priorityWeight,
+        status: task.status || '',
+        statusWeight,
+        featId: task.featId || '',
+        category: task.category || '',
+        layerWeight,
+        featWeight,
+        updatedAt
+      });
+    }
+
+    results.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.priorityWeight !== a.priorityWeight) return b.priorityWeight - a.priorityWeight;
+      if (b.statusWeight !== a.statusWeight) return b.statusWeight - a.statusWeight;
+      if (b.featWeight !== a.featWeight) return b.featWeight - a.featWeight;
+      return a.updatedAt - b.updatedAt;
+    });
+
+    return results.slice(0, 5).map((entry, idx) => ({
+      ...entry,
+      rank: idx + 1
+    }));
+  }
+
+  function setRecommendationStatus(message) {
+    if (!recommendationStatusEl) return;
+    recommendationStatusEl.textContent = message || '';
+  }
+
+  async function handleRecommendationSelect(rec) {
+    if (!rec?.taskId) return;
+    selectedTaskId = rec.taskId;
+    updateTaskSelection();
+    const selector = `li[data-task-id="${escapeSelector(rec.taskId)}"]`;
+    const target = listEl ? listEl.querySelector(selector) : null;
+    if (target && typeof target.scrollIntoView === 'function') {
+      try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { target.scrollIntoView(); }
+    }
+    await renderDetail(rec.taskId);
+    if (window?.tasks?.recordRecommendationSelection) {
+      try {
+        await window.tasks.recordRecommendationSelection({
+          taskId: rec.taskId,
+          title: rec.title,
+          score: rec.score,
+          priority: rec.priority,
+          status: rec.status,
+          featId: rec.featId,
+          rank: rec.rank,
+          reason: rec.summary,
+          reasons: rec.reasons
+        });
+      } catch (err) {
+        console.warn('[Tasks] Failed to record recommendation selection', err);
+      }
+    }
+  }
+
+  function renderRecommendations(recommendations) {
+    if (!recommendationPanel || !recommendationListEl) return;
+    recommendationListEl.innerHTML = '';
+
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      const msg = document.createElement('li');
+      msg.className = 'tasks-recommendations__empty';
+      msg.textContent = '現在推奨アクションはありません';
+      recommendationListEl.appendChild(msg);
+      setRecommendationStatus('推奨アクションは現在ありません');
+      return;
+    }
+
+    const updatedAt = recommendationAnalysisState.lastUpdated
+      ? recommendationAnalysisState.lastUpdated.toLocaleString('ja-JP')
+      : new Date().toLocaleString('ja-JP');
+    setRecommendationStatus(`${recommendations.length}件の推奨アクション (更新: ${updatedAt})`);
+
+    for (const rec of recommendations) {
+      const li = document.createElement('li');
+      li.className = 'tasks-recommendations__item';
+
+      const body = document.createElement('div');
+      body.className = 'tasks-recommendations__body';
+
+      const title = document.createElement('p');
+      title.className = 'tasks-recommendations__title';
+      title.textContent = `${rec.rank}. ${rec.title}`;
+      body.appendChild(title);
+
+      const meta = document.createElement('p');
+      meta.className = 'tasks-recommendations__meta';
+      const parts = [
+        `<span class="tasks-recommendations__score">スコア ${rec.score}</span>`,
+        `優先度: ${escapeHtml(rec.priority || 'N/A')}`,
+        `ステータス: ${escapeHtml(rec.status || 'N/A')}`
+      ];
+      if (rec.featId) parts.push(`FEAT: ${escapeHtml(rec.featId)}`);
+      if (rec.category) parts.push(`カテゴリ: ${escapeHtml(rec.category)}`);
+      meta.innerHTML = parts.join(' · ');
+      body.appendChild(meta);
+
+      const reason = document.createElement('p');
+      reason.className = 'tasks-recommendations__reason';
+      reason.textContent = rec.summary || '優先度の高いタスクです';
+      body.appendChild(reason);
+
+      li.appendChild(body);
+
+      const actions = document.createElement('div');
+      actions.className = 'tasks-recommendations__item-actions';
+      const jumpBtn = document.createElement('button');
+      jumpBtn.type = 'button';
+      jumpBtn.className = 'btn btn-primary btn-sm';
+      jumpBtn.textContent = 'タスクを開く';
+      jumpBtn.addEventListener('click', () => { handleRecommendationSelect(rec); });
+      actions.appendChild(jumpBtn);
+      li.appendChild(actions);
+
+      recommendationListEl.appendChild(li);
+    }
+  }
+
+  async function runRecommendationRefresh(options = {}) {
+    if (!recommendationPanel) return;
+    if (recommendationRefreshPromise) {
+      recommendationRefreshQueued = true;
+      return;
+    }
+
+    const { forceReload = false } = options;
+    setRecommendationStatus('解析中...');
+    recommendationPanel.classList.remove('empty-state');
+
+    recommendationRefreshPromise = (async () => {
+      try {
+        const artifacts = await ensureRecommendationArtifacts({ forceReload });
+        latestRecommendations = computeTaskRecommendations(tasks, artifacts);
+        renderRecommendations(latestRecommendations);
+      } catch (err) {
+        console.warn('[Tasks] Recommendation refresh failed:', err);
+        latestRecommendations = [];
+        if (recommendationListEl) recommendationListEl.innerHTML = '';
+        setRecommendationStatus(`解析に失敗しました: ${(err && err.message) || err}`);
+      }
+    })().finally(() => {
+      recommendationRefreshPromise = null;
+      if (recommendationRefreshQueued) {
+        recommendationRefreshQueued = false;
+        runRecommendationRefresh();
+      }
+    });
+  }
+
+  function scheduleRecommendationRefresh(options = {}) {
+    if (!recommendationPanel) return;
+    if (options?.forceReload) {
+      recommendationAnalysisState.artifacts = null;
+      recommendationAnalysisState.loadingPromise = null;
+    }
+    runRecommendationRefresh(options);
   }
 
   async function renderPromptDictionaryUI(task) {
@@ -1057,18 +1633,93 @@
     await renderPromptDictionaryUI(t);
     function getPath(v){return v?v.split('#')[0].trim():'';}
     const openBy = async (key)=>{ const p=featSuggest&&getPath(featSuggest.links[key]); if(p) await window.docs.open(p); };
-    document.getElementById('task-save').addEventListener('click', ()=>{ t.title=document.getElementById('task-title').value.trim(); t.category=document.getElementById('task-category').value.trim()||'Uncategorized'; t.priority=document.getElementById('task-priority').value; t.status=document.getElementById('task-status').value; t.featId=document.getElementById('task-feat').value.trim(); t.notes=document.getElementById('task-notes').value; const bdTextarea=document.getElementById('task-breakdown-prompt'); if(bdTextarea) t.breakdownPrompt=bdTextarea.value; const bdStatus=document.getElementById('task-breakdown-status'); if(bdStatus) t.breakdownStatus=bdStatus.value; t.promptPartIds = Array.from(promptSelection); t.updatedAt=new Date().toISOString(); selectedTaskCategory = t.category; selectedTaskId = t.id; persistCategoryValue(selectedTaskCategory); renderCategories(tasks); renderList(); });
+    const saveButton = document.getElementById('task-save');
+    if (saveButton) {
+      saveButton.addEventListener('click', () => {
+        t.title = document.getElementById('task-title').value.trim();
+        t.category = document.getElementById('task-category').value.trim() || 'Uncategorized';
+        t.priority = document.getElementById('task-priority').value;
+        t.status = document.getElementById('task-status').value;
+        t.featId = document.getElementById('task-feat').value.trim();
+        t.notes = document.getElementById('task-notes').value;
+        const bdTextarea = document.getElementById('task-breakdown-prompt');
+        if (bdTextarea) t.breakdownPrompt = bdTextarea.value;
+        const bdStatus = document.getElementById('task-breakdown-status');
+        if (bdStatus) t.breakdownStatus = bdStatus.value;
+        t.promptPartIds = Array.from(promptSelection);
+        t.updatedAt = new Date().toISOString();
+        selectedTaskCategory = t.category;
+        selectedTaskId = t.id;
+        persistCategoryValue(selectedTaskCategory);
+        renderCategories(tasks);
+        renderList();
+        scheduleRecommendationRefresh();
+      });
+    }
     if (featSuggest) { const map={PRD:'task-open-prd',UX:'task-open-ux',API:'task-open-api',DATA:'task-open-data',QA:'task-open-qa'}; for (const k of Object.keys(map)) { const btn=document.getElementById(map[k]); if(btn) btn.addEventListener('click',()=>openBy(k)); } }
     const genBtn=document.getElementById('task-generate-breakdown'); const copyBtn=document.getElementById('task-copy-breakdown');
     if(genBtn) genBtn.addEventListener('click', async ()=>{ const featId=document.getElementById('task-feat').value.trim(); const reg=await loadFeats(); const item=reg.items.find(i=>i.id===featId); const links=item?item.links:{}; let prompt=buildBreakdownPrompt({ title:document.getElementById('task-title').value.trim(), category:document.getElementById('task-category').value.trim(), priority:document.getElementById('task-priority').value, featId, links }); await ensurePromptLibraryLoaded(); const extraItems=getSelectedPromptItems(); if(extraItems.length){ const blocks=extraItems.map(part=>{ const lines=[]; lines.push(`### ${part.title||part.id}`); if(part.description) lines.push(part.description); if(part.body) lines.push(part.body); if(part.tags&&part.tags.length) lines.push(`タグ: ${part.tags.join(', ')}`); return lines.filter(Boolean).join('\n'); }).filter(Boolean); if(blocks.length){ prompt = [prompt, '', '## 追加プロンプトパーツ', blocks.join('\n\n')].join('\n').replace(/\n{3,}/g,'\n\n').trim(); }} const ta=document.getElementById('task-breakdown-prompt'); if(ta) ta.value=prompt; t.breakdownPrompt=prompt; t.promptPartIds = Array.from(promptSelection); t.lastBreakdownAt=new Date().toISOString(); const stamp=document.getElementById('task-breakdown-stamp'); if(stamp) stamp.textContent=`Last: ${new Date(t.lastBreakdownAt).toLocaleString('ja-JP')}`; });
     if(copyBtn) copyBtn.addEventListener('click', async ()=>{ const ta=document.getElementById('task-breakdown-prompt'); const txt=ta?ta.value:''; if(!txt){ alert('Breakdown Promptが空です'); return;} try{ await navigator.clipboard.writeText(txt); alert('コピーしました（Cursor autoに貼り付けてください）'); }catch(e){ alert('クリップボードへのコピーに失敗しました'); } });
   }
   function escapeHtml(s){return String(s||'').replace(/[&<>]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));}
-  if (bulkImportBtn) bulkImportBtn.addEventListener('click', ()=>{ const text=(bulkTextarea&&bulkTextarea.value)||''; if(!text.trim()){alert('貼り付け欄が空です'); return;} const newOnes=parsePasted(text); if(!newOnes.length){ alert('取り込み対象がありません'); return;} tasks=tasks.concat(newOnes); searchQueryRaw=''; searchQuery=''; persistFilterValue(''); if(filterInput) filterInput.value=''; selectedTaskCategory=newOnes[0].category; persistCategoryValue(selectedTaskCategory); selectedTaskId=newOnes[0].id; renderCategories(tasks); renderList(); bulkTextarea.value=''; alert(`${newOnes.length}件を取り込みました`); });
-  if (addOneBtn) addOneBtn.addEventListener('click', ()=>{ const cat=(addCatInput&&addCatInput.value.trim())||'Uncategorized'; const title=(addTitleInput&&addTitleInput.value.trim())||''; if(!title){alert('タイトルを入力してください'); return;} const [item]=parsePasted(`【${cat}】 ${title}`); tasks.push(item); selectedTaskCategory=item.category; persistCategoryValue(selectedTaskCategory); selectedTaskId=item.id; searchQueryRaw=''; searchQuery=''; persistFilterValue(''); if(filterInput) filterInput.value=''; renderCategories(tasks); renderList(); if(addTitleInput) addTitleInput.value=''; });
+  if (bulkImportBtn) {
+    bulkImportBtn.addEventListener('click', () => {
+      const text = (bulkTextarea && bulkTextarea.value) || '';
+      if (!text.trim()) {
+        alert('貼り付け欄が空です');
+        return;
+      }
+      const newOnes = parsePasted(text);
+      if (!newOnes.length) {
+        alert('取り込み対象がありません');
+        return;
+      }
+      tasks = tasks.concat(newOnes);
+      searchQueryRaw = '';
+      searchQuery = '';
+      persistFilterValue('');
+      if (filterInput) filterInput.value = '';
+      selectedTaskCategory = newOnes[0].category;
+      persistCategoryValue(selectedTaskCategory);
+      selectedTaskId = newOnes[0].id;
+      renderCategories(tasks);
+      renderList();
+      scheduleRecommendationRefresh();
+      if (bulkTextarea) bulkTextarea.value = '';
+      alert(`${newOnes.length}件を取り込みました`);
+    });
+  }
+  if (addOneBtn) {
+    addOneBtn.addEventListener('click', () => {
+      const cat = (addCatInput && addCatInput.value.trim()) || 'Uncategorized';
+      const title = (addTitleInput && addTitleInput.value.trim()) || '';
+      if (!title) {
+        alert('タイトルを入力してください');
+        return;
+      }
+      const [item] = parsePasted(`【${cat}】 ${title}`);
+      tasks.push(item);
+      selectedTaskCategory = item.category;
+      persistCategoryValue(selectedTaskCategory);
+      selectedTaskId = item.id;
+      searchQueryRaw = '';
+      searchQuery = '';
+      persistFilterValue('');
+      if (filterInput) filterInput.value = '';
+      renderCategories(tasks);
+      renderList();
+      scheduleRecommendationRefresh();
+      if (addTitleInput) addTitleInput.value = '';
+    });
+  }
   saveBtn.addEventListener('click', async ()=>{ const res=await window.tasks.writeJson(tasks); alert(res.success?'保存しました':`保存失敗: ${res.error}`); });
   exportBtn.addEventListener('click', async ()=>{ const lines=tasks.map(t=>`- [${t.status}] (${t.priority}) ${t.title} ${t.featId? '['+t.featId+']':''} #${t.category}`); const md=lines.join('\n'); const res=await window.tasks.appendMdc('human_todo.mdc', md); alert(res.success?'human_todo.mdcに追記しました':`エクスポート失敗: ${res.error}`); });
+  if (recommendationRefreshBtn) {
+    recommendationRefreshBtn.addEventListener('click', () => {
+      scheduleRecommendationRefresh({ forceReload: true });
+    });
+  }
   if (filterInput) filterInput.addEventListener('input', ()=>{ const raw=filterInput.value.trim(); searchQueryRaw=raw; searchQuery=raw.toLowerCase(); persistFilterValue(raw); renderList(); });
-  (async ()=>{ const res=await window.tasks.readJson(); tasks=res.success&&Array.isArray(res.data)?res.data.map(applyTaskDefaults):[]; if(tasks.length){ selectedTaskId=tasks[0].id; } renderCategories(tasks); renderList(); })();
+  (async ()=>{ const res=await window.tasks.readJson(); tasks=res.success&&Array.isArray(res.data)?res.data.map(applyTaskDefaults):[]; if(tasks.length){ selectedTaskId=tasks[0].id; } renderCategories(tasks); renderList(); scheduleRecommendationRefresh({ forceReload: true }); })();
 })();
 

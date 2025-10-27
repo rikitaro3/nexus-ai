@@ -321,6 +321,108 @@ ipcMain.handle('tasks:writeJson', async (event, data: unknown) => {
   }
 });
 
+ipcMain.handle('tasks:readRecommendationHistory', async () => {
+  try {
+    const repoRoot = getRepoRoot();
+    const target = path.join(repoRoot, 'tools', 'nexus', 'task-recommendations-history.json');
+    if (!fs.existsSync(target)) {
+      logger.info('Recommendation history not found, returning empty array');
+      return { success: true, data: [] };
+    }
+    const raw = fs.readFileSync(target, 'utf8');
+    const data = JSON.parse(raw);
+    logger.info('Recommendation history read successfully', {
+      total: Array.isArray(data) ? data.length : 'unknown'
+    });
+    return { success: true, data: Array.isArray(data) ? data : [] };
+  } catch (e) {
+    logger.error('Failed to read recommendation history', { error: (e as Error).message });
+    return { success: false, error: (e as Error).message };
+  }
+});
+
+ipcMain.handle('tasks:recordRecommendationSelection', async (_event, payload: any) => {
+  try {
+    const repoRoot = getRepoRoot();
+    const target = path.join(repoRoot, 'tools', 'nexus', 'task-recommendations-history.json');
+    const dir = path.dirname(target);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      logger.info('Created directory for recommendation history', { dir });
+    }
+
+    const readExisting = () => {
+      if (!fs.existsSync(target)) return [] as any[];
+      try {
+        const text = fs.readFileSync(target, 'utf8');
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (err) {
+        logger.warn('Failed to parse existing recommendation history, starting fresh', {
+          error: (err as Error).message
+        });
+        return [] as any[];
+      }
+    };
+
+    const history = readExisting();
+
+    const toStringSafe = (value: unknown) => {
+      if (typeof value === 'string') return value;
+      if (value == null) return '';
+      try {
+        return String(value);
+      } catch {
+        return '';
+      }
+    };
+
+    const toNumberSafe = (value: unknown) => {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const toStringArray = (value: unknown) => {
+      if (!Array.isArray(value)) return [] as string[];
+      return value
+        .map(item => {
+          if (typeof item === 'string') return item;
+          if (item == null) return '';
+          try { return String(item); } catch { return ''; }
+        })
+        .filter(Boolean);
+    };
+
+    const record = {
+      taskId: toStringSafe(payload?.taskId) || `UNKNOWN-${Date.now()}`,
+      title: toStringSafe(payload?.title),
+      reason: toStringSafe(payload?.reason),
+      reasons: toStringArray(payload?.reasons),
+      score: toNumberSafe(payload?.score),
+      priority: toStringSafe(payload?.priority),
+      status: toStringSafe(payload?.status),
+      featId: toStringSafe(payload?.featId),
+      rank: toNumberSafe(payload?.rank),
+      timestamp: new Date().toISOString()
+    };
+
+    history.push(record);
+    fs.writeFileSync(target, JSON.stringify(history, null, 2), 'utf8');
+    logger.info('Recommendation selection recorded', {
+      target,
+      taskId: record.taskId,
+      score: record.score,
+      rank: record.rank,
+      historySize: history.length
+    });
+    return { success: true };
+  } catch (e) {
+    logger.error('Failed to record recommendation selection', { error: (e as Error).message });
+    return { success: false, error: (e as Error).message };
+  }
+});
+
 // Prompts dictionary
 ipcMain.handle('prompts:readJson', async () => {
   try {
