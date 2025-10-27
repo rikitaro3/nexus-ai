@@ -14,7 +14,7 @@
     "start:unix": "NEXUS_PROJECT_ROOT=$(cd ../.. && pwd) electron .",
     "test": "jest",
     "test:unit": "jest --testPathPatterns src/main/utils/__tests__",
-    "test:integration": "jest --testPathPatterns src/main/handlers/__tests__",
+    "test:integration": "jest --testPathPatterns test/integration",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "node legacy/tests/test-nexus-e2e.js",
