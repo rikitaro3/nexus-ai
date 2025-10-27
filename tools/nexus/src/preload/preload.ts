@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { IpcRendererEvent } from 'electron';
 
 contextBridge.exposeInMainWorld('docs', {
   read: (relPath: string): Promise<string> => ipcRenderer.invoke('docs:read', relPath),
@@ -29,8 +30,20 @@ contextBridge.exposeInMainWorld('settings', {
 });
 
 contextBridge.exposeInMainWorld('dialog', {
-  selectContextFile: (): Promise<{ filePath?: string; canceled: boolean }> => 
+  selectContextFile: (): Promise<{ filePath?: string; canceled: boolean }> =>
     ipcRenderer.invoke('dialog:selectContextFile')
+});
+
+contextBridge.exposeInMainWorld('rulesWatcher', {
+  onEvent: (callback: (payload: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('rules:watcher:event', handler);
+    return () => ipcRenderer.removeListener('rules:watcher:event', handler);
+  },
+  getState: () => ipcRenderer.invoke('rules:getLatestState'),
+  revalidate: (mode: 'manual' | 'bulk') => ipcRenderer.invoke('rules:revalidate', { mode }),
+  scan: () => ipcRenderer.invoke('rules:scanImpacts'),
+  listLogs: () => ipcRenderer.invoke('rules:listLogs')
 });
 
 

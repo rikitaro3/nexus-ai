@@ -35,6 +35,22 @@ main { flex: 1; overflow: auto; padding: 20px; }
 .docs-middle li span { color: #6b7280; font-size: 12px; }
 .docs-mode { display: none; }
 .docs-mode.active { display: block; }
+.rules-pipeline { margin-bottom: 16px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; display: flex; flex-direction: column; gap: 8px; }
+.rules-pipeline.hidden { display: none; }
+.rules-pipeline__header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rules-pipeline__title { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #0f172a; }
+.rules-pipeline__timestamp { font-size: 11px; color: #6b7280; }
+.rules-pipeline__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rules-pipeline__status { font-size: 13px; color: #1f2937; }
+.rules-pipeline__status--error { color: #b91c1c; }
+.rules-pipeline__summary, .rules-pipeline__diff, .rules-pipeline__impacts, .rules-pipeline__logs { font-size: 12px; color: #374151; }
+.rules-pipeline__meta { margin-top: 4px; font-size: 12px; color: #6b7280; }
+.rules-pipeline__list { list-style: disc; margin: 4px 0 0 20px; padding: 0; }
+.rules-pipeline__badge { display: inline-flex; align-items: center; padding: 2px 6px; background: #e0f2fe; color: #0c4a6e; border-radius: 9999px; font-size: 11px; margin-right: 6px; }
+.rules-pipeline__diff-empty { color: #6b7280; font-style: italic; }
+.rules-pipeline__diff-detail { margin-left: 22px; color: #4b5563; font-size: 11px; }
+.rules-pipeline__missing { margin-top: 6px; }
+.rules-pipeline__logs .btn { margin-left: 8px; }
 .docs-mode-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
 .docs-mode-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .docs-mode-meta { color: #475569; font-size: 13px; display: flex; align-items: center; gap: 6px; }

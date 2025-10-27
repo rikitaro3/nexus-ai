@@ -116,6 +116,262 @@
     return;
   }
 
+  const treeModeRoot = document.getElementById('docs-mode-tree');
+  const pipelinePanel = document.createElement('div');
+  pipelinePanel.id = 'rules-pipeline';
+  pipelinePanel.className = 'rules-pipeline hidden';
+  pipelinePanel.innerHTML = `
+    <div class="rules-pipeline__header">
+      <div class="rules-pipeline__title">
+        <strong>Quality Gates Pipeline</strong>
+        <span class="rules-pipeline__timestamp" data-role="timestamp"></span>
+      </div>
+      <div class="rules-pipeline__actions">
+        <button id="rules-revalidate" class="btn btn-secondary btn-sm">再検証</button>
+        <button id="rules-bulk-update" class="btn btn-secondary btn-sm">一括更新</button>
+      </div>
+    </div>
+    <div class="rules-pipeline__status" data-role="status">Quality Gatesの状態を取得中...</div>
+    <div class="rules-pipeline__summary" data-role="summary"></div>
+    <div class="rules-pipeline__diff" data-role="diff"></div>
+    <div class="rules-pipeline__impacts" data-role="impacts"></div>
+    <div class="rules-pipeline__logs" data-role="logs"></div>
+  `;
+  const treeSplitRoot = treeModeRoot ? treeModeRoot.querySelector('.docs-split') : null;
+  if (treeModeRoot) {
+    if (treeSplitRoot) {
+      treeModeRoot.insertBefore(pipelinePanel, treeSplitRoot);
+    } else {
+      treeModeRoot.appendChild(pipelinePanel);
+    }
+  }
+
+  const pipelineStatusEl = pipelinePanel.querySelector('[data-role="status"]');
+  const pipelineSummaryEl = pipelinePanel.querySelector('[data-role="summary"]');
+  const pipelineDiffEl = pipelinePanel.querySelector('[data-role="diff"]');
+  const pipelineImpactsEl = pipelinePanel.querySelector('[data-role="impacts"]');
+  const pipelineLogsEl = pipelinePanel.querySelector('[data-role="logs"]');
+  const pipelineTimestampEl = pipelinePanel.querySelector('[data-role="timestamp"]');
+  const pipelineRevalidateBtn = pipelinePanel.querySelector('#rules-revalidate');
+  const pipelineBulkBtn = pipelinePanel.querySelector('#rules-bulk-update');
+  const rulesWatcherApi = typeof window !== 'undefined' ? window.rulesWatcher : null;
+  let detachRulesWatcher = null;
+
+  const SEGMENT_LABELS = { auto: '自動', semiAuto: '半自動', manual: '手動' };
+  const STATUS_LABELS = { idle: '待機中', running: '実行中', completed: '完了', error: 'エラー' };
+
+  function formatTimestamp(value) {
+    if (!value) return '';
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString('ja-JP', { hour12: false });
+    } catch (err) {
+      console.warn('[Docs Navigator] Failed to format timestamp', err);
+      return value;
+    }
+  }
+
+  function renderPipelineSegments(state) {
+    if (!state) return 'Quality Gatesパイプラインの状態を取得できませんでした。';
+    const order = ['auto', 'semiAuto', 'manual'];
+    const parts = [];
+    for (const key of order) {
+      const segment = state[key];
+      if (!segment) continue;
+      const label = SEGMENT_LABELS[key] || key;
+      const status = STATUS_LABELS[segment.status] || segment.status;
+      const when = segment.lastRunAt ? formatTimestamp(segment.lastRunAt) : '未実行';
+      const exitInfo = typeof segment.exitCode === 'number' ? ` (exit ${segment.exitCode})` : '';
+      parts.push(`<span class="rules-pipeline__badge">${label}</span>${status}${exitInfo} · ${when}`);
+    }
+    return parts.length ? parts.join(' ／ ') : 'Quality Gatesパイプラインは未実行です。';
+  }
+
+  function renderSummary(snapshot) {
+    if (!snapshot) {
+      return '<span class="rules-pipeline__diff-empty">Quality Gates結果はまだありません。</span>';
+    }
+    const header = `<strong>最新結果 (${formatTimestamp(snapshot.timestamp)})</strong>`;
+    const items = Array.isArray(snapshot.summary)
+      ? snapshot.summary.map(item => `<li><span class="rules-pipeline__badge">${escapeHtml(item.gateId)}</span>${item.total}件 (E:${item.severity.error} / W:${item.severity.warn} / I:${item.severity.info})</li>`)
+      : [];
+    if (items.length === 0) {
+      return `${header}<div class="rules-pipeline__diff-empty">違反はありません。</div>`;
+    }
+    return `${header}<ul class="rules-pipeline__list">${items.join('')}</ul>`;
+  }
+
+  function renderDiff(snapshot) {
+    if (!snapshot || !snapshot.diff) {
+      return '<span class="rules-pipeline__diff-empty">差分はありません</span>';
+    }
+    const diff = snapshot.diff;
+    if (!diff.totalAdded && !diff.totalRemoved) {
+      return '<span class="rules-pipeline__diff-empty">差分はありません</span>';
+    }
+    const items = Array.isArray(diff.perGate)
+      ? diff.perGate.slice(0, 5).map(item => {
+          const added = item.added?.length ?? 0;
+          const removed = item.removed?.length ?? 0;
+          let details = '';
+          if (added > 0) {
+            const sample = item.added[0] || {};
+            const sampleLabel = escapeHtml(sample.path || sample.message || '追加違反');
+            details += `<div class="rules-pipeline__diff-detail">追加: ${sampleLabel}${added > 1 ? ` 他${added - 1}件` : ''}</div>`;
+          }
+          if (removed > 0) {
+            const sample = item.removed[0] || {};
+            const sampleLabel = escapeHtml(sample.path || sample.message || '解消違反');
+            details += `<div class="rules-pipeline__diff-detail">解消: ${sampleLabel}${removed > 1 ? ` 他${removed - 1}件` : ''}</div>`;
+          }
+          return `<li><span class="rules-pipeline__badge">${escapeHtml(item.gateId)}</span>＋${added} / －${removed}${details}</li>`;
+        })
+      : [];
+    return `
+      <strong>差分プレビュー</strong>
+      <div>追加: ${diff.totalAdded}件 / 解消: ${diff.totalRemoved}件</div>
+      ${items.length ? `<ul class="rules-pipeline__list">${items.join('')}</ul>` : ''}
+    `;
+  }
+
+  function renderImpacts(impact) {
+    if (!impact) {
+      return '<span class="rules-pipeline__diff-empty">影響スキャンはまだ実行されていません。</span>';
+    }
+    const missingDocs = (impact.documents || []).filter(doc => !doc.exists).slice(0, 5);
+    const warnings = (impact.warnings || []).map(w => `<li>${escapeHtml(w)}</li>`).join('');
+    const missingList = missingDocs.length
+      ? `<div class="rules-pipeline__missing"><strong>未検出ドキュメント</strong><ul class="rules-pipeline__list">${missingDocs.map(doc => `<li>${escapeHtml(doc.path)}</li>`).join('')}</ul></div>`
+      : '';
+    return `
+      <strong>影響ドキュメント</strong>: ${impact.summary.total}件 (欠落: ${impact.summary.missing}件)
+      <div class="rules-pipeline__meta">Context: ${impact.contextPath ? escapeHtml(impact.contextPath) : '未検出'}</div>
+      ${warnings ? `<ul class="rules-pipeline__list">${warnings}</ul>` : ''}
+      ${missingList}
+    `;
+  }
+
+  function renderLogs(logs) {
+    if (!Array.isArray(logs) || logs.length === 0) {
+      return '<span class="rules-pipeline__diff-empty">ログはまだありません。</span>';
+    }
+    const items = logs.slice(0, 5).map(log => {
+      const modeLabel = (log.mode || '').toUpperCase();
+      return `<li><span class="rules-pipeline__badge">${escapeHtml(modeLabel)}</span>${formatTimestamp(log.timestamp)}<button class="btn btn-ghost btn-sm" data-open-log="${escapeHtml(log.relativePath)}">開く</button></li>`;
+    });
+    return `<strong>検証ログ</strong><ul class="rules-pipeline__list">${items.join('')}</ul>`;
+  }
+
+  async function openLog(relPath) {
+    if (!relPath) return;
+    try {
+      await window.docs.open(relPath);
+    } catch (err) {
+      console.error('[Docs Navigator] Failed to open Quality Gates log', err);
+      setTreeStatus('Quality Gatesログを開けませんでした', 'error');
+    }
+  }
+
+  function updatePipelineView(event) {
+    if (!event) return;
+    pipelinePanel.classList.remove('hidden');
+    pipelineStatusEl.classList.remove('rules-pipeline__status--error');
+    pipelineStatusEl.innerHTML = renderPipelineSegments(event.pipeline?.state);
+    if (event.error) {
+      pipelineStatusEl.classList.add('rules-pipeline__status--error');
+      pipelineStatusEl.innerHTML += `<div>${escapeHtml(event.error.message || 'Quality Gates監視でエラーが発生しました。')}</div>`;
+    }
+    pipelineSummaryEl.innerHTML = renderSummary(event.pipeline?.lastRun || null);
+    pipelineDiffEl.innerHTML = renderDiff(event.pipeline?.lastRun || null);
+    pipelineImpactsEl.innerHTML = renderImpacts(event.impact);
+    pipelineLogsEl.innerHTML = renderLogs(event.logs);
+    pipelineTimestampEl.textContent = formatTimestamp(event.timestamp);
+    pipelineLogsEl.querySelectorAll('[data-open-log]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.preventDefault();
+        const rel = btn.getAttribute('data-open-log');
+        await openLog(rel);
+      });
+    });
+    const snapshot = event.pipeline?.lastRun;
+    if (event.trigger === 'auto' && snapshot && typeof snapshot.exitCode === 'number') {
+      const tone = snapshot.exitCode === 0 ? 'success' : 'warn';
+      setTreeStatus(`Quality Gatesを自動再検証しました (exit ${snapshot.exitCode})`, tone);
+    }
+  }
+
+  async function triggerRulesAction(mode) {
+    if (!rulesWatcherApi || typeof rulesWatcherApi.revalidate !== 'function') return;
+    const targetBtn = mode === 'bulk' ? pipelineBulkBtn : pipelineRevalidateBtn;
+    if (targetBtn) targetBtn.disabled = true;
+    pipelineStatusEl.classList.remove('rules-pipeline__status--error');
+    setTreeStatus(mode === 'bulk' ? 'Quality Gatesの一括更新を実行中...' : 'Quality Gatesを再検証中...', 'info');
+    try {
+      const res = await rulesWatcherApi.revalidate(mode);
+      if (!res || !res.success) {
+        const message = res?.error || 'Quality Gatesの再検証に失敗しました。';
+        pipelineStatusEl.classList.add('rules-pipeline__status--error');
+        pipelineStatusEl.innerHTML = escapeHtml(message);
+        setTreeStatus(message, 'error');
+      } else if (res.event) {
+        updatePipelineView(res.event);
+        const snapshot = res.event?.pipeline?.lastRun;
+        if (snapshot && typeof snapshot.exitCode === 'number') {
+          const tone = snapshot.exitCode === 0 ? 'success' : 'warn';
+          const label = mode === 'bulk' ? '一括更新' : '再検証';
+          setTreeStatus(`Quality Gatesの${label}が完了しました (exit ${snapshot.exitCode})`, tone);
+        }
+      }
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      pipelineStatusEl.classList.add('rules-pipeline__status--error');
+      pipelineStatusEl.innerHTML = escapeHtml(message);
+      setTreeStatus('Quality Gatesの再検証でエラーが発生しました', 'error');
+    } finally {
+      if (targetBtn) targetBtn.disabled = false;
+    }
+  }
+
+  if (pipelineRevalidateBtn) {
+    pipelineRevalidateBtn.addEventListener('click', () => triggerRulesAction('manual'));
+  }
+  if (pipelineBulkBtn) {
+    pipelineBulkBtn.addEventListener('click', () => triggerRulesAction('bulk'));
+  }
+
+  if (rulesWatcherApi && typeof rulesWatcherApi.getState === 'function') {
+    try {
+      const res = await rulesWatcherApi.getState();
+      if (res && res.success && res.event) {
+        updatePipelineView(res.event);
+      } else if (res && !res.success && res.error) {
+        pipelinePanel.classList.remove('hidden');
+        pipelineStatusEl.classList.add('rules-pipeline__status--error');
+        pipelineStatusEl.innerHTML = escapeHtml(res.error);
+      }
+    } catch (err) {
+      pipelinePanel.classList.remove('hidden');
+      pipelineStatusEl.classList.add('rules-pipeline__status--error');
+      pipelineStatusEl.innerHTML = escapeHtml(err && err.message ? err.message : String(err));
+    }
+    if (rulesWatcherApi && typeof rulesWatcherApi.onEvent === 'function') {
+      detachRulesWatcher = rulesWatcherApi.onEvent(updatePipelineView);
+    }
+  } else {
+    pipelinePanel.classList.remove('hidden');
+    pipelineStatusEl.classList.add('rules-pipeline__status--error');
+    pipelineStatusEl.textContent = 'Quality Gates watcher APIが利用できません。';
+    if (pipelineRevalidateBtn) pipelineRevalidateBtn.disabled = true;
+    if (pipelineBulkBtn) pipelineBulkBtn.disabled = true;
+  }
+
+  window.addEventListener('beforeunload', () => {
+    if (typeof detachRulesWatcher === 'function') {
+      try { detachRulesWatcher(); } catch (err) { console.warn('[Docs Navigator] Failed to detach rules watcher', err); }
+    }
+  });
+
   // context source (repo or nexus). default repo unless debug & previously saved
   let contextPath = '.cursor/context.mdc';
   let entries = [];
