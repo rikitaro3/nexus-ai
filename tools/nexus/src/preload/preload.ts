@@ -9,7 +9,9 @@ contextBridge.exposeInMainWorld('docs', {
 contextBridge.exposeInMainWorld('tasks', {
   readJson: (): Promise<any> => ipcRenderer.invoke('tasks:readJson'),
   writeJson: (data: any): Promise<void> => ipcRenderer.invoke('tasks:writeJson', data),
-  appendMdc: (relPath: string, content: string): Promise<void> => ipcRenderer.invoke('mdc:append', relPath, content)
+  appendMdc: (relPath: string, content: string): Promise<void> => ipcRenderer.invoke('mdc:append', relPath, content),
+  recordRecommendationSelection: (data: any): Promise<void> => ipcRenderer.invoke('tasks:recordRecommendationSelection', data),
+  readRecommendationHistory: (): Promise<any> => ipcRenderer.invoke('tasks:readRecommendationHistory')
 });
 
 contextBridge.exposeInMainWorld('prompts', {
