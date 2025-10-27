@@ -134,6 +134,7 @@
     <div class="rules-pipeline__status" data-role="status">Quality Gatesの状態を取得中...</div>
     <div class="rules-pipeline__summary" data-role="summary"></div>
     <div class="rules-pipeline__diff" data-role="diff"></div>
+    <div class="rules-pipeline__analytics" data-role="analytics"></div>
     <div class="rules-pipeline__impacts" data-role="impacts"></div>
     <div class="rules-pipeline__logs" data-role="logs"></div>
   `;
@@ -149,6 +150,7 @@
   const pipelineStatusEl = pipelinePanel.querySelector('[data-role="status"]');
   const pipelineSummaryEl = pipelinePanel.querySelector('[data-role="summary"]');
   const pipelineDiffEl = pipelinePanel.querySelector('[data-role="diff"]');
+  const pipelineAnalyticsEl = pipelinePanel.querySelector('[data-role="analytics"]');
   const pipelineImpactsEl = pipelinePanel.querySelector('[data-role="impacts"]');
   const pipelineLogsEl = pipelinePanel.querySelector('[data-role="logs"]');
   const pipelineTimestampEl = pipelinePanel.querySelector('[data-role="timestamp"]');
@@ -159,6 +161,7 @@
 
   const SEGMENT_LABELS = { auto: '自動', semiAuto: '半自動', manual: '手動' };
   const STATUS_LABELS = { idle: '待機中', running: '実行中', completed: '完了', error: 'エラー' };
+  const DOCUMENT_GATE_ORDER = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08'];
 
   function formatTimestamp(value) {
     if (!value) return '';
@@ -235,6 +238,61 @@
     `;
   }
 
+  function renderAnalytics(analytics) {
+    if (!analytics) {
+      return '<span class="rules-pipeline__diff-empty">Analyticsデータを取得できませんでした。</span>';
+    }
+
+    const docStatusEntries = Object.entries(analytics.documents?.byStatus || {})
+      .map(([status, count]) => `${escapeHtml(status)}: ${count}`)
+      .join(' ／ ');
+    const taskStatusEntries = Object.entries(analytics.tasks?.byStatus || {})
+      .map(([status, count]) => `${escapeHtml(status)}: ${count}`)
+      .join(' ／ ');
+
+    const rows = DOCUMENT_GATE_ORDER.map(gateId => {
+      const gate = Array.isArray(analytics.gates)
+        ? analytics.gates.find(item => item?.gateId === gateId)
+        : null;
+      const total = gate?.totalViolations ?? 0;
+      const docs = gate?.uniqueDocuments ?? 0;
+      const tasks = gate?.impactedTasks ?? 0;
+      const severity = gate?.severity || { error: 0, warn: 0, info: 0 };
+      return `
+        <tr>
+          <th scope="row">${escapeHtml(gateId)}</th>
+          <td>${total}</td>
+          <td>${docs}</td>
+          <td>${tasks}</td>
+          <td>E:${severity.error ?? 0} / W:${severity.warn ?? 0} / I:${severity.info ?? 0}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <strong>最新メトリクス (${escapeHtml(formatTimestamp(analytics.generatedAt) || '未取得')})</strong>
+      <div class="rules-pipeline__analytics-meta">
+        <span>Docs: ${analytics.documents?.total ?? 0}件 (違反ドキュメント: ${analytics.documents?.withViolations ?? 0}件)</span>
+        ${docStatusEntries ? `<span>状態: ${docStatusEntries}</span>` : ''}
+        <span>Tasks: ${analytics.tasks?.total ?? 0}件${taskStatusEntries ? `（${taskStatusEntries}）` : ''}</span>
+      </div>
+      <div class="rules-pipeline__analytics-table-wrapper">
+        <table class="rules-pipeline__analytics-table">
+          <thead>
+            <tr>
+              <th>Gate</th>
+              <th>違反件数</th>
+              <th>対象ドキュメント</th>
+              <th>影響タスク</th>
+              <th>Severity (E/W/I)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
   function renderImpacts(impact) {
     if (!impact) {
       return '<span class="rules-pipeline__diff-empty">影響スキャンはまだ実行されていません。</span>';
@@ -256,11 +314,52 @@
     if (!Array.isArray(logs) || logs.length === 0) {
       return '<span class="rules-pipeline__diff-empty">ログはまだありません。</span>';
     }
-    const items = logs.slice(0, 5).map(log => {
+    const headerCells = DOCUMENT_GATE_ORDER.map(gateId => `<th>${escapeHtml(gateId)}</th>`).join('');
+    const rows = logs.slice(0, 5).map(log => {
       const modeLabel = (log.mode || '').toUpperCase();
-      return `<li><span class="rules-pipeline__badge">${escapeHtml(modeLabel)}</span>${formatTimestamp(log.timestamp)}<button class="btn btn-ghost btn-sm" data-open-log="${escapeHtml(log.relativePath)}">開く</button></li>`;
-    });
-    return `<strong>検証ログ</strong><ul class="rules-pipeline__list">${items.join('')}</ul>`;
+      const summaryMap = new Map((Array.isArray(log.summary) ? log.summary : []).map(item => [item.gateId, item]));
+      const gateCells = DOCUMENT_GATE_ORDER.map(gateId => {
+        const entry = summaryMap.get(gateId) || { total: 0, severity: { error: 0, warn: 0, info: 0 } };
+        const total = entry.total ?? 0;
+        const severity = entry.severity || { error: 0, warn: 0, info: 0 };
+        return `
+          <td class="rules-pipeline__history-cell">
+            <div class="rules-pipeline__history-total">${total}</div>
+            <div class="rules-pipeline__history-severity">E:${severity.error ?? 0} / W:${severity.warn ?? 0}</div>
+          </td>
+        `;
+      }).join('');
+      const timestamp = formatTimestamp(log.timestamp);
+      const exitInfo = typeof log.exitCode === 'number' ? `exit ${log.exitCode}` : '';
+      return `
+        <tr>
+          <td class="rules-pipeline__history-run">
+            <div class="rules-pipeline__history-meta">
+              <span class="rules-pipeline__badge">${escapeHtml(modeLabel)}</span>
+              <span>${escapeHtml(timestamp)}</span>
+              ${exitInfo ? `<span class="rules-pipeline__history-exit">${escapeHtml(exitInfo)}</span>` : ''}
+            </div>
+            <button class="btn btn-ghost btn-sm" data-open-log="${escapeHtml(log.relativePath)}">開く</button>
+          </td>
+          ${gateCells}
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <strong>検証履歴</strong>
+      <div class="rules-pipeline__history-wrapper">
+        <table class="rules-pipeline__history">
+          <thead>
+            <tr>
+              <th>Run</th>
+              ${headerCells}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
   }
 
   async function openLog(relPath) {
@@ -284,6 +383,9 @@
     }
     pipelineSummaryEl.innerHTML = renderSummary(event.pipeline?.lastRun || null);
     pipelineDiffEl.innerHTML = renderDiff(event.pipeline?.lastRun || null);
+    if (pipelineAnalyticsEl) {
+      pipelineAnalyticsEl.innerHTML = renderAnalytics(event.analytics);
+    }
     pipelineImpactsEl.innerHTML = renderImpacts(event.impact);
     pipelineLogsEl.innerHTML = renderLogs(event.logs);
     pipelineTimestampEl.textContent = formatTimestamp(event.timestamp);

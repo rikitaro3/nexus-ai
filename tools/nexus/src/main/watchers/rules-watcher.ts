@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { ImpactScanResult, scanQualityGateImpacts } from '../utils/document-impact.js';
+import { collectDocumentAnalytics, DocumentAnalyticsSnapshot } from '../utils/document-analytics.js';
 import {
   listQualityGateLogs,
   loadLatestQualityGateLog,
@@ -48,6 +49,7 @@ export interface RulesWatcherEvent {
     lastRun: QualityGateSnapshot | null;
   };
   logs: Awaited<ReturnType<typeof listQualityGateLogs>>;
+  analytics: DocumentAnalyticsSnapshot;
   message?: string;
   error?: { message: string; stack?: string };
 }
@@ -222,6 +224,10 @@ export class RulesWatcherController {
     }
 
     const logs = await listQualityGateLogs(this.projectRoot);
+    const analytics = collectDocumentAnalytics({
+      results: runResult?.payload?.results ?? null,
+      docStatus: runResult?.payload?.docStatus ?? null
+    });
 
     const event: RulesWatcherEvent = {
       type: 'quality-gates:update',
@@ -233,6 +239,7 @@ export class RulesWatcherController {
         lastRun: this.makeSnapshot(runResult ?? null)
       },
       logs,
+      analytics,
       message: options.reason,
       error
     };
