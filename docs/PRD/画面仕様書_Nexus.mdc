@@ -1,0 +1,113 @@
+# Nexus 画面仕様書
+
+## 1. 目的と対象
+- 対象アプリ: Electron ベースのドキュメント／タスク管理ツール「Nexus」。
+- 本書は Docs / Tasks / Settings 各タブの UI 構造、主要コンポーネント、状態遷移、保存されるユーザー設定を明確にし、AI・人双方が UI 実装を再現できることを目的とする。
+
+## 2. 共通レイアウト
+### 2.1 フレーム
+- `body` 全体で高さ 100vh の縦方向レイアウト。`.container` がヘッダー・タブ・メイン領域を縦積みする。`main` はオーバーフロー時にスクロール。 【F:src/renderer/index.html†L1-L106】【F:src/renderer/styles/app.css†L1-L32】
+- ベースフォントはシステムサンセリフ。ライトテーマ背景は #f7f8fa、文字色 #222。 【F:src/renderer/index.html†L6-L13】【F:src/renderer/styles/app.css†L1-L4】
+
+### 2.2 ヘッダー
+- `.app-header` は白背景・1px ボーダー・左右にアプリブランドとアクションボタン（Console Log ダウンロード）。幅が狭い場合は折り返し。 【F:src/renderer/index.html†L16-L26】【F:src/renderer/styles/app.css†L4-L13】
+
+### 2.3 タブナビゲーション
+- `.tabs` で Docs / Tasks / Settings の 3 つの `button`。`.active` を付与して表示タブを切替。 【F:src/renderer/index.html†L27-L33】【F:src/renderer/styles/app.css†L14-L27】
+- タブ切替は `tab-content` に `.active` を付与し、表示タブのみ `display: block`。他タブは非表示。 【F:src/renderer/index.html†L34-L181】【F:src/renderer/styles/app.css†L46-L49】
+
+### 2.4 カード／パネル構造
+- 各タブの内容は `.card` 内に収まる。内部は `.docs-split` グリッド（左: min 200px, max 240px／中央: 1fr／右: 1fr）。`.span-2` で 2 列結合が可能。 【F:src/renderer/index.html†L35-L181】【F:src/renderer/styles/app.css†L30-L61】【F:src/renderer/styles/app.css†L104-L106】
+- 空状態は `.empty-state` クラスでテキスト表示。ボタンやステータスピルは `.status` 系クラスを使用。 【F:src/renderer/index.html†L47-L74】【F:src/renderer/styles/app.css†L62-L94】
+
+## 3. Docs タブ
+### 3.1 モードツールバー
+- ヘッダー直下にモード切替バー。`data-mode` が `docs` / `feats` / `tree` の 3 種。説明文 `#docs-mode-description` はモードに応じて差し替え。初期値は「Breadcrumbsからリンク構造を検証します」。 【F:src/renderer/index.html†L37-L67】【F:src/renderer/features/docs-navigator/docs-navigator.js†L9-L45】
+- 選択モードは `localStorage` キー `nexus.docs.mode` に保存。デフォルトは Tree モード。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L21-L68】
+- コンテキスト切替セレクタ（Repo / Nexus）は `#context-select-wrap` 内にあり、必要時のみ表示。 【F:src/renderer/index.html†L35-L43】
+
+### 3.2 Docs モード (`#docs-mode-docs`)
+- 3 カラム構成。
+  - 左カラム: カテゴリ一覧 `#docs-categories`。未選択時は「カテゴリを読み込み中です...」。
+  - 中央カラム: ドキュメント一覧 `#docs-list`。カテゴリ選択前は「カテゴリを選択してください」。リスト項目はタイトルとメタ情報（サブテキスト）。
+  - 右カラム: 詳細パネル `#docs-detail`。ドキュメント選択で本文・リンク情報を描画。未選択時は説明プレースホルダー。 【F:src/renderer/index.html†L44-L66】
+- リスト選択で `.active` を付与し、背景色 #e0f2fe・枠線 #93c5fd。 【F:src/renderer/styles/app.css†L52-L80】
+
+### 3.3 FEATs モード (`#docs-mode-feats`)
+- ツールバー: テキスト検索 `#feat-search` と重複警告 `#feat-dup-alert`。
+- レイアウト: 左カラム `#feats-list`、右 2 列結合 `#feat-detail`。いずれも空状態テキストを持つ。 【F:src/renderer/index.html†L67-L91】
+- FEAT レコードと関連リンクをロードし、検索や重複検知を行う。詳細には FEAT の説明と参照ドキュメントリンク群を表示。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L540-L1165】
+
+### 3.4 Tree モード (`#docs-mode-tree`)
+- ツールバー: `#tree-direction` セレクト（Downstream/Upstream）と `#tree-validate` ボタン、検証ステータス表示 `#tree-status`。初期ステータスは空。 【F:src/renderer/index.html†L92-L111】
+- 左カラム `#tree-view` に階層表示。`tree-node` クラスでクリック選択、`.selected` は背景 #dbeafe。
+- 右 2 列: `#tree-detail`（リンク一覧）、`#gate-results`（Quality Gates 結果）。両方とも空状態メッセージを持つ。 【F:src/renderer/index.html†L111-L125】【F:src/renderer/styles/app.css†L150-L209】
+- Tree データは Breadcrumbs を解析して構築し、ノードクリックで上下流リンク・層情報を表示。検証結果は `gate-result` コンポーネントに pass/error/warn のステータスカラーで出し分け。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L585-L1544】【F:src/renderer/styles/app.css†L188-L205】
+
+### 3.5 Quality Gates パイプライン
+- Tree モード DOM に `#rules-pipeline` パネルを動的追加。ステータス、差分、オートフィックス、ログ等のセクションを持つ。アクションボタン（再検証／一括更新／影響再スキャン）を配置。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L70-L133】
+- 取得結果に応じて `status-*` クラスで配色を変更。タイムスタンプは日本ロケールで整形表示。 【F:src/renderer/styles/app.css†L84-L103】【F:src/renderer/features/docs-navigator/docs-navigator.js†L134-L210】
+
+### 3.6 連携・永続化
+- Tree モードは `window.rulesWatcher` と連携し、Quality Gates のスナップショットや差分を取得・再計算する。失敗時は警告を表示しつつフォールバック。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L133-L1544】
+- Docs タブで利用する Context ファイルは Settings で選択したパスを `localStorage` に保存し、フォールバック順に読み込む。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L748-L847】
+
+## 4. Tasks タブ
+### 4.1 ツールバーとフィルタ
+- 上部ボタン: `#tasks-save`（JSON 保存）、`#tasks-export`（`human_todo.mdc` に追記）、フィルタ入力 `#tasks-filter`。フィルタ値は `localStorage` (`nexus.tasks.filter`) に保存。 【F:src/renderer/index.html†L128-L146】【F:src/renderer/features/tasks/tasks.js†L420-L560】【F:src/renderer/features/tasks/tasks.js†L1824-L1894】
+
+### 4.2 推奨アクションパネル
+- `#tasks-recommendations` はヘッダー、再計算ボタン、ステータス文、推奨リストを持つ。推奨の各アイテムはタイトル・メタ情報・理由文・アクションボタン群で構成。空時は `.tasks-recommendations__empty` を表示。 【F:src/renderer/index.html†L146-L164】【F:src/renderer/styles/app.css†L107-L149】【F:src/renderer/features/tasks/tasks.js†L531-L1118】
+- 推奨計算では Context Map と Breadcrumbs を解析し、Quality Gate 違反や DAG の循環検知を行う。 【F:src/renderer/features/tasks/tasks.js†L612-L940】
+
+### 4.3 タスク入力フォーム
+- 複数行貼り付け (`#tasks-bulk` + `#tasks-bulk-import`) で `【カテゴリ】タイトル` 形式からタスクを生成。空入力や形式エラー時はアラート。 【F:src/renderer/index.html†L165-L180】【F:src/renderer/features/tasks/tasks.js†L1811-L1857】
+- 単一追加フォーム (`#tasks-add-category`, `#tasks-add-title`, `#tasks-add-one`) は必須項目チェック後にタスクを追加。 【F:src/renderer/index.html†L172-L180】【F:src/renderer/features/tasks/tasks.js†L1857-L1878】
+
+### 4.4 カテゴリ／一覧／詳細パネル
+- `.docs-split` を流用し、カテゴリリスト（左）、タスク一覧（中央）、詳細パネル（右）を配置。カテゴリ選択は `nexus.tasks.category` に保存。空状態テキストをそれぞれ持つ。 【F:src/renderer/index.html†L181-L206】【F:src/renderer/features/tasks/tasks.js†L507-L590】【F:src/renderer/features/tasks/tasks.js†L1878-L1894】
+
+### 4.5 詳細パネルとブレークダウン
+- タスク選択で `#task-detail` に詳細フォームを描画。タイトル／カテゴリ／優先度／ステータス／FEAT-ID／Notes／Breakdown Prompt の編集が可能。ブレークダウン生成ボタン、コピー、ステータス（DRAFT/READY/REVIEWED）および最終生成時刻を表示。 【F:src/renderer/features/tasks/tasks.js†L1693-L1786】
+- FEAT リンクが存在する場合は PRD/UX/API/DATA/QA ボタンを生成し、該当ドキュメントを `window.docs.open` で開く。 【F:src/renderer/features/tasks/tasks.js†L1786-L1834】
+- Prompt Dictionary セクションではカテゴリ選択、検索、アイテム編集・削除、辞書保存などの操作が可能。保存は `window.prompts.writeJson` を呼び出し、結果をステータス表示。 【F:src/renderer/index.html†L181-L206】【F:src/renderer/features/tasks/tasks.js†L1500-L1709】
+
+### 4.6 データ入出力
+- Save で `window.tasks.writeJson(tasks)`、Export で Markdown 形式を `human_todo.mdc` に追記。成功／失敗はアラート表示。 【F:src/renderer/features/tasks/tasks.js†L1878-L1910】
+- 初期化時に `window.tasks.readJson()` からタスクリストをロードし、カテゴリ・一覧を再描画。 【F:src/renderer/features/tasks/tasks.js†L1894-L1904】
+
+## 5. Settings タブ
+### 5.1 プロジェクトルート
+- 入力 `#settings-project-root` と Save / Test ボタン。結果メッセージは `#settings-project-root-status` とリスト (`.settings-test-list`) で表示。保存成功時は「再起動で適用」。 【F:src/renderer/index.html†L207-L234】【F:src/renderer/features/settings/settings.js†L1-L102】
+- Test 実行でファイル存在チェック結果をリスト表示。不足ファイルがある場合は警告行を追加。 【F:src/renderer/features/settings/settings.js†L103-L160】
+
+### 5.2 Context File
+- 現在パス表示 `#settings-context-path`、Select/Clear ボタン、ステータス `#settings-context-status`。選択結果は `localStorage` に保存し、Quality Gates に反映。 【F:src/renderer/index.html†L235-L249】【F:src/renderer/features/settings/settings.js†L160-L216】
+
+### 5.3 AI Provider
+- `#settings-ai-provider` セレクト、説明文、ステータス表示。`window.aiProviderRegistry` と同期し、プロバイダーがない場合は警告メッセージを表示。 【F:src/renderer/index.html†L220-L240】【F:src/renderer/features/settings/settings.js†L217-L309】
+
+### 5.4 テーマ切替
+- `#settings-toggle-theme` ボタンでライト／ダークを切替。初回はダークモードを既定として `localStorage` (`dark-mode`) に保存。ボタン表示はモードに応じて ☀️／🌙 を切替。 【F:src/renderer/index.html†L250-L258】【F:src/renderer/features/settings/settings.js†L24-L69】
+- ダークテーマではボタン、カード、リスト背景などを暗色に置換するスタイルが適用される。 【F:src/renderer/styles/app.css†L210-L275】
+
+## 6. ステータス／バッジ規格
+- `.status` は info/success/error/warn に応じて背景・文字色を変える丸ピル。`.tasks-meta-pill` や `.rules-pipeline__badge` でメタ情報を補助表示する。 【F:src/renderer/styles/app.css†L84-L149】
+- Tree の `gate-result` クラスは pass/error/warn カラー、Tasks 推奨のスコアは `tasks-recommendations__score` で青系表示。 【F:src/renderer/styles/app.css†L188-L205】【F:src/renderer/styles/app.css†L120-L145】
+
+## 7. 永続化キー一覧
+| 機能 | localStorage キー | 用途 |
+| --- | --- | --- |
+| Docs モード | `nexus.docs.mode` | 最終選択モード (`docs`/`feats`/`tree`) を保持 | 【F:src/renderer/features/docs-navigator/docs-navigator.js†L21-L68】
+| Docs Context | `context-file-path` / `nexus.context` | Docs/Tree のコンテキストファイル参照 | 【F:src/renderer/features/docs-navigator/docs-navigator.js†L748-L847】
+| Tasks フィルタ | `nexus.tasks.filter` | タスク一覧フィルタ文字列 | 【F:src/renderer/features/tasks/tasks.js†L420-L560】
+| Tasks カテゴリ | `nexus.tasks.category` | タスク一覧で最後に選択したカテゴリ | 【F:src/renderer/features/tasks/tasks.js†L420-L560】
+| テーマ | `dark-mode` | テーマ選択の永続化。初回は `true` でダークモード | 【F:src/renderer/features/settings/settings.js†L24-L69】
+| プロジェクトルート | `project-root` | Settings で保存したルートパス | 【F:src/renderer/features/settings/settings.js†L70-L124】
+| AI プロバイダー | `ai-provider` | アクティブな Break-down プロバイダー ID | 【F:src/renderer/features/settings/settings.js†L217-L309】
+
+## 8. アクセシビリティと操作ポリシー
+- 主要操作は `button` 要素で実装し、キーボード操作が可能。状態フィードバックは `aria-live="polite"` を持つ要素（例: `#tree-status`）や `.status` ピルで通知。 【F:src/renderer/index.html†L100-L111】【F:src/renderer/styles/app.css†L84-L94】
+- 空状態メッセージを全リストに用意し、データ未ロード時にも説明文を表示。 【F:src/renderer/index.html†L47-L125】
+
+以上をもって UI 実装者はレイアウト・コンポーネント構造・状態遷移を把握でき、既存デザインを踏襲した画面再現が可能となる。
