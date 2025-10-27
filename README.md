@@ -35,6 +35,20 @@ npm start              # Run (uses dist/main.js)
 npm run start:dev      # Build + Run
 ```
 
+### Quality Gates Validation (CLI)
+
+Run the documentation quality gates without launching the GUI:
+
+```bash
+npm run validate:docs            # Human-readable summary
+npm run validate:docs -- --json  # JSON output for automation
+```
+
+Options:
+
+- `--context <path>` – specify an alternate `context.mdc` file.
+- `--project-root <path>` – override the project root for resolving document paths.
+
 ### E2E Tests
 
 ```bash

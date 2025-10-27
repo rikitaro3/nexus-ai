@@ -20,7 +20,8 @@
     "test:e2e": "node test-nexus-e2e.js",
     "test:e2e:old": "node test-e2e-puppeteer.js",
     "test:e2e:smoke": "playwright test",
-    "test:e2e:playwright": "node test-e2e-playwright.js"
+    "test:e2e:playwright": "node test-e2e-playwright.js",
+    "validate:docs": "node scripts/validate-docs-gates.js"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.28.5",
