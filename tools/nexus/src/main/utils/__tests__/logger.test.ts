@@ -1,53 +1,52 @@
 describe('logger', () => {
-  const originalEnv = process.env;
-  const originalConsole = { ...console };
-
-  beforeEach(() => {
-    jest.resetModules();
-    process.env = { ...originalEnv };
-    console.log = jest.fn();
-    console.warn = jest.fn();
-    console.error = jest.fn();
-  });
+  const originalEnv = process.env.NEXUS_DEBUG;
 
   afterEach(() => {
-    process.env = originalEnv;
-    console.log = originalConsole.log;
-    console.warn = originalConsole.warn;
-    console.error = originalConsole.error;
+    jest.restoreAllMocks();
+    jest.resetModules();
+    if (originalEnv === undefined) {
+      delete process.env.NEXUS_DEBUG;
+    } else {
+      process.env.NEXUS_DEBUG = originalEnv;
+    }
   });
 
-  it('logs debug messages when NEXUS_DEBUG is enabled', () => {
-    process.env.NEXUS_DEBUG = '1';
-    const { logger } = require('../logger');
+  function loadLogger() {
+    return require('../logger') as typeof import('../logger');
+  }
 
-    logger.debug('debug-message');
-
-    expect(console.log).toHaveBeenCalledWith('[DEBUG]', 'debug-message', '');
-  });
-
-  it('suppresses debug logs when NEXUS_DEBUG is disabled', () => {
+  it('logs info, warn and error messages when debug mode is disabled', () => {
     delete process.env.NEXUS_DEBUG;
-    const { logger } = require('../logger');
+    jest.resetModules();
 
-    logger.debug('debug-message');
-    logger.info('info-message');
-    logger.warn('warn-message');
-    logger.error('error-message');
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    expect(console.log).not.toHaveBeenCalledWith('[DEBUG]', 'debug-message', '');
-    expect(console.log).toHaveBeenCalledWith('[INFO]', 'info-message', '');
-    expect(console.warn).toHaveBeenCalledWith('[WARN]', 'warn-message', '');
-    expect(console.error).toHaveBeenCalledWith('[ERROR]', 'error-message', '');
+    const { logger } = loadLogger();
+
+    logger.debug('hidden debug');
+    expect(logSpy).not.toHaveBeenCalled();
+
+    logger.info('visible info', { area: 'test' });
+    expect(logSpy).toHaveBeenCalledWith('[INFO]', 'visible info', JSON.stringify({ area: 'test' }, null, 2));
+
+    logger.warn('careful', { path: '/tmp' });
+    expect(warnSpy).toHaveBeenCalledWith('[WARN]', 'careful', JSON.stringify({ path: '/tmp' }, null, 2));
+
+    logger.error('serious', { code: 500 });
+    expect(errorSpy).toHaveBeenCalledWith('[ERROR]', 'serious', JSON.stringify({ code: 500 }, null, 2));
   });
 
-  it('stringifies context objects before logging', () => {
+  it('logs debug messages when NEXUS_DEBUG=1', () => {
     process.env.NEXUS_DEBUG = '1';
-    const { logger } = require('../logger');
+    jest.resetModules();
 
-    const context = { feature: 'test', status: 'ok' };
-    logger.info('info', context);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-    expect(console.log).toHaveBeenCalledWith('[INFO]', 'info', JSON.stringify(context, null, 2));
+    const { logger } = loadLogger();
+    logger.debug('show me');
+
+    expect(logSpy).toHaveBeenCalledWith('[DEBUG]', 'show me', '');
   });
 });
