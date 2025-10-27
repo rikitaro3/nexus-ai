@@ -342,9 +342,21 @@
     }
     
     renderFeatList(filteredFeats, registry.dupIds);
-    setTreeStatus('モードをTreeに切り替えてください', 'info');
     if (categoryOrder.length > 0) renderList(categoryOrder[0]);
     else showDocDetailPlaceholder('カテゴリがありません');
+
+    // Treeビューをデフォルト表示にする
+    modeButtons.forEach(btn => {
+      const isTree = btn.dataset.mode === 'tree';
+      btn.classList.toggle('active', isTree);
+      btn.setAttribute('aria-selected', isTree ? 'true' : 'false');
+    });
+    if (modeDescription) modeDescription.textContent = modeDescriptions.tree;
+    docsMode?.classList.remove('active');
+    featsMode?.classList.remove('active');
+    treeMode?.classList.add('active');
+    setTreeStatus('Tree構造を解析中...', 'info');
+    renderTree();
   } catch (error) { console.error('Docs Navigator init error:', error); }
 
   function extractSection(text, startHeader, stopHeaderPrefix = '## ') {

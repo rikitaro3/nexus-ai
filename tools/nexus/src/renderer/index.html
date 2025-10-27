@@ -41,15 +41,15 @@
           </div>
           <div class="docs-mode-bar" role="toolbar">
             <div class="docs-mode-buttons">
-              <button class="btn btn-secondary docs-mode-btn active" data-mode="docs">Docs</button>
+              <button class="btn btn-secondary docs-mode-btn" data-mode="docs">Docs</button>
               <button class="btn btn-secondary docs-mode-btn" data-mode="feats">FEATs</button>
-              <button class="btn btn-secondary docs-mode-btn" data-mode="tree">Tree</button>
+              <button class="btn btn-secondary docs-mode-btn active" data-mode="tree">Tree</button>
             </div>
             <div class="docs-mode-meta">
-              <span id="docs-mode-description">カテゴリからドキュメントを探索します</span>
+              <span id="docs-mode-description">Breadcrumbsからリンク構造を検証します</span>
             </div>
           </div>
-          <div id="docs-mode-docs" class="docs-mode active">
+          <div id="docs-mode-docs" class="docs-mode">
             <div class="docs-split">
               <div class="docs-left">
                 <h3>カテゴリ</h3>
@@ -84,7 +84,7 @@
               </div>
             </div>
           </div>
-          <div id="docs-mode-tree" class="docs-mode">
+          <div id="docs-mode-tree" class="docs-mode active">
             <div class="feats-toolbar">
               <select id="tree-direction" title="Tree direction">
                 <option value="downstream">Downstream (上位→下位)</option>
@@ -96,7 +96,7 @@
             <div class="docs-split">
               <div class="docs-left">
                 <h3>Tree</h3>
-                <div id="tree-view" class="empty-state">Treeを読み込むにはモードを切り替えてください</div>
+                <div id="tree-view" class="empty-state">Treeを読み込み中です...</div>
               </div>
               <div class="docs-right span-2">
                 <h3>詳細</h3>
