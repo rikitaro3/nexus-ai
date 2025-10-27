@@ -1,6 +1,8 @@
 import path from 'path';
 import { test, expect } from '@playwright/test';
 
+const TREE_READY_MESSAGE = 'Tree view ready';
+
 test.describe('Nexus smoke test', () => {
   test('renders tree view in demo fixture', async ({ page }) => {
     const fileUrl = 'file://' + path.resolve(__dirname, './fixtures/smoke.html');
@@ -14,7 +16,7 @@ test.describe('Nexus smoke test', () => {
     await treeButton.click();
 
     const status = page.locator('#tree-status');
-    await expect(status).toHaveText('Tree view ready');
+    await expect(status).toHaveText(TREE_READY_MESSAGE);
 
     const treeView = page.locator('#tree-view .tree-node');
     await expect(treeView.first()).toHaveText('Root Node');

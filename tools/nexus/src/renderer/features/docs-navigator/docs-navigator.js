@@ -838,7 +838,7 @@
         setTreeStatus('ルートが見つかりません', 'warn');
       } else {
         console.log('renderTree: success, rendered', rootNodes.length, 'root nodes');
-        setTreeStatus(`✓ ${rootNodes.length} roots`, 'success');
+        setTreeStatus('Tree view ready', 'success');
       }
     } catch (e) {
       console.error('renderTree error:', e);
