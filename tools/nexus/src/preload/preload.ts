@@ -45,7 +45,8 @@ contextBridge.exposeInMainWorld('rulesWatcher', {
   getState: () => ipcRenderer.invoke('rules:getLatestState'),
   revalidate: (mode: 'manual' | 'bulk') => ipcRenderer.invoke('rules:revalidate', { mode }),
   scan: () => ipcRenderer.invoke('rules:scanImpacts'),
-  listLogs: () => ipcRenderer.invoke('rules:listLogs')
+  listLogs: () => ipcRenderer.invoke('rules:listLogs'),
+  setContextPath: (contextPath: string | null) => ipcRenderer.invoke('rules:setContext', { contextPath })
 });
 
 

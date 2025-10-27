@@ -129,6 +129,7 @@
       <div class="rules-pipeline__actions">
         <button id="rules-revalidate" class="btn btn-secondary btn-sm">再検証</button>
         <button id="rules-bulk-update" class="btn btn-secondary btn-sm">一括更新</button>
+        <button id="rules-scan-impacts" class="btn btn-secondary btn-sm">影響再スキャン</button>
       </div>
     </div>
     <div class="rules-pipeline__status" data-role="status">Quality Gatesの状態を取得中...</div>
@@ -154,8 +155,10 @@
   const pipelineTimestampEl = pipelinePanel.querySelector('[data-role="timestamp"]');
   const pipelineRevalidateBtn = pipelinePanel.querySelector('#rules-revalidate');
   const pipelineBulkBtn = pipelinePanel.querySelector('#rules-bulk-update');
+  const pipelineScanBtn = pipelinePanel.querySelector('#rules-scan-impacts');
   const rulesWatcherApi = typeof window !== 'undefined' ? window.rulesWatcher : null;
   let detachRulesWatcher = null;
+  let currentRulesWatcherContext = null;
 
   const SEGMENT_LABELS = { auto: '自動', semiAuto: '半自動', manual: '手動' };
   const STATUS_LABELS = { idle: '待機中', running: '実行中', completed: '完了', error: 'エラー' };
@@ -273,6 +276,23 @@
     }
   }
 
+  async function applyRulesWatcherContext(nextPath) {
+    if (!rulesWatcherApi || typeof rulesWatcherApi.setContextPath !== 'function') return;
+    const normalized = typeof nextPath === 'string' && nextPath.trim() ? nextPath.trim() : null;
+    if (currentRulesWatcherContext === normalized) {
+      return;
+    }
+    const previous = currentRulesWatcherContext;
+    try {
+      await rulesWatcherApi.setContextPath(normalized);
+      currentRulesWatcherContext = normalized;
+    } catch (err) {
+      currentRulesWatcherContext = previous;
+      console.warn('[Docs Navigator] Failed to update Quality Gates context', err);
+      setTreeStatus('Quality Gatesのコンテキスト更新に失敗しました', 'warn');
+    }
+  }
+
   function updatePipelineView(event) {
     if (!event) return;
     pipelinePanel.classList.remove('hidden');
@@ -298,6 +318,10 @@
     if (event.trigger === 'auto' && snapshot && typeof snapshot.exitCode === 'number') {
       const tone = snapshot.exitCode === 0 ? 'success' : 'warn';
       setTreeStatus(`Quality Gatesを自動再検証しました (exit ${snapshot.exitCode})`, tone);
+    } else if (event.trigger === 'scan') {
+      setTreeStatus('Quality Gatesの影響を再スキャンしました', 'info');
+    } else if (event.trigger === 'context') {
+      setTreeStatus('Quality Gatesのコンテキストを更新しました', 'info');
     }
   }
 
@@ -339,6 +363,32 @@
   if (pipelineBulkBtn) {
     pipelineBulkBtn.addEventListener('click', () => triggerRulesAction('bulk'));
   }
+  if (pipelineScanBtn) {
+    pipelineScanBtn.addEventListener('click', async () => {
+      if (!rulesWatcherApi || typeof rulesWatcherApi.scan !== 'function') return;
+      pipelineScanBtn.disabled = true;
+      pipelineStatusEl.classList.remove('rules-pipeline__status--error');
+      setTreeStatus('影響ドキュメントを再スキャンしています...', 'info');
+      try {
+        const res = await rulesWatcherApi.scan();
+        if (!res || !res.success) {
+          const message = res?.error || '影響スキャンに失敗しました。';
+          pipelineStatusEl.classList.add('rules-pipeline__status--error');
+          pipelineStatusEl.innerHTML = escapeHtml(message);
+          setTreeStatus(message, 'error');
+        } else if (res.event) {
+          updatePipelineView(res.event);
+        }
+      } catch (err) {
+        console.error('[Docs Navigator] Failed to rescan Quality Gates impacts', err);
+        pipelineStatusEl.classList.add('rules-pipeline__status--error');
+        pipelineStatusEl.innerHTML = '影響スキャンに失敗しました。';
+        setTreeStatus('Quality Gatesの影響スキャンでエラーが発生しました', 'error');
+      } finally {
+        pipelineScanBtn.disabled = false;
+      }
+    });
+  }
 
   if (rulesWatcherApi && typeof rulesWatcherApi.getState === 'function') {
     try {
@@ -364,6 +414,7 @@
     pipelineStatusEl.textContent = 'Quality Gates watcher APIが利用できません。';
     if (pipelineRevalidateBtn) pipelineRevalidateBtn.disabled = true;
     if (pipelineBulkBtn) pipelineBulkBtn.disabled = true;
+    if (pipelineScanBtn) pipelineScanBtn.disabled = true;
   }
 
   window.addEventListener('beforeunload', () => {
@@ -406,7 +457,8 @@
       select.addEventListener('change', () => {
         const v = select.value;
         localStorage.setItem('nexus.context', v);
-        location.reload();
+        const nextPath = v === 'nexus' ? 'tools/nexus/context.mdc' : '.cursor/context.mdc';
+        Promise.resolve(applyRulesWatcherContext(nextPath)).finally(() => location.reload());
       });
     } else {
       // デバッグモードでない場合でも、localStorageから読み込む
@@ -414,6 +466,7 @@
     }
     console.log('[Docs Navigator] Reading context from:', contextPath);
     console.log('[Docs Navigator] contextToUse:', contextToUse, 'isDebug:', isDebug, 'saved:', saved);
+    await applyRulesWatcherContext(contextPath);
     let ctxRes = await window.docs.read(contextPath);
     if (!ctxRes.success && contextPath !== 'tools/nexus/context.mdc' && !customContextPath) {
       console.warn('[Docs Navigator] Context read failed, trying Nexus fallback...', ctxRes.error);
@@ -423,6 +476,7 @@
         console.log('[Docs Navigator] Fallback context loaded from Nexus package');
         ctxRes = fallbackRes;
         contextPath = fallbackPath;
+        await applyRulesWatcherContext(contextPath);
         contextToUse = 'nexus';
         try {
           localStorage.setItem('nexus.context', 'nexus');

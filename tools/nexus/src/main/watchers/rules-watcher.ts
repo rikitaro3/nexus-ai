@@ -12,7 +12,7 @@ import {
   summarizeGateResults
 } from '../utils/quality-gates.js';
 
-export type RulesWatcherTrigger = 'init' | 'auto' | 'manual' | 'bulk';
+export type RulesWatcherTrigger = 'init' | 'auto' | 'manual' | 'bulk' | 'context' | 'scan';
 
 export interface PipelineSegmentState {
   mode: 'auto' | 'manual' | 'bulk';
@@ -82,6 +82,7 @@ function cloneSegment(segment: PipelineSegmentState): PipelineSegmentState {
 function mapTriggerToSegment(trigger: RulesWatcherTrigger): 'auto' | 'manual' | 'semiAuto' {
   if (trigger === 'auto') return 'auto';
   if (trigger === 'bulk') return 'semiAuto';
+  if (trigger === 'context' || trigger === 'scan') return 'manual';
   return 'manual';
 }
 
@@ -253,11 +254,24 @@ export class RulesWatcherController {
   }
 
   async scanOnly(): Promise<RulesWatcherEvent> {
-    return this.refresh({ trigger: 'init', runValidation: false, reason: 'manual-scan' });
+    return this.refresh({ trigger: 'scan', runValidation: false, reason: 'manual-scan' });
   }
 
   async listLogs() {
     return listQualityGateLogs(this.projectRoot);
+  }
+
+  async setContextPath(contextPath: string | null): Promise<RulesWatcherEvent> {
+    if (this.isDisposed) {
+      throw new Error('Rules watcher already disposed');
+    }
+    const normalized = typeof contextPath === 'string' && contextPath.trim() ? contextPath.trim() : null;
+    this.contextOverride = normalized;
+    return this.refresh({
+      trigger: 'context',
+      runValidation: false,
+      reason: normalized ? `context:set:${normalized}` : 'context:clear'
+    });
   }
 
   dispose() {
