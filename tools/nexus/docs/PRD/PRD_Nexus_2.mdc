@@ -1,8 +1,13 @@
 ---
 alwaysApply: false
 ---
-# システム要件定義ドラフト  
+# システム要件定義ドラフト
 （ドキュメント階層管理＋AI駆動ブレークダウン＋品質ゲート）
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: docs/PRD/index.mdc
+> Downstream: docs/ARCH/index.mdc, docs/DEVELOPMENT/index.mdc, docs/QA/index.mdc
 
 ## 0. このドキュメントについて
 本ドキュメントは、以下を対象とした要件定義ドラフトである。

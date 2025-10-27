@@ -3,7 +3,7 @@
 > Breadcrumbs
 > Layer: PRD
 > Upstream: N/A
-> Downstream: tools/nexus/docs/PRD/index.mdc
+> Downstream: docs/PRD/index.mdc
 
 ## Purpose
 - Nexus専用ドキュメント索引（デバッグ時のみ選択可能）
@@ -13,7 +13,7 @@
 ### PRD（要求仕様）
 - **index.mdc** (本ファイル)
 - **PRD/index.mdc** … Features Registry（NEX-ID管理）
-- **PRD/PRD_Nexus.mdc** … Nexus要求仕様
+- **PRD/PRD_Nexus_2.mdc** … Nexus要求仕様
 
 ### ARCH（アーキテクチャ）
 - **ARCH/index.mdc** … システム構成、IPC通信、データ構造
@@ -35,7 +35,7 @@
 
 ### NEX-0001: Nexus最小MVP
 - **範囲**: Docs/FEATs/Orphans + Tasks/Breakdown UI
-- **PRD**: PRD/PRD_Nexus.mdc
+- **PRD**: PRD/PRD_Nexus_2.mdc
 - **ARCH**: ARCH/index.mdc
 - **DEVELOPMENT**: DEVELOPMENT/index.mdc
 - **QA**: QA/index.mdc

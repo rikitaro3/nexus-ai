@@ -3,7 +3,7 @@
 > Breadcrumbs
 > Layer: ARCH
 > Upstream: docs/ARCH/index.mdc
-> Downstream: docs/ARCH/セキュリティ設計.mdc, docs/ARCH/データフロー設計.mdc
+> Downstream: docs/ARCH/セキュリティ設計.mdc, docs/ARCH/IPC設計.mdc
 
 ## 目次
 

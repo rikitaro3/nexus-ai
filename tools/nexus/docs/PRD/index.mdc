@@ -2,8 +2,8 @@
 
 > Breadcrumbs
 > Layer: PRD
-> Upstream: tools/nexus/docs/index.mdc
-> Downstream: tools/nexus/docs/PRD/PRD_Nexus.mdc, tools/nexus/docs/PRD/PRD_DocumentTemplate.mdc, tools/nexus/docs/PRD/PRD_Strategy.mdc
+> Upstream: docs/index.mdc
+> Downstream: docs/PRD/PRD_Nexus_2.mdc, docs/PRD/PRD_DocumentTemplate.mdc, docs/PRD/PRD_Strategy.mdc
 
 ## PRD Documents
 
@@ -16,17 +16,17 @@
 ## Features Registry（NEX-ID）
 
 ### NEX-0001: Nexus最小MVP（Docs/FEATs/Orphans + Tasks/Breakdown UI）
-- PRD: tools/nexus/docs/PRD/PRD_Nexus.mdc
-- ARCH: tools/nexus/docs/ARCH/index.mdc
-- DEVELOPMENT: tools/nexus/docs/DEVELOPMENT/index.mdc
-- QA: tools/nexus/docs/QA/index.mdc
+- PRD: docs/PRD/PRD_Nexus_2.mdc
+- ARCH: docs/ARCH/index.mdc
+- DEVELOPMENT: docs/DEVELOPMENT/index.mdc
+- QA: docs/QA/index.mdc
 
 ### NEX-0002: コンテキスト切替（デバッグ時のみ）
-- PRD: tools/nexus/docs/PRD/PRD_Nexus.mdc
-- ARCH: tools/nexus/docs/ARCH/index.mdc
+- PRD: docs/PRD/PRD_Nexus_2.mdc
+- ARCH: docs/ARCH/index.mdc
 
 ### NEX-0003: 戦略・ビジョン実装（長期）
-- PRD: tools/nexus/docs/PRD/PRD_Strategy.mdc
+- PRD: docs/PRD/PRD_Strategy.mdc
 - スコープ: フェーズ1（Foundation）、フェーズ2（Automation）、フェーズ3（Quality Gate）
 
 ## Notes

@@ -1,8 +1,8 @@
 # Quality Gates Index
 
 > Breadcrumbs
-> Layer: GATES
-> Upstream: tools/nexus/docs/index.mdc
+> Layer: QA
+> Upstream: docs/index.mdc
 > Downstream: N/A
 
 ## 目的
