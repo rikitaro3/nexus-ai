@@ -1,5 +1,6 @@
 // Ported Docs Navigator (Docs/FEATs/Orphans)
 (async function initDocsNavigator() {
+  const expandedPaths = new Set();
   console.log('[Docs Navigator] === INIT START ===');
   const catEl = document.getElementById('docs-categories');
   const listEl = document.getElementById('docs-list');
@@ -428,7 +429,15 @@
     
     div.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      if (hasChildren) node.expanded = !node.expanded;
+      if (hasChildren) {
+        const isExpanded = expandedPaths.has(node.path);
+        if (isExpanded) {
+          expandedPaths.delete(node.path);
+        } else {
+          expandedPaths.add(node.path);
+        }
+        node.expanded = !isExpanded;
+      }
       await renderTreeNodeDetail(node);
       renderTree();
     });
@@ -608,10 +617,13 @@
       console.log('[renderTree] Calling parseAllBreadcrumbs()...');
       const nodes = await parseAllBreadcrumbs();
       console.log('[renderTree] parseAllBreadcrumbs returned nodes:', nodes.size);
-      
+
       const direction = window.treeDirection ? window.treeDirection.value : 'downstream';
       console.log('[renderTree] direction =', direction);
       console.log('[renderTree] Calling buildTree()...');
+      for (const node of nodes.values()) {
+        node.expanded = expandedPaths.has(node.path);
+      }
       const rootNodes = buildTree(nodes, direction);
       console.log('[renderTree] buildTree returned rootNodes:', rootNodes.length);
       
