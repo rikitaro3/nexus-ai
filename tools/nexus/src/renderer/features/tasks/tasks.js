@@ -1,5 +1,104 @@
 // Ported Tasks (import/edit/save/export/breakdown)
 (function initTasksModule() {
+  const aiProviderRegistry = (() => {
+    if (typeof window !== 'undefined' && window.aiProviderRegistry) {
+      return window.aiProviderRegistry;
+    }
+    if (typeof require === 'function') {
+      try {
+        const registry = require('../../services/ai/registry.js');
+        try {
+          require('../../services/ai/providers/cursor.js');
+        } catch (err) {
+          if (!err || err.code !== 'MODULE_NOT_FOUND') {
+            console.warn('[Tasks] Failed to preload Cursor provider for Node context:', err);
+          }
+        }
+        if (registry && typeof registry.ensureActiveProvider === 'function') {
+          registry.ensureActiveProvider({ silent: true });
+        }
+        return registry;
+      } catch (err) {
+        console.warn('[Tasks] Failed to load AI provider registry in Node context:', err);
+      }
+    }
+    return null;
+  })();
+
+  function normalizeBreakdownContext(raw = {}) {
+    return {
+      title: typeof raw?.title === 'string' ? raw.title : '',
+      category: typeof raw?.category === 'string' ? raw.category : '',
+      priority: typeof raw?.priority === 'string' ? raw.priority : '',
+      featId: typeof raw?.featId === 'string' ? raw.featId : '',
+      links: raw?.links && typeof raw.links === 'object' ? { ...raw.links } : {},
+    };
+  }
+
+  function fallbackBuildBreakdownPrompt(context) {
+    const linksText = Object.entries(context?.links || {})
+      .map(([key, value]) => {
+        const label = key == null ? '' : String(key).trim();
+        const target = value == null ? '' : String(value).trim();
+        if (!label || !target) return '';
+        return `- ${label}: ${target}`;
+      })
+      .filter(Boolean)
+      .join('\n');
+
+    return [
+      'あなたはプロジェクトの実装ブレークダウン設計者です。以下の制約と入力を踏まえ、MECEなサブタスク（各項目に完了基準付き）を5〜10件で提案し、不明点（最大5件）と参照先（PRD/UX/API/DATA/QA）も挙げてください。',
+      '',
+      '[制約]',
+      '- 外部AI APIを使わない（Cursor autoのみ）',
+      '- 冗長禁止、簡潔さ重視',
+      '- DAG/MECE/Quality Gatesを尊重（context.mdc参照）',
+      '',
+      '[入力]',
+      `- タスク: ${context.title} / カテゴリ: ${context.category} / 優先度: ${context.priority} / FEAT: ${context.featId}`,
+      '- 関連ドキュメント:',
+      linksText || '- (なし)',
+      '',
+      '[出力]',
+      '- サブタスク一覧: [ {name, acceptanceCriteria, refs} ... ]',
+      '- 不明点: [question1..]',
+      '- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]'
+    ].join('\n');
+  }
+
+  const fallbackBreakdownProvider = {
+    id: 'cursor',
+    label: 'Cursor Auto (Fallback)',
+    description: 'Default breakdown prompt generator used when no AI provider is configured.',
+    buildBreakdownPrompt: fallbackBuildBreakdownPrompt,
+  };
+
+  function resolveBreakdownProvider(providerId) {
+    if (aiProviderRegistry) {
+      const lookupId = providerId && typeof providerId === 'string' ? providerId : '';
+      if (lookupId && typeof aiProviderRegistry.getProvider === 'function') {
+        const provider = aiProviderRegistry.getProvider(lookupId);
+        if (provider) return provider;
+      }
+      if (typeof aiProviderRegistry.getActiveProvider === 'function') {
+        const active = aiProviderRegistry.getActiveProvider();
+        if (active) return active;
+      }
+      if (typeof aiProviderRegistry.ensureActiveProvider === 'function') {
+        const ensured = aiProviderRegistry.ensureActiveProvider({ silent: true });
+        if (ensured) return ensured;
+      }
+      if (typeof aiProviderRegistry.listProviders === 'function' && typeof aiProviderRegistry.getProvider === 'function') {
+        const available = aiProviderRegistry.listProviders();
+        if (Array.isArray(available) && available.length) {
+          const first = aiProviderRegistry.getProvider(available[0].id);
+          if (first) return first;
+        }
+      }
+    }
+    return fallbackBreakdownProvider;
+  }
+
   function taskDefaults() {
     return {
       notes: '',
@@ -58,26 +157,35 @@
     return out;
   }
 
-  function buildBreakdownPrompt({ title, category, priority, featId, links }) {
-    const linksText = Object.entries(links || {}).map(([k, v]) => `- ${k}: ${v}`).join('\n');
-    return [
-      'あなたはプロジェクトの実装ブレークダウン設計者です。以下の制約と入力を踏まえ、MECEなサブタスク（各項目に完了基準付き）を5〜10件で提案し、不明点（最大5件）と参照先（PRD/UX/API/DATA/QA）も挙げてください。',
-      '',
-      '[制約]',
-      '- 外部AI APIを使わない（Cursor autoのみ）',
-      '- 冗長禁止、簡潔さ重視',
-      '- DAG/MECE/Quality Gatesを尊重（context.mdc参照）',
-      '',
-      '[入力]',
-      `- タスク: ${title} / カテゴリ: ${category} / 優先度: ${priority} / FEAT: ${featId || ''}`,
-      '- 関連ドキュメント:',
-      linksText || '- (なし)',
-      '',
-      '[出力]',
-      '- サブタスク一覧: [ {name, acceptanceCriteria, refs} ... ]',
-      '- 不明点: [question1..]',
-      '- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]'
-    ].join('\n');
+  function buildBreakdownPrompt(rawContext, options = {}) {
+    const context = normalizeBreakdownContext(rawContext);
+    const provider = resolveBreakdownProvider(options?.providerId);
+    let result;
+    try {
+      result = provider.buildBreakdownPrompt(context, {
+        registry: aiProviderRegistry,
+        options,
+      });
+    } catch (err) {
+      console.error(`[Tasks] Provider ${provider?.id || 'unknown'} failed to build breakdown prompt:`, err);
+      return fallbackBreakdownProvider.buildBreakdownPrompt(context);
+    }
+
+    if (result && typeof result === 'object' && result !== null) {
+      const prompt = typeof result.prompt === 'string' ? result.prompt : '';
+      if (prompt) {
+        if (result.usage && aiProviderRegistry && typeof aiProviderRegistry.recordTokenUsage === 'function') {
+          aiProviderRegistry.recordTokenUsage({ providerId: provider.id, ...result.usage });
+        }
+        return prompt;
+      }
+    }
+
+    if (typeof result === 'string') {
+      return result;
+    }
+
+    return fallbackBreakdownProvider.buildBreakdownPrompt(context);
   }
 
   function promptLibraryDefaults() {
@@ -240,6 +348,8 @@
       taskDefaults,
       applyTaskDefaults,
       parsePasted,
+      normalizeBreakdownContext,
+      resolveBreakdownProvider,
       buildBreakdownPrompt,
     };
   }

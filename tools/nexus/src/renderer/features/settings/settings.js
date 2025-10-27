@@ -8,6 +8,10 @@
   const contextStatusEl = document.getElementById('settings-context-status');
   const selectContextBtn = document.getElementById('settings-select-context');
   const clearContextBtn = document.getElementById('settings-clear-context');
+  const providerSelect = document.getElementById('settings-ai-provider');
+  const providerStatusEl = document.getElementById('settings-ai-provider-status');
+  const providerDescriptionEl = document.getElementById('settings-ai-provider-description');
+  const aiRegistry = window.aiProviderRegistry;
 
   if (!rootInput || !saveBtn || !testBtn) {
     return;
@@ -15,6 +19,7 @@
 
   const PROJECT_ROOT_KEY = 'project-root';
   const CONTEXT_FILE_KEY = 'context-file-path';
+  const AI_PROVIDER_KEY = 'ai-provider';
 
   function setStatus(el, text, type) {
     if (!el) return;
@@ -25,11 +30,13 @@
     }
     el.textContent = text;
     el.classList.remove('hidden');
-    el.classList.remove('status-ok', 'status-error');
+    el.classList.remove('status-ok', 'status-error', 'status-info');
     if (type === 'ok') {
       el.classList.add('status-ok');
     } else if (type === 'error') {
       el.classList.add('status-error');
+    } else if (type === 'info') {
+      el.classList.add('status-info');
     }
   }
 
@@ -129,6 +136,135 @@
     setStatus(contextStatusEl, 'Cleared', 'ok');
   }
 
+  function refreshProviderDescription(provider) {
+    if (!providerDescriptionEl) return;
+    if (!provider) {
+      providerDescriptionEl.textContent = '利用可能なAIプロバイダーが見つかりません。';
+      return;
+    }
+    const description = provider.description && provider.description.trim()
+      ? provider.description.trim()
+      : `${provider.label} を使用します。`;
+    providerDescriptionEl.textContent = description;
+  }
+
+  function renderProviderOptions(selectedId) {
+    if (!providerSelect) return [];
+    const providers = aiRegistry && typeof aiRegistry.listProviders === 'function'
+      ? aiRegistry.listProviders()
+      : [];
+    providerSelect.innerHTML = '';
+    if (!providers.length) {
+      providerSelect.disabled = true;
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '（未登録）';
+      providerSelect.appendChild(opt);
+      refreshProviderDescription(null);
+      return providers;
+    }
+    providerSelect.disabled = false;
+    for (const provider of providers) {
+      const opt = document.createElement('option');
+      opt.value = provider.id;
+      opt.textContent = provider.label || provider.id;
+      providerSelect.appendChild(opt);
+    }
+    if (selectedId && providers.some(p => p.id === selectedId)) {
+      providerSelect.value = selectedId;
+    } else {
+      providerSelect.value = providers[0].id;
+    }
+    const current = providers.find(p => p.id === providerSelect.value) || null;
+    refreshProviderDescription(current);
+    return providers;
+  }
+
+  async function loadAiProviderSelection() {
+    if (!providerSelect) return;
+    try {
+      const storedLocal = localStorage.getItem(AI_PROVIDER_KEY);
+      const providers = renderProviderOptions(storedLocal || undefined);
+      if (!providers.length) {
+        setStatus(providerStatusEl, 'AIプロバイダーが登録されていません。', 'info');
+        return;
+      }
+
+      let providerId = storedLocal;
+      if (!providerId) {
+        const response = await window.settings.getAiProvider();
+        providerId = (response && (response.providerId || response.id || response.value)) || '';
+      }
+
+      if (!providerId || !providers.some(p => p.id === providerId)) {
+        const active = aiRegistry && typeof aiRegistry.getActiveProviderId === 'function'
+          ? aiRegistry.getActiveProviderId()
+          : '';
+        if (active && providers.some(p => p.id === active)) {
+          providerId = active;
+        } else {
+          providerId = providers[0].id;
+        }
+      }
+
+      providerSelect.value = providerId;
+      const provider = providers.find(p => p.id === providerId) || null;
+      refreshProviderDescription(provider);
+
+      if (aiRegistry && typeof aiRegistry.setActiveProvider === 'function') {
+        aiRegistry.setActiveProvider(providerId, { silent: false });
+      }
+
+      await window.settings.setAiProvider(providerId);
+      localStorage.setItem(AI_PROVIDER_KEY, providerId);
+      setStatus(providerStatusEl, `Provider set to ${provider ? provider.label : providerId}`, 'ok');
+    } catch (err) {
+      console.error('[Settings] Failed to initialize AI provider:', err);
+      setStatus(providerStatusEl, 'AIプロバイダーの初期化に失敗しました', 'error');
+    }
+  }
+
+  function bindProviderSelect() {
+    if (!providerSelect) return;
+    providerSelect.addEventListener('change', async () => {
+      const providerId = providerSelect.value;
+      if (!providerId) {
+        setStatus(providerStatusEl, '無効なプロバイダーです', 'error');
+        return;
+      }
+      try {
+        if (aiRegistry && typeof aiRegistry.setActiveProvider === 'function') {
+          aiRegistry.setActiveProvider(providerId, { silent: false });
+        }
+        await window.settings.setAiProvider(providerId);
+        localStorage.setItem(AI_PROVIDER_KEY, providerId);
+        const providers = aiRegistry && typeof aiRegistry.listProviders === 'function'
+          ? aiRegistry.listProviders()
+          : [];
+        const provider = providers.find(p => p.id === providerId) || null;
+        refreshProviderDescription(provider);
+        setStatus(providerStatusEl, `Provider set to ${provider ? provider.label : providerId}`, 'ok');
+      } catch (err) {
+        console.error('[Settings] Failed to set AI provider:', err);
+        setStatus(providerStatusEl, '更新に失敗しました', 'error');
+      }
+    });
+
+    if (aiRegistry && typeof aiRegistry.subscribe === 'function') {
+      aiRegistry.subscribe(provider => {
+        if (!providerSelect) return;
+        const currentProviders = renderProviderOptions(provider?.id || providerSelect.value);
+        if (!currentProviders.length) return;
+        const activeId = provider?.id || providerSelect.value;
+        if (activeId) {
+          providerSelect.value = activeId;
+          const activeProvider = currentProviders.find(p => p.id === activeId) || null;
+          refreshProviderDescription(activeProvider);
+        }
+      });
+    }
+  }
+
   saveBtn.addEventListener('click', handleSave);
   testBtn.addEventListener('click', handleTest);
   if (selectContextBtn) selectContextBtn.addEventListener('click', handleSelectContext);
@@ -136,4 +272,6 @@
 
   renderContextPath();
   loadInitialRoot();
+  bindProviderSelect();
+  loadAiProviderSelection();
 })();
