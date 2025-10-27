@@ -87,6 +87,35 @@ interface RunOptions {
 }
 
 const LOG_DIR = path.join('tools', 'nexus', 'logs', 'quality-gates');
+const DEFAULT_GATE_ORDER = [
+  'DOC-01',
+  'DOC-02',
+  'DOC-03',
+  'DOC-04',
+  'DOC-05',
+  'DOC-06',
+  'DOC-07',
+  'DOC-08',
+  'TC-01',
+  'TC-02',
+  'TC-03',
+  'TC-04'
+] as const;
+
+function sortGateIds(gateIds: string[]): string[] {
+  const order = new Map<string, number>();
+  DEFAULT_GATE_ORDER.forEach((gateId, index) => order.set(gateId, index));
+  return gateIds.sort((a, b) => {
+    const aIndex = order.get(a);
+    const bIndex = order.get(b);
+    if (typeof aIndex === 'number' && typeof bIndex === 'number') {
+      return aIndex - bIndex;
+    }
+    if (typeof aIndex === 'number') return -1;
+    if (typeof bIndex === 'number') return 1;
+    return a.localeCompare(b);
+  });
+}
 
 function sanitizeTimestampForFilename(iso: string): string {
   return iso.replace(/[:]/g, '-');
@@ -95,10 +124,17 @@ function sanitizeTimestampForFilename(iso: string): string {
 export function summarizeGateResults(results: QualityGateResults | undefined | null): QualityGateSummaryItem[] {
   if (!results) return [];
   const summary: QualityGateSummaryItem[] = [];
+  const gateIds = sortGateIds([
+    ...new Set([
+      ...Object.keys(results),
+      ...DEFAULT_GATE_ORDER
+    ])
+  ]);
 
-  for (const [gateId, violations] of Object.entries(results)) {
+  for (const gateId of gateIds) {
+    const violations = Array.isArray(results?.[gateId]) ? results[gateId] : [];
     const counts = { error: 0, warn: 0, info: 0 };
-    for (const violation of violations ?? []) {
+    for (const violation of violations) {
       const severity = (violation?.severity ?? 'info').toString().toLowerCase() as 'error' | 'warn' | 'info';
       if (severity === 'error' || severity === 'warn' || severity === 'info') {
         counts[severity] += 1;
@@ -106,10 +142,10 @@ export function summarizeGateResults(results: QualityGateResults | undefined | n
         counts.info += 1;
       }
     }
-    summary.push({ gateId, total: violations?.length ?? 0, severity: counts });
+    summary.push({ gateId, total: violations.length, severity: counts });
   }
 
-  return summary.sort((a, b) => a.gateId.localeCompare(b.gateId));
+  return summary;
 }
 
 function buildViolationKey(violation: QualityGateViolation): string {
@@ -139,12 +175,15 @@ export function computeGateDiff(previous: QualityGateResults | null | undefined,
 
   const gateIds = new Set<string>([
     ...Object.keys(previous ?? {}),
-    ...Object.keys(next ?? {})
+    ...Object.keys(next ?? {}),
+    ...DEFAULT_GATE_ORDER
   ]);
 
-  for (const gateId of Array.from(gateIds).sort()) {
-    const prevList = previous?.[gateId] ?? [];
-    const nextList = next?.[gateId] ?? [];
+  for (const gateId of sortGateIds(Array.from(gateIds))) {
+    const prevRaw = previous?.[gateId];
+    const nextRaw = next?.[gateId];
+    const prevList = Array.isArray(prevRaw) ? prevRaw : [];
+    const nextList = Array.isArray(nextRaw) ? nextRaw : [];
     const prevMap = new Map(prevList.map(item => [buildViolationKey(item), item]));
     const nextMap = new Map(nextList.map(item => [buildViolationKey(item), item]));
 

@@ -55,8 +55,14 @@ describe('collectDocumentAnalytics', () => {
       DONE: 1
     });
 
-    // Ensure every gate is represented in the expected order
-    expect(analytics.gates.map(g => g.gateId)).toEqual(Array.from(DOCUMENT_GATE_ORDER));
+    // Ensure every gate is represented in the expected order including test-case gates
+    expect(analytics.gates.map(g => g.gateId)).toEqual([
+      ...Array.from(DOCUMENT_GATE_ORDER),
+      'TC-01',
+      'TC-02',
+      'TC-03',
+      'TC-04'
+    ]);
 
     const gate01 = analytics.gates.find(g => g.gateId === 'DOC-01');
     expect(gate01).toMatchObject({
@@ -85,5 +91,14 @@ describe('collectDocumentAnalytics', () => {
       severity: { error: 0, warn: 1, info: 0 },
       impactedTasks: 1
     });
+    for (const gateId of ['TC-01', 'TC-02', 'TC-03', 'TC-04']) {
+      const tcGate = analytics.gates.find(g => g.gateId === gateId);
+      expect(tcGate).toMatchObject({
+        totalViolations: 0,
+        uniqueDocuments: 0,
+        severity: { error: 0, warn: 0, info: 0 },
+        impactedTasks: 0
+      });
+    }
   });
 });
