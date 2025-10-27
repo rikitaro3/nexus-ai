@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nexus Smoke Test</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    .tree-node { margin-left: 1rem; }
+    .status { color: #0070f3; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Docs Navigator</h1>
+  <div class="docs-mode-bar">
+    <button data-mode="docs">Docs</button>
+    <button data-mode="tree">Tree</button>
+  </div>
+  <div id="tree-mode" hidden>
+    <p id="tree-status" class="status">Tree view is hidden</p>
+    <div id="tree-view"></div>
+  </div>
+  <script>
+    document.querySelector('button[data-mode="tree"]').addEventListener('click', () => {
+      document.getElementById('tree-mode').hidden = false;
+      document.getElementById('tree-status').textContent = 'Tree view ready';
+      const treeView = document.getElementById('tree-view');
+      treeView.innerHTML = '';
+      const node = document.createElement('div');
+      node.className = 'tree-node';
+      node.textContent = 'Root Node';
+      treeView.appendChild(node);
+    });
+  </script>
+</body>
+</html>
