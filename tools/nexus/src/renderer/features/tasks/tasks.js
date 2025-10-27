@@ -35,7 +35,7 @@
     };
   }
 
-  function fallbackBuildBreakdownPrompt(context) {
+  function buildDefaultBreakdownPrompt(context) {
     const linksText = Object.entries(context?.links || {})
       .map(([key, value]) => {
         const label = key == null ? '' : String(key).trim();
@@ -50,7 +50,7 @@
       'あなたはプロジェクトの実装ブレークダウン設計者です。以下の制約と入力を踏まえ、MECEなサブタスク（各項目に完了基準付き）を5〜10件で提案し、不明点（最大5件）と参照先（PRD/UX/API/DATA/QA）も挙げてください。',
       '',
       '[制約]',
-      '- 外部AI APIを使わない（Cursor autoのみ）',
+      '- 外部依存を最小化し、チームが即着手できる粒度で提示すること',
       '- 冗長禁止、簡潔さ重視',
       '- DAG/MECE/Quality Gatesを尊重（context.mdc参照）',
       '',
@@ -62,41 +62,52 @@
       '[出力]',
       '- サブタスク一覧: [ {name, acceptanceCriteria, refs} ... ]',
       '- 不明点: [question1..]',
-      '- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]'
+      '- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]',
+      '',
+      '※ AIプロバイダー未設定時のフォールバックテンプレートです。'
     ].join('\n');
   }
 
-  const fallbackBreakdownProvider = {
-    id: 'cursor',
-    label: 'Cursor Auto (Fallback)',
-    description: 'Default breakdown prompt generator used when no AI provider is configured.',
-    buildBreakdownPrompt: fallbackBuildBreakdownPrompt,
-  };
-
   function resolveBreakdownProvider(providerId) {
-    if (aiProviderRegistry) {
-      const lookupId = providerId && typeof providerId === 'string' ? providerId : '';
-      if (lookupId && typeof aiProviderRegistry.getProvider === 'function') {
-        const provider = aiProviderRegistry.getProvider(lookupId);
-        if (provider) return provider;
-      }
-      if (typeof aiProviderRegistry.getActiveProvider === 'function') {
-        const active = aiProviderRegistry.getActiveProvider();
-        if (active) return active;
-      }
-      if (typeof aiProviderRegistry.ensureActiveProvider === 'function') {
-        const ensured = aiProviderRegistry.ensureActiveProvider({ silent: true });
-        if (ensured) return ensured;
-      }
-      if (typeof aiProviderRegistry.listProviders === 'function' && typeof aiProviderRegistry.getProvider === 'function') {
-        const available = aiProviderRegistry.listProviders();
-        if (Array.isArray(available) && available.length) {
-          const first = aiProviderRegistry.getProvider(available[0].id);
-          if (first) return first;
+    if (!aiProviderRegistry) {
+      return null;
+    }
+
+    const lookupId = typeof providerId === 'string' ? providerId.trim() : '';
+    if (lookupId) {
+      if (typeof aiProviderRegistry.getProvider === 'function') {
+        const explicit = aiProviderRegistry.getProvider(lookupId);
+        if (explicit) {
+          if (typeof aiProviderRegistry.setActiveProvider === 'function') {
+            aiProviderRegistry.setActiveProvider(lookupId, { silent: true });
+          }
+          return explicit;
         }
       }
+      if (typeof aiProviderRegistry.setActiveProvider === 'function') {
+        aiProviderRegistry.setActiveProvider(lookupId, { silent: true });
+      }
     }
-    return fallbackBreakdownProvider;
+
+    if (typeof aiProviderRegistry.getActiveProvider === 'function') {
+      const active = aiProviderRegistry.getActiveProvider();
+      if (active) return active;
+    }
+
+    if (typeof aiProviderRegistry.ensureActiveProvider === 'function') {
+      const ensured = aiProviderRegistry.ensureActiveProvider({ silent: true });
+      if (ensured) return ensured;
+    }
+
+    if (typeof aiProviderRegistry.listProviders === 'function' && typeof aiProviderRegistry.getProvider === 'function') {
+      const available = aiProviderRegistry.listProviders();
+      if (Array.isArray(available) && available.length) {
+        const first = aiProviderRegistry.getProvider(available[0].id);
+        if (first) return first;
+      }
+    }
+
+    return null;
   }
 
   function taskDefaults() {
@@ -157,25 +168,61 @@
     return out;
   }
 
-  function buildBreakdownPrompt(rawContext, options = {}) {
-    const context = normalizeBreakdownContext(rawContext);
-    const provider = resolveBreakdownProvider(options?.providerId);
-    let result;
-    try {
-      result = provider.buildBreakdownPrompt(context, {
-        registry: aiProviderRegistry,
-        options,
-      });
-    } catch (err) {
-      console.error(`[Tasks] Provider ${provider?.id || 'unknown'} failed to build breakdown prompt:`, err);
-      return fallbackBreakdownProvider.buildBreakdownPrompt(context);
+  function callFallbackPrompt(context, failingProviderId) {
+    if (!aiProviderRegistry) {
+      return buildDefaultBreakdownPrompt(context);
     }
 
+    const attempted = new Set();
+    const candidates = [];
+
+    if (typeof aiProviderRegistry.getActiveProvider === 'function') {
+      const active = aiProviderRegistry.getActiveProvider();
+      if (active) candidates.push(active);
+    }
+
+    if (typeof aiProviderRegistry.ensureActiveProvider === 'function') {
+      const ensured = aiProviderRegistry.ensureActiveProvider({ silent: true });
+      if (ensured) candidates.push(ensured);
+    }
+
+    if (typeof aiProviderRegistry.listProviders === 'function' && typeof aiProviderRegistry.getProvider === 'function') {
+      const listed = aiProviderRegistry.listProviders();
+      if (Array.isArray(listed)) {
+        for (const item of listed) {
+          if (!item || typeof item.id !== 'string') continue;
+          const provider = aiProviderRegistry.getProvider(item.id);
+          if (provider) {
+            candidates.push(provider);
+          }
+        }
+      }
+    }
+
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate.buildBreakdownPrompt !== 'function') continue;
+      if (candidate.id && candidate.id === failingProviderId) continue;
+      if (candidate.id && attempted.has(candidate.id)) continue;
+      if (candidate.id) attempted.add(candidate.id);
+      try {
+        return candidate.buildBreakdownPrompt(context, {
+          registry: aiProviderRegistry,
+          reason: 'fallback',
+        });
+      } catch (err) {
+        console.warn(`[Tasks] Fallback provider ${candidate?.id || 'unknown'} failed:`, err);
+      }
+    }
+
+    return buildDefaultBreakdownPrompt(context);
+  }
+
+  function normalizePromptResult(result, context, provider) {
     if (result && typeof result === 'object' && result !== null) {
       const prompt = typeof result.prompt === 'string' ? result.prompt : '';
       if (prompt) {
         if (result.usage && aiProviderRegistry && typeof aiProviderRegistry.recordTokenUsage === 'function') {
-          aiProviderRegistry.recordTokenUsage({ providerId: provider.id, ...result.usage });
+          aiProviderRegistry.recordTokenUsage({ providerId: provider?.id, ...result.usage });
         }
         return prompt;
       }
@@ -185,7 +232,40 @@
       return result;
     }
 
-    return fallbackBreakdownProvider.buildBreakdownPrompt(context);
+    return callFallbackPrompt(context, provider?.id);
+  }
+
+  function buildBreakdownPrompt(rawContext, options = {}) {
+    const context = normalizeBreakdownContext(rawContext);
+    const provider = resolveBreakdownProvider(options?.providerId);
+    if (!provider || typeof provider.buildBreakdownPrompt !== 'function') {
+      return callFallbackPrompt(context);
+    }
+
+    let result;
+    let usageRecorded = false;
+    const helpers = {
+      registry: aiProviderRegistry,
+      options,
+      recordUsage(usage) {
+        if (!usage || !aiProviderRegistry || typeof aiProviderRegistry.recordTokenUsage !== 'function') return;
+        usageRecorded = true;
+        aiProviderRegistry.recordTokenUsage({ providerId: provider.id, ...usage });
+      },
+    };
+
+    try {
+      result = provider.buildBreakdownPrompt(context, helpers);
+    } catch (err) {
+      console.error(`[Tasks] Provider ${provider?.id || 'unknown'} failed to build breakdown prompt:`, err);
+      return callFallbackPrompt(context, provider?.id);
+    }
+
+    if (!usageRecorded && result && typeof result === 'object' && result !== null && result.usage) {
+      helpers.recordUsage(result.usage);
+    }
+
+    return normalizePromptResult(result, context, provider);
   }
 
   function promptLibraryDefaults() {

@@ -62,7 +62,7 @@
         },
       };
 
-  provider.buildBreakdownPrompt = function buildCursorBreakdownPrompt(context) {
+  provider.buildBreakdownPrompt = function buildCursorBreakdownPrompt(context, helpers = {}) {
     const title = asString(context?.title).trim();
     const category = asString(context?.category).trim();
     const priority = asString(context?.priority).trim();
@@ -89,8 +89,22 @@
       '- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]',
     ];
 
-    return [header, '', ...constraints, '', ...inputs, '', ...outputs].join('\n');
+    const prompt = [header, '', ...constraints, '', ...inputs, '', ...outputs].join('\n');
+
+    if (helpers && typeof helpers.recordUsage === 'function') {
+      try {
+        helpers.recordUsage({ promptTokens: prompt.length, completionTokens: 0, totalTokens: prompt.length });
+      } catch (err) {
+        console.warn('[AI] Failed to record Cursor provider usage', err);
+      }
+    }
+
+    return prompt;
   };
 
   registry.registerProvider(provider);
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = provider;
+  }
 })(typeof window !== 'undefined' ? window : undefined);

@@ -144,5 +144,41 @@ describe('tasks helpers', () => {
       expect(prompt).toContain('- 関連ドキュメント:');
       expect(prompt).toContain('- (なし)');
     });
+
+    it('falls back to default template when no provider is available', () => {
+      const registry = (global as any).aiProviderRegistry;
+      const getActiveSpy = jest.spyOn(registry, 'getActiveProvider').mockReturnValue(null);
+      const ensureSpy = jest.spyOn(registry, 'ensureActiveProvider').mockReturnValue(null);
+      const listSpy = jest.spyOn(registry, 'listProviders').mockReturnValue([]);
+
+      const prompt = buildBreakdownPrompt({
+        title: 'Fallback scenario',
+        category: 'Ops',
+        priority: 'LOW',
+        featId: '',
+      });
+
+      expect(prompt).toContain('フォールバックテンプレート');
+
+      getActiveSpy.mockRestore();
+      ensureSpy.mockRestore();
+      listSpy.mockRestore();
+    });
+
+    it('records token usage when providers report it via helpers', () => {
+      const registry = (global as any).aiProviderRegistry;
+      const recordSpy = jest.spyOn(registry, 'recordTokenUsage');
+
+      buildBreakdownPrompt({
+        title: 'Token tracking',
+        category: 'Backend',
+        priority: 'MEDIUM',
+        featId: 'FEAT-9999',
+      });
+
+      expect(recordSpy).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'cursor' }));
+
+      recordSpy.mockRestore();
+    });
   });
 });
