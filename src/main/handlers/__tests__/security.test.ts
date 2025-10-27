@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 // getRepoRoot() を直接インポートするのではなく、テスト用のラッパーを作成
 let testEnv: NodeJS.ProcessEnv = {};
@@ -86,5 +87,49 @@ describe('getRepoRoot の優先順位', () => {
     
     expect(result).toBeDefined();
     expect(typeof result).toBe('string');
+  });
+});
+
+describe('validatePath', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    delete process.env.NEXUS_PROJECT_ROOT;
+    testEnv = { ...originalEnv };
+    jest.resetModules();
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  test('リポジトリと同じプレフィックスの別ディレクトリを拒否する', () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-security-'));
+    const repoRoot = path.join(baseDir, 'repo');
+    const repoFile = path.join(repoRoot, 'inside.txt');
+    const outsideDir = `${repoRoot}-backup`;
+    const outsideFile = path.join(outsideDir, 'outside.txt');
+
+    try {
+      fs.mkdirSync(repoRoot, { recursive: true });
+      fs.mkdirSync(outsideDir, { recursive: true });
+      fs.writeFileSync(repoFile, 'inside');
+      fs.writeFileSync(outsideFile, 'outside');
+
+      process.env.NEXUS_PROJECT_ROOT = repoRoot;
+
+      const security = require('../security');
+
+      const validResult = security.validatePath('inside.txt');
+      expect(validResult.valid).toBe(true);
+
+      const invalidResult = security.validatePath(outsideFile);
+      expect(invalidResult.valid).toBe(false);
+      expect(invalidResult.error).toBe('パスがリポジトリ外');
+    } finally {
+      if (fs.existsSync(baseDir)) {
+        fs.rmSync(baseDir, { recursive: true, force: true });
+      }
+    }
   });
 });
