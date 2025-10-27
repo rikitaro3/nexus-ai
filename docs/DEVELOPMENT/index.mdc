@@ -1,0 +1,113 @@
+# Nexus Development Guide
+
+> Breadcrumbs
+> Layer: DEVELOPMENT
+> Upstream: docs/ARCH/index.mdc
+> Downstream: N/A
+
+## 概要
+Nexusの実装方針、コーディング規約、開発フロー。
+
+## 実装方針
+
+### コア機能
+1. **Docs Navigator**
+   - Context Map（.cursor/context.mdc or context.mdc）をパース
+   - カテゴリ×ドキュメント一覧を表示
+   - 詳細表示（Breadcrumbs, Traceability Map, Waypoints, MECE Domains）
+   - Openボタンで外部エディタ起動
+
+2. **FEAT横断ビュー**
+   - Features Registry（docs/PRD/index.mdc）をパース
+   - FEAT一覧＋カバレッジ率表示
+   - 不足リンク警告（PRD/UX/API/DATA/QA）
+
+3. **Orphan検出**
+   - docs/*/index.mdcのBreadcrumbsを解析
+   - Upstream/Downstreamが両方空＝Orphan
+   - 一覧表示
+
+4. **Tasks管理**
+   - 一括インポート（【カテゴリ】タイトル）
+   - 個別追加（カテゴリ＋タイトル）
+   - 編集（title, category, priority, status, featId, notes）
+   - 保存（tasks.json）
+   - エクスポート（human_todo.mdc）
+
+5. **Breakdown生成**
+   - FEAT連携で自動入力
+   - 定型プロンプト生成（PRD_DocsNavigator_TasksBreakdown.mdc準拠）
+   - クリップボードコピー（Cursor auto用）
+
+### コンテキスト切替（デバッグ時のみ）
+- 環境変数 `NEXUS_DEBUG=1` または `!app.isPackaged` で有効
+- セレクトで Repo / Nexus を切り替え
+- 選択をlocalStorageに記憶
+
+## コーディング規約
+
+### JavaScript
+- 依存: なし（Vanilla JS + DOM API）
+- モジュール: IIFE（即時関数）でスコープ分離
+- 非同期: async/await
+- エラー: try-catch + console.error
+- ドキュメント: JSDoc（必要に応じて）
+
+### IPC
+- preload.js: contextBridge.exposeInMainWorld() で公開
+- main.js: ipcMain.handle() で処理
+- 戻り値: `{ success: bool, data/error }` 形式
+
+### DOM操作
+- DOM要素は直接操作
+- イベント: addEventListener
+- テンプレート: インライン文字列（シンプルさ重視）
+
+### データパース
+- Context Map: 正規表現でカテゴリ/パス/説明を抽出
+- Features Registry: 正規表現でFEAT-ID/タイトル/リンクを抽出
+- Breadcrumbs: 正規表現で Upstream/Downstream を抽出
+
+## ファイル構成
+```
+
+├── package.json
+├── main.js (IPC handlers)
+├── preload.js (contextBridge)
+├── context.mdc (Nexus専用Context)
+├── tasks.json (タスクデータ)
+├── docs/
+│   ├── ARCH/index.mdc
+│   ├── DEVELOPMENT/index.mdc (本ファイル)
+│   ├── PRD/index.mdc (Features Registry)
+│   └── PRD/PRD_Nexus.mdc (要求仕様)
+└── renderer/
+    ├── index.html (UI)
+    ├── styles.css
+    ├── app.js (タブ切替)
+    ├── docs-navigator.js
+    └── tasks.js
+```
+
+## 開発フロー
+1. 機能追加: PRD更新 → ARCH更新 → 実装 → テスト
+2. バグ修正: 再現 → 修正 → テスト
+3. リファクタ: 小規模・段階的に実施
+
+## テスト方針
+- 手動テスト（Electron起動で確認）
+- IPCは main/preload 単体で動作確認
+- レンダラーはDOM操作をブラウザコンソールで確認
+- ファイルI/Oは実際のtasks.jsonで確認
+
+## デバッグ
+- DevTools: `mainWindow.webContents.openDevTools()`
+- ログ: console.log/error
+- IPC: main.js でリクエスト/レスポンスをログ
+
+## 注意事項
+- 外部API不使用（オフライン運用）
+- ファイルパス検証必須（セキュリティ）
+- 同期I/O使用（簡素化優先）
+alwaysApply: true
+---

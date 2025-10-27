@@ -8,14 +8,14 @@ NEXUSアプリに完全自動化されたE2Eテストを実装しました。
 
 ### 実装内容
 
-1. **tools/nexus/legacy/tests/test-nexus-e2e.js**: NEXUSアプリ専用の完全自動化E2Eテスト
-2. **tools/nexus/package.json**: `test:e2e`スクリプトを追加
+1. **legacy/tests/test-nexus-e2e.js**: NEXUSアプリ専用の完全自動化E2Eテスト
+2. **package.json**: `test:e2e`スクリプトを追加
 3. **完全自動化**: 手動操作不要で実行可能
 
 ### 実行結果
 
 ```bash
-cd tools/nexus
+cd nexus-ai
 npm run test:e2e
 ```
 
@@ -76,11 +76,11 @@ ls .cursor/context.mdc
 
 ```bash
 # E2Eテストの実行
-cd tools/nexus
+cd nexus-ai
 npm run test:e2e
 
 # 結果
-# - tools/nexus/legacy/tests/assets/test-nexus-e2e.png: スクリーンショット
+# - legacy/tests/assets/test-nexus-e2e.png: スクリーンショット
 # - コンソール出力: テスト結果
 ```
 
