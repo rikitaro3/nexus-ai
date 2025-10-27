@@ -21,7 +21,8 @@
     "test:e2e:old": "node legacy/tests/test-e2e-puppeteer.js",
     "test:e2e:smoke": "playwright test",
     "test:e2e:playwright": "node legacy/tests/test-e2e-playwright.js",
-    "validate:docs": "node scripts/validate-docs-gates.js"
+    "validate:docs": "node scripts/validate-docs-gates.js",
+    "capture:screenshots": "node scripts/capture-screenshots.js"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.28.5",
