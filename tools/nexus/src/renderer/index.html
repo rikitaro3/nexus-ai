@@ -171,6 +171,18 @@
           </div>
           <hr />
           <div class="settings-section">
+            <h3>AI Provider</h3>
+            <div class="form-group">
+              <label for="settings-ai-provider">Breakdown Provider</label>
+              <select id="settings-ai-provider"></select>
+            </div>
+            <p id="settings-ai-provider-description" class="text-muted">利用するAIプロバイダーを選択してください。</p>
+            <div class="control-group">
+              <span id="settings-ai-provider-status" class="status hidden"></span>
+            </div>
+          </div>
+          <hr />
+          <div class="settings-section">
             <h3>Context File</h3>
             <p id="settings-context-path" class="settings-context-path">(未設定)</p>
             <div class="control-group">
@@ -202,6 +214,8 @@
       console.error('[Unhandled Promise Rejection]', event.reason);
     });
   </script>
+  <script src="services/ai/registry.js"></script>
+  <script src="services/ai/providers/cursor.js"></script>
   <script src="shared/app.js"></script>
   <script src="features/docs-navigator/docs-navigator.js"></script>
   <script src="features/tasks/tasks.js"></script>

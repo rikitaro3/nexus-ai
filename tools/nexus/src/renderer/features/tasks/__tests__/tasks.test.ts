@@ -3,14 +3,42 @@ const tasks = require('../tasks');
 const {
   applyTaskDefaults,
   parsePasted,
+  normalizeBreakdownContext,
   buildBreakdownPrompt,
 } = tasks as {
   applyTaskDefaults: (raw?: Record<string, unknown>) => Record<string, unknown>;
   parsePasted: (text: string, options?: { uidFn?: () => string; timestampFn?: () => string }) => Record<string, unknown>[];
+  normalizeBreakdownContext: (raw?: Record<string, unknown>) => {
+    title: string;
+    category: string;
+    priority: string;
+    featId: string;
+    links: Record<string, unknown>;
+  };
   buildBreakdownPrompt: (input: { title: string; category: string; priority: string; featId?: string; links?: Record<string, string> }) => string;
 };
 
 describe('tasks helpers', () => {
+  describe('normalizeBreakdownContext', () => {
+    it('coerces invalid input into safe defaults', () => {
+      const context = normalizeBreakdownContext({
+        title: 123 as unknown as string,
+        category: null as unknown as string,
+        priority: undefined as unknown as string,
+        featId: 0 as unknown as string,
+        links: null,
+      });
+
+      expect(context).toEqual({
+        title: '',
+        category: '',
+        priority: '',
+        featId: '',
+        links: {},
+      });
+    });
+  });
+
   describe('applyTaskDefaults', () => {
     it('fills missing breakdown metadata with defaults', () => {
       const result = applyTaskDefaults({ title: 'Example Task' });

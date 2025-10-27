@@ -27,6 +27,7 @@ const PROJECT_ROOT = process.env.NEXUS_PROJECT_ROOT
 
 const NEXUS_DIR = path.dirname(path.dirname(__dirname)); // dist/src/main -> dist
 const PROMPTS_JSON_PATH = path.join(PROJECT_ROOT, 'tools', 'nexus', 'prompts.json');
+const DEFAULT_AI_PROVIDER_ID = 'cursor';
 
 logger.info('Project root initialized', { 
   __dirname,
@@ -146,6 +147,7 @@ app.on('activate', () => {
 
 // Global variable to store custom project root
 let customProjectRoot: string | null = null;
+let selectedAiProviderId: string | null = null;
 
 // Env: isDebug
 const isDebug = (process.env.NEXUS_DEBUG === '1' || !app.isPackaged);
@@ -210,6 +212,24 @@ ipcMain.handle('settings:testProjectRoot', async (_event, root?: string) => {
     logger.error('Failed to test project root', { error: message, root });
     return { success: false, error: message };
   }
+});
+
+ipcMain.handle('settings:getAiProvider', async () => {
+  const providerId = (selectedAiProviderId && selectedAiProviderId.trim()) || DEFAULT_AI_PROVIDER_ID;
+  logger.info('Getting AI provider', { providerId });
+  return { providerId };
+});
+
+ipcMain.handle('settings:setAiProvider', async (_event, providerId?: string) => {
+  const normalized = typeof providerId === 'string' ? providerId.trim() : '';
+  if (!normalized) {
+    const error = 'Invalid AI provider id';
+    logger.warn('Rejected AI provider update', { providerId });
+    throw new Error(error);
+  }
+  selectedAiProviderId = normalized;
+  logger.info('AI provider updated', { providerId: normalized });
+  return { success: true };
 });
 
 // Dialog: select context file
