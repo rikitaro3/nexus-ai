@@ -264,8 +264,9 @@ ipcMain.handle('docs:open', withPathValidation(async (event, validation) => {
 // Tasks
 ipcMain.handle('tasks:readJson', async () => {
   try {
-    const target = path.join(__dirname, '..', '..', 'tasks.json');
-    logger.debug('Reading tasks.json', { target });
+    const repoRoot = getRepoRoot();
+    const target = path.join(repoRoot, 'tools', 'nexus', 'tasks.json');
+    logger.debug('Reading tasks.json', { target, repoRoot });
     if (!fs.existsSync(target)) {
       logger.info('tasks.json does not exist, returning empty array');
       return { success: true, data: [] };
@@ -281,8 +282,14 @@ ipcMain.handle('tasks:readJson', async () => {
 
 ipcMain.handle('tasks:writeJson', async (event, data: unknown) => {
   try {
-    const target = path.join(__dirname, '..', '..', 'tasks.json');
-    logger.debug('Writing tasks.json', { target, dataCount: Array.isArray(data) ? data.length : 'unknown' });
+    const repoRoot = getRepoRoot();
+    const target = path.join(repoRoot, 'tools', 'nexus', 'tasks.json');
+    const dir = path.dirname(target);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      logger.info('Created directory for tasks.json', { dir });
+    }
+    logger.debug('Writing tasks.json', { target, repoRoot, dataCount: Array.isArray(data) ? data.length : 'unknown' });
     fs.writeFileSync(target, JSON.stringify(data ?? [], null, 2), 'utf8');
     logger.info('tasks.json written successfully');
     return { success: true };

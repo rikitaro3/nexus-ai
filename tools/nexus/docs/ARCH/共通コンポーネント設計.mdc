@@ -440,9 +440,9 @@ Tasks関連のIPCハンドラーを提供
 import { ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { withPathValidation } from './security';
+import { getRepoRoot, withPathValidation } from './security';
 
-const TASKS_FILE = path.join(__dirname, '..', '..', 'tasks.json');
+const TASKS_FILE = path.join(getRepoRoot(), 'tools', 'nexus', 'tasks.json');
 
 /**
  * Tasksを読み込む
@@ -459,6 +459,10 @@ ipcMain.handle('tasks:readJson', async () => {
  * Tasksを保存する
  */
 ipcMain.handle('tasks:writeJson', async (event, data: unknown) => {
+  const dir = path.dirname(TASKS_FILE);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   fs.writeFileSync(TASKS_FILE, JSON.stringify(data ?? [], null, 2), 'utf8');
   return { success: true };
 });

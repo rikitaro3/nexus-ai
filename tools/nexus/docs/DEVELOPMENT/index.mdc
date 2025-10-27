@@ -31,7 +31,7 @@ Nexusの実装方針、コーディング規約、開発フロー。
    - 一括インポート（【カテゴリ】タイトル）
    - 個別追加（カテゴリ＋タイトル）
    - 編集（title, category, priority, status, featId, notes）
-   - 保存（tasks.json）
+   - 保存（tools/nexus/tasks.json）
    - エクスポート（human_todo.mdc）
 
 5. **Breakdown生成**
@@ -98,7 +98,7 @@ tools/nexus/
 - 手動テスト（Electron起動で確認）
 - IPCは main/preload 単体で動作確認
 - レンダラーはDOM操作をブラウザコンソールで確認
-- ファイルI/Oは実際のtasks.jsonで確認
+- ファイルI/Oは実際のtools/nexus/tasks.jsonで確認
 
 ## デバッグ
 - DevTools: `mainWindow.webContents.openDevTools()`

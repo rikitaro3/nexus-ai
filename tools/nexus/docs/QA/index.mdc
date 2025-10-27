@@ -34,7 +34,7 @@ Nexusのテスト方針、品質基準、受入基準。
 - ✅ 一括インポート（【カテゴリ】タイトル）
 - ✅ 個別追加
 - ✅ 編集（全フィールド）
-- ✅ 保存（tasks.json）
+- ✅ 保存（tools/nexus/tasks.json）
 - ✅ エクスポート（human_todo.mdc）
 
 ### Breakdown生成
@@ -65,7 +65,7 @@ Nexusのテスト方針、品質基準、受入基準。
 - 結果: Orphan数 >= 0（警告のみ）
 
 ### Gate-NX-04: Tasks永続化
-- パス: tasks.json読み書き
+- パス: tools/nexus/tasks.json読み書き
 - 条件: 保存後、再起動で復元
 - 結果: タスク数一致
 
