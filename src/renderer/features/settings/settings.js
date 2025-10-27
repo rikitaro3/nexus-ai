@@ -20,6 +20,34 @@
   const PROJECT_ROOT_KEY = 'project-root';
   const CONTEXT_FILE_KEY = 'context-file-path';
   const AI_PROVIDER_KEY = 'ai-provider';
+  const DARK_MODE_KEY = 'dark-mode';
+
+  // Dark mode toggle button
+  const themeToggleBtn = document.getElementById('settings-toggle-theme');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', function() {
+      document.body.classList.toggle('dark');
+      const isDark = document.body.classList.contains('dark');
+      localStorage.setItem(DARK_MODE_KEY, isDark);
+      updateThemeButton();
+    });
+    
+    function updateThemeButton() {
+      const isDark = document.body.classList.contains('dark');
+      themeToggleBtn.textContent = isDark ? '☀️ ライトモードに切り替え' : '🌙 ダークモードに切り替え';
+    }
+    
+    // Load saved theme (default to dark mode)
+    const savedTheme = localStorage.getItem(DARK_MODE_KEY);
+    if (savedTheme === null) {
+      // First time user - default to dark mode
+      document.body.classList.add('dark');
+      localStorage.setItem(DARK_MODE_KEY, 'true');
+    } else if (savedTheme === 'true') {
+      document.body.classList.add('dark');
+    }
+    updateThemeButton();
+  }
 
   function setStatus(el, text, type) {
     if (!el) return;

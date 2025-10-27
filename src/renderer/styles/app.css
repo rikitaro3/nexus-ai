@@ -157,3 +157,66 @@ main { flex: 1; overflow: auto; padding: 20px; }
 .task-prompts__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .task-prompts__empty { color: #6b7280; font-size: 13px; margin: 0; }
 
+/* Dark Mode */
+body.dark { background: #1e1e1e; color: #e0e0e0; }
+body.dark .app-header { background: #2d2d2d; border-bottom-color: #3d3d3d; }
+body.dark .app-brand h1 { color: #e0e0e0; }
+body.dark .app-subtitle { color: #9ca3af; }
+body.dark .primary-toolbar { background: #2d2d2d; border-bottom-color: #3d3d3d; }
+body.dark .tab-btn { background: #3d3d3d; border-color: #4d4d4d; color: #e0e0e0; }
+body.dark .tab-btn:hover { background: #4a5568; border-color: #6b7280; }
+body.dark .tab-btn.active { background: #3b82f6; border-color: #2563eb; color: #fff; }
+body.dark .btn.btn-secondary { background: #3d3d3d; color: #e0e0e0; border-color: #4d4d4d; }
+body.dark .btn.btn-secondary:hover { background: #4d4d4d; }
+body.dark .btn.btn-ghost { color: #60a5fa; }
+body.dark .btn.btn-ghost:hover { background: #374151; border-color: #4b5563; }
+body.dark .card { background: #2d2d2d; border-color: #3d3d3d; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+body.dark .docs-left, body.dark .docs-middle, body.dark .docs-right { background: #2d2d2d; border-color: #3d3d3d; }
+body.dark .docs-left h3, body.dark .docs-middle h3, body.dark .docs-right h3 { color: #e0e0e0; }
+body.dark .docs-left li:hover, body.dark .docs-middle li:hover { background: #3d3d3d; }
+body.dark .docs-left li.active, body.dark .docs-middle li.active { background: #1e3a8a; border-color: #3b82f6; }
+body.dark .docs-middle li span { color: #9ca3af; }
+body.dark .rules-pipeline { background: #2d2d2d; border-color: #3d3d3d; }
+body.dark .rules-pipeline__title { color: #e0e0e0; }
+body.dark .rules-pipeline__timestamp { color: #9ca3af; }
+body.dark .rules-pipeline__status { color: #e0e0e0; }
+body.dark .rules-pipeline__summary, body.dark .rules-pipeline__diff, body.dark .rules-pipeline__analytics { color: #d1d5db; }
+body.dark .rules-pipeline__meta { color: #9ca3af; }
+body.dark .docs-mode-meta { color: #9ca3af; }
+body.dark .form-group input[type="text"], body.dark .form-group textarea, body.dark .feats-toolbar input[type="text"], body.dark .tasks-inputs input[type="text"], body.dark .tasks-inputs textarea { background: #3d3d3d; border-color: #4d4d4d; color: #e0e0e0; }
+body.dark .control-group select { background: #3d3d3d; border-color: #4d4d4d; color: #e0e0e0; }
+body.dark .tasks-recommendations { background: #2d2d2d; border-color: #3d3d3d; }
+body.dark .tasks-recommendations__header h3 { color: #e0e0e0; }
+body.dark .tasks-recommendations__status { color: #9ca3af; }
+body.dark .tasks-recommendations__item { background: #3d3d3d; border-color: #4d4d4d; }
+body.dark .tasks-recommendations__title { color: #e0e0e0; }
+body.dark .tasks-recommendations__meta { color: #9ca3af; }
+body.dark .tasks-recommendations__reason { color: #d1d5db; }
+body.dark .tasks-recommendations__empty { color: #9ca3af; }
+body.dark .tasks-meta-pill { background: #3d3d3d; border-color: #4d4d4d; color: #e0e0e0; }
+body.dark .settings-context-path { background: #3d3d3d; border-color: #4d4d4d; color: #e0e0e0; }
+body.dark .text-muted { color: #9ca3af; }
+body.dark .tree-node:hover { background: #3d3d3d; }
+body.dark .tree-node.selected { background: #1e3a8a; }
+body.dark .tree-path { color: #9ca3af; }
+body.dark .tree-loading { color: #9ca3af; }
+body.dark .tree-error { background: #7f1d1d; color: #fca5a5; }
+body.dark .gate-result.pass { background: #064e3b; color: #6ee7b7; }
+body.dark .gate-result.error { background: #7f1d1d; color: #fca5a5; }
+body.dark .gate-result.warn { background: #78350f; color: #fcd34d; }
+body.dark .gate-violation { background: #3d3d3d; border-left-color: #dc2626; }
+body.dark .task-prompts__item { background: #3d3d3d; border-color: #4d4d4d; }
+body.dark .task-prompts__item.active { background: #1e3a8a; border-color: #3b82f6; }
+body.dark .task-prompts__item-label { color: #e0e0e0; }
+body.dark .task-prompts__item-desc { color: #9ca3af; }
+body.dark .task-prompts__item-tags { color: #60a5fa; }
+body.dark .task-prompts__empty { color: #9ca3af; }
+body.dark .rules-pipeline__analytics-table { background: #3d3d3d; }
+body.dark .rules-pipeline__analytics-table th { background: #4d4d4d; color: #e0e0e0; }
+body.dark .rules-pipeline__analytics-table td { color: #e0e0e0; border-color: #4d4d4d; }
+body.dark .rules-pipeline__history { background: #3d3d3d; }
+body.dark .rules-pipeline__history th { background: #4d4d4d; color: #e0e0e0; }
+body.dark .rules-pipeline__history td { color: #e0e0e0; border-color: #4d4d4d; }
+body.dark .rules-pipeline__history-total { color: #e0e0e0; }
+body.dark .rules-pipeline__history-severity, body.dark .rules-pipeline__history-exit { color: #9ca3af; }
+
