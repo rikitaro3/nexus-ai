@@ -68,6 +68,7 @@ export interface DocsAutofixSummary {
   dryRun: boolean;
   operations: DocsAutofixOperation[];
   renameMap: DocsAutofixRenameEntry[];
+  files: string[];
   warnings: string[];
   errors: string[];
   rawOutput: string;
@@ -330,6 +331,7 @@ async function runDocsAutofix(projectRoot: string, options: { contextPath?: stri
           dryRun: !!options.dryRun,
           operations: [],
           renameMap: [],
+          files: [],
           warnings: [],
           errors: [],
           rawOutput: '',
@@ -349,6 +351,9 @@ async function runDocsAutofix(projectRoot: string, options: { contextPath?: stri
   }
   if (!Array.isArray(summary.renameMap)) {
     summary.renameMap = [];
+  }
+  if (!Array.isArray(summary.files)) {
+    summary.files = [];
   }
   if (!Array.isArray(summary.warnings)) {
     summary.warnings = [];
