@@ -253,42 +253,76 @@
     category: 'nexus.tasks.category'
   };
 
-  function storageAvailable() {
-    return typeof window !== 'undefined' && !!window.localStorage;
-  }
-
-  function readStorage(key) {
-    if (!storageAvailable()) return null;
+  function normalizePreferenceValue(value) {
+    if (typeof value === 'string') return value.trim();
+    if (value == null) return '';
     try {
-      const value = window.localStorage.getItem(key);
-      return value == null ? null : value;
+      return String(value).trim();
     } catch (err) {
-      console.warn('[Tasks] Failed to read storage:', key, err);
-      return null;
+      console.warn('[Tasks] Failed to normalize preference value:', err);
+      return '';
     }
   }
 
-  function writeStorage(key, value) {
-    if (!storageAvailable()) return;
-    try {
-      if (value && value.length > 0) {
-        window.localStorage.setItem(key, value);
-      } else {
-        window.localStorage.removeItem(key);
+  function createStringPreference(storageKey, { defaultValue = '', validate } = {}) {
+    const hasStorage = () => typeof window !== 'undefined' && !!window.localStorage;
+
+    function read() {
+      if (!hasStorage()) return defaultValue;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw == null) return defaultValue;
+        const normalized = normalizePreferenceValue(raw);
+        if (!normalized) return defaultValue;
+        if (validate && !validate(normalized)) return defaultValue;
+        return normalized;
+      } catch (err) {
+        console.warn('[Tasks] Failed to read preference from storage:', storageKey, err);
+        return defaultValue;
       }
-    } catch (err) {
-      console.warn('[Tasks] Failed to persist storage:', key, err);
     }
+
+    function write(value) {
+      if (!hasStorage()) return defaultValue;
+      try {
+        const normalized = normalizePreferenceValue(value);
+        if (!normalized) {
+          window.localStorage.removeItem(storageKey);
+          return defaultValue;
+        }
+        if (validate && !validate(normalized)) {
+          window.localStorage.removeItem(storageKey);
+          return defaultValue;
+        }
+        window.localStorage.setItem(storageKey, normalized);
+        return normalized;
+      } catch (err) {
+        console.warn('[Tasks] Failed to persist preference:', storageKey, err);
+        return defaultValue;
+      }
+    }
+
+    function clear() {
+      if (!hasStorage()) return;
+      try {
+        window.localStorage.removeItem(storageKey);
+      } catch (err) {
+        console.warn('[Tasks] Failed to clear preference:', storageKey, err);
+      }
+    }
+
+    return { read, write, clear };
   }
+
+  const filterPreference = createStringPreference(STORAGE_KEYS.filter, { defaultValue: '' });
+  const categoryPreference = createStringPreference(STORAGE_KEYS.category, { defaultValue: '' });
 
   function persistFilterValue(raw) {
-    const trimmed = (raw || '').trim();
-    writeStorage(STORAGE_KEYS.filter, trimmed);
+    filterPreference.write(raw || '');
   }
 
   function persistCategoryValue(category) {
-    const normalized = category && category.trim() ? category.trim() : '';
-    writeStorage(STORAGE_KEYS.category, normalized);
+    categoryPreference.write(category || '');
   }
 
   const listEl = document.getElementById('tasks-list');
@@ -305,8 +339,11 @@
   const catsEmptyEl = document.getElementById('tasks-categories-empty');
   const listEmptyEl = document.getElementById('tasks-list-empty');
 
-  const persistedFilterRaw = readStorage(STORAGE_KEYS.filter) || '';
-  const persistedCategory = readStorage(STORAGE_KEYS.category);
+  const persistedFilterRaw = filterPreference.read();
+  const persistedCategoryRaw = categoryPreference.read();
+  const persistedCategory = persistedCategoryRaw && persistedCategoryRaw.length > 0
+    ? persistedCategoryRaw
+    : null;
 
   if (filterInput) {
     filterInput.value = persistedFilterRaw;
