@@ -30,8 +30,8 @@ async function main() {
     process.exit(2);
   }
 
-  const { nodes, docStatus } = await parseAllBreadcrumbs(entries, projectRoot);
-  const results = validateGates(nodes, docStatus);
+  const { nodes, docStatus, docContents } = await parseAllBreadcrumbs(entries, projectRoot);
+  const results = validateGates(nodes, docStatus, docContents);
 
   outputResults({
     results,
@@ -40,9 +40,8 @@ async function main() {
     docStatus
   }, args.format);
 
-  const hasErrors = results['DOC-01'].some(v => v.severity !== 'warn') ||
-    results['DOC-02'].some(v => v.severity !== 'warn') ||
-    results['DOC-03'].some(v => v.severity !== 'warn');
+  const hasErrors = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-05', 'DOC-06', 'DOC-07']
+    .some(gateId => results[gateId].some(v => v.severity !== 'warn'));
 
   process.exit(hasErrors ? 1 : 0);
 }
@@ -140,6 +139,7 @@ function parseContextEntries(text) {
 async function parseAllBreadcrumbs(entries, projectRoot) {
   const nodes = new Map();
   const docStatus = new Map();
+  const docContents = new Map();
 
   for (const entry of entries) {
     const relPath = entry.path;
@@ -152,6 +152,8 @@ async function parseAllBreadcrumbs(entries, projectRoot) {
       docStatus.set(relPath, { status: 'read-error', message: error.message });
       continue;
     }
+
+    docContents.set(relPath, content);
 
     const breadcrumbs = extractBreadcrumbs(content);
     if (!breadcrumbs) {
@@ -179,15 +181,19 @@ async function parseAllBreadcrumbs(entries, projectRoot) {
     }
   }
 
-  return { nodes, docStatus };
+  return { nodes, docStatus, docContents };
 }
 
-function validateGates(nodes, docStatus) {
+function validateGates(nodes, docStatus, docContents) {
   const results = {
     'DOC-01': [],
     'DOC-02': [],
     'DOC-03': [],
-    'DOC-04': []
+    'DOC-04': [],
+    'DOC-05': [],
+    'DOC-06': [],
+    'DOC-07': [],
+    'DOC-08': []
   };
 
   for (const [pathKey, status] of docStatus.entries()) {
@@ -218,6 +224,18 @@ function validateGates(nodes, docStatus) {
 
   const cycles = detectCycles(nodes);
   results['DOC-04'] = cycles.map(cycle => ({ ...cycle, severity: 'warn' }));
+
+  const headingViolations = validateHeadings(docContents);
+  results['DOC-05'].push(...headingViolations);
+
+  const tocViolations = validateTableOfContents(docContents);
+  results['DOC-06'].push(...tocViolations);
+
+  const namingViolations = validateNamingRules(docContents, docStatus, nodes);
+  results['DOC-07'].push(...namingViolations);
+
+  const scopeViolations = validateScopeSections(docContents);
+  results['DOC-08'].push(...scopeViolations.map(v => ({ ...v, severity: 'warn' })));
 
   return results;
 }
@@ -255,6 +273,307 @@ function detectCycles(nodes) {
   }
 
   return cycles;
+}
+
+function validateHeadings(docContents) {
+  const violations = [];
+
+  for (const [pathKey, content] of docContents.entries()) {
+    const headings = extractHeadings(content);
+    const numberingState = [];
+
+    for (const heading of headings) {
+      if (heading.level < 2 || heading.level > 3) continue;
+      const text = heading.text.trim();
+      if (/^目次$/i.test(text)) continue;
+
+      const match = text.match(/^(\d+(?:\.\d+)*)\.\s+.+$/);
+      if (!match) {
+        violations.push({
+          path: pathKey,
+          heading: text,
+          message: `章番号形式ではありません: "${text}"`,
+          severity: 'error'
+        });
+        continue;
+      }
+
+      const numbers = match[1].split('.').map(num => parseInt(num, 10));
+      const depth = heading.level - 2;
+
+      if (numbers.length !== depth + 1 || numbers.some(Number.isNaN)) {
+        violations.push({
+          path: pathKey,
+          heading: text,
+          message: `見出しレベルと章番号の整合が取れていません: "${text}"`,
+          severity: 'error'
+        });
+        continue;
+      }
+
+      let prefixMismatch = false;
+      for (let i = 0; i < depth; i++) {
+        if (typeof numberingState[i] === 'undefined') {
+          prefixMismatch = true;
+          break;
+        }
+        if (numberingState[i] !== numbers[i]) {
+          prefixMismatch = true;
+          break;
+        }
+      }
+
+      if (prefixMismatch) {
+        violations.push({
+          path: pathKey,
+          heading: text,
+          message: `上位レベルの章番号が連番になっていません: "${text}"`,
+          severity: 'error'
+        });
+        continue;
+      }
+
+      const previous = numberingState[depth];
+      const expected = typeof previous === 'undefined'
+        ? (depth === 0 ? numbers[depth] : 1)
+        : previous + 1;
+
+      if (numbers[depth] !== expected) {
+        violations.push({
+          path: pathKey,
+          heading: text,
+          message: `章番号は ${expected} を期待しました (実際: ${numbers[depth]})`,
+          severity: 'error'
+        });
+        continue;
+      }
+
+      numberingState[depth] = numbers[depth];
+      numberingState.length = depth + 1;
+    }
+  }
+
+  return violations;
+}
+
+function validateTableOfContents(docContents) {
+  const violations = [];
+
+  for (const [pathKey, content] of docContents.entries()) {
+    const tocSection = extractSectionByTitle(content, [/^目次$/i]);
+    if (!tocSection) {
+      violations.push({ path: pathKey, message: '## 目次 セクションが見つかりません', severity: 'error' });
+      continue;
+    }
+
+    const links = Array.from(tocSection.content.matchAll(/\[(.+?)\]\(#(.+?)\)/g));
+    if (links.length === 0) {
+      violations.push({ path: pathKey, message: '目次に有効なリンクが存在しません', severity: 'error' });
+      continue;
+    }
+
+    const headings = extractHeadings(content);
+    const headingSlugs = new Set(headings.map(h => slugifyHeading(h.text)).filter(Boolean));
+    for (const [, , anchor] of links) {
+      const normalized = anchor.trim().toLowerCase();
+      if (!headingSlugs.has(normalized)) {
+        violations.push({
+          path: pathKey,
+          link: anchor,
+          message: `目次リンクのアンカーが本文に存在しません: #${anchor}`,
+          severity: 'error'
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
+function validateNamingRules(docContents, docStatus, nodes) {
+  const violations = [];
+  const allPaths = new Set([...docContents.keys(), ...docStatus.keys()]);
+
+  for (const pathKey of allPaths) {
+    if (!pathKey) continue;
+    const baseName = path.basename(pathKey);
+    if (!baseName) continue;
+    if (baseName.toLowerCase() === 'index.mdc') continue;
+
+    const lower = baseName.toLowerCase();
+    if (!lower.endsWith('.mdc') && !lower.endsWith('.md')) {
+      violations.push({
+        path: pathKey,
+        message: `ファイル拡張子が無効です (.mdc/.md のみ許可): ${baseName}`,
+        severity: 'error'
+      });
+      continue;
+    }
+
+    const layer = inferLayerFromPath(pathKey, nodes);
+    const pattern = selectNamingPattern(layer);
+    if (!pattern.test(baseName)) {
+      violations.push({
+        path: pathKey,
+        message: `命名規則に準拠していません (${layer || 'GENERAL'}): ${baseName}`,
+        severity: 'error'
+      });
+    }
+  }
+
+  return violations;
+}
+
+function validateScopeSections(docContents) {
+  const violations = [];
+
+  for (const [pathKey, content] of docContents.entries()) {
+    let hasInclude = false;
+    let hasExclude = false;
+
+    const includeSection = extractSectionByTitle(content, [/^(扱う内容|in\s*scope)$/i]);
+    if (includeSection) {
+      hasInclude = hasListWithContent(includeSection.content);
+    }
+
+    const excludeSection = extractSectionByTitle(content, [/^(扱わない内容|out\s*of\s*scope|非スコープ)$/i]);
+    if (excludeSection) {
+      hasExclude = hasListWithContent(excludeSection.content);
+    }
+
+    if (!hasInclude || !hasExclude) {
+      const scopeSection = extractSectionByTitle(content, [/^scope$/i]);
+      if (scopeSection) {
+        const bullets = extractListLines(scopeSection.content);
+        const includeKeywords = bullets.some(line => /(含まれる|in\s*scope|対象)/i.test(line));
+        const excludeKeywords = bullets.some(line => /(含まれない|out\s*of\s*scope|除外|非対象)/i.test(line));
+        if (bullets.length > 0 && includeKeywords && excludeKeywords) {
+          hasInclude = true;
+          hasExclude = true;
+        }
+      }
+    }
+
+    if (!hasInclude || !hasExclude) {
+      violations.push({
+        path: pathKey,
+        message: 'Scopeセクションに「扱う内容」と「扱わない内容」が明示されていません',
+        severity: 'warn'
+      });
+    }
+  }
+
+  return violations;
+}
+
+function extractHeadings(content) {
+  const headings = [];
+  const lines = content.split('\n');
+  let inCodeBlock = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (line.trim().startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+
+    const match = line.match(/^(#{1,6})\s+(.*)$/);
+    if (match) {
+      headings.push({ level: match[1].length, text: match[2].trim() });
+    }
+  }
+
+  return headings;
+}
+
+function extractSectionByTitle(content, titlePatterns) {
+  const lines = content.split('\n');
+  let startIndex = -1;
+  let startLevel = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const match = line.match(/^(#{2,6})\s+(.*)$/);
+    if (!match) continue;
+
+    const headingText = match[2].trim();
+    if (titlePatterns.some(pattern => pattern.test(headingText))) {
+      startIndex = i;
+      startLevel = match[1].length;
+      break;
+    }
+  }
+
+  if (startIndex === -1) return null;
+
+  const sectionLines = [];
+  for (let j = startIndex + 1; j < lines.length; j++) {
+    const line = lines[j];
+    const trimmed = line.trim();
+    const match = trimmed.match(/^(#{1,6})\s+/);
+    if (match && match[1].length <= startLevel) break;
+    sectionLines.push(line);
+  }
+
+  return { level: startLevel, content: sectionLines.join('\n') };
+}
+
+function slugifyHeading(text) {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\u3000/g, ' ')
+    .replace(/["'`]/g, '')
+    .replace(/[^\p{Letter}\p{Number}\s\-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function inferLayerFromPath(pathKey, nodes) {
+  const normalized = pathKey.replace(/\\/g, '/');
+  if (nodes.has(pathKey) && nodes.get(pathKey).layer) {
+    return nodes.get(pathKey).layer.toUpperCase();
+  }
+
+  const segments = normalized.split('/');
+  const docsIndex = segments.indexOf('docs');
+  if (docsIndex !== -1 && segments.length > docsIndex + 1) {
+    return segments[docsIndex + 1].toUpperCase();
+  }
+
+  return null;
+}
+
+function selectNamingPattern(layer) {
+  switch (layer) {
+    case 'PRD':
+      return /^PRD_[A-Z0-9][A-Za-z0-9_-]*\.mdc$/;
+    case 'ARCH':
+      return /^[A-Z0-9][A-Za-z0-9_-]*\.(mdc|md)$/;
+    case 'QA':
+      return /^[A-Z0-9][A-Za-z0-9_-]*\.mdc$/;
+    case 'UX':
+    case 'API':
+    case 'DATA':
+    case 'DEVELOPMENT':
+    case 'STRATEGY':
+      return /^[A-Z0-9][A-Za-z0-9_-]*\.mdc$/;
+    default:
+      return /^[A-Z0-9][A-Za-z0-9_-]*\.mdc$/;
+  }
+}
+
+function hasListWithContent(sectionText) {
+  const bullets = extractListLines(sectionText);
+  return bullets.some(line => line.trim().length > 2);
+}
+
+function extractListLines(sectionText) {
+  const lines = sectionText.split('\n');
+  return lines.filter(line => line.trim().match(/^[-*\d]+[.)]?\s+.+/));
 }
 
 function extractSection(text, startHeader, stopHeaderPrefix = '## ') {
@@ -303,13 +622,17 @@ function outputResults(payload, format) {
   console.log('Context File:', payload.contextPath);
   console.log('');
 
-  const order = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04'];
+  const order = ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-04', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08'];
   for (const gateId of order) {
     const violations = payload.results[gateId];
-    const status = violations.length === 0 ? 'PASS' : (gateId === 'DOC-04' ? 'WARN' : 'FAIL');
+    const status = violations.length === 0
+      ? 'PASS'
+      : (gateId === 'DOC-04' || gateId === 'DOC-08' ? 'WARN' : 'FAIL');
     console.log(`${gateId}: ${status} (${violations.length}件)`);
     for (const violation of violations) {
-      const detail = violation.cycle ? violation.cycle.join(' → ') : (violation.link || violation.layer || '');
+      const detail = violation.cycle
+        ? violation.cycle.join(' → ')
+        : (violation.link || violation.layer || violation.heading || '');
       console.log(`  - ${violation.path}${detail ? ` — ${detail}` : ''}`);
       console.log(`    ${violation.message}`);
     }
