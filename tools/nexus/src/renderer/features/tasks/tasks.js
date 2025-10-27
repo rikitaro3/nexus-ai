@@ -248,6 +248,49 @@
     return;
   }
 
+  const STORAGE_KEYS = {
+    filter: 'nexus.tasks.filter',
+    category: 'nexus.tasks.category'
+  };
+
+  function storageAvailable() {
+    return typeof window !== 'undefined' && !!window.localStorage;
+  }
+
+  function readStorage(key) {
+    if (!storageAvailable()) return null;
+    try {
+      const value = window.localStorage.getItem(key);
+      return value == null ? null : value;
+    } catch (err) {
+      console.warn('[Tasks] Failed to read storage:', key, err);
+      return null;
+    }
+  }
+
+  function writeStorage(key, value) {
+    if (!storageAvailable()) return;
+    try {
+      if (value && value.length > 0) {
+        window.localStorage.setItem(key, value);
+      } else {
+        window.localStorage.removeItem(key);
+      }
+    } catch (err) {
+      console.warn('[Tasks] Failed to persist storage:', key, err);
+    }
+  }
+
+  function persistFilterValue(raw) {
+    const trimmed = (raw || '').trim();
+    writeStorage(STORAGE_KEYS.filter, trimmed);
+  }
+
+  function persistCategoryValue(category) {
+    const normalized = category && category.trim() ? category.trim() : '';
+    writeStorage(STORAGE_KEYS.category, normalized);
+  }
+
   const listEl = document.getElementById('tasks-list');
   const catsEl = document.getElementById('tasks-categories');
   const detailEl = document.getElementById('task-detail');
@@ -262,11 +305,21 @@
   const catsEmptyEl = document.getElementById('tasks-categories-empty');
   const listEmptyEl = document.getElementById('tasks-list-empty');
 
+  const persistedFilterRaw = readStorage(STORAGE_KEYS.filter) || '';
+  const persistedCategory = readStorage(STORAGE_KEYS.category);
+
+  if (filterInput) {
+    filterInput.value = persistedFilterRaw;
+  }
+
   if (!listEl || !catsEl || !detailEl) return;
 
   let tasks = [];
-  let searchQuery = '';
-  let selectedTaskCategory = null;
+  let searchQueryRaw = persistedFilterRaw.trim();
+  let searchQuery = searchQueryRaw.toLowerCase();
+  let selectedTaskCategory = persistedCategory && persistedCategory.trim()
+    ? persistedCategory.trim()
+    : null;
   let selectedTaskId = null;
   let featsRegistry = null;
 
@@ -768,7 +821,7 @@
     }
   }
   function getVisibleTasks() {
-    const query = searchQuery ? searchQuery.toLowerCase() : '';
+    const query = searchQuery;
     return tasks.filter(t => {
       const matchesCategory = selectedTaskCategory ? t.category === selectedTaskCategory : true;
       const haystack = (t.title + ' ' + t.category + ' ' + (t.featId || '')).toLowerCase();
@@ -798,6 +851,10 @@
       return;
     }
     toggleEmpty(catsEmptyEl, false);
+    if (selectedTaskCategory && !cats.has(selectedTaskCategory)) {
+      selectedTaskCategory = null;
+      persistCategoryValue('');
+    }
     for (const [c, n] of Array.from(cats.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
       const li = document.createElement('li');
       li.dataset.category = c;
@@ -810,6 +867,7 @@
           selectedTaskCategory = c;
           selectedTaskId = null;
         }
+        persistCategoryValue(selectedTaskCategory);
         updateCategorySelection();
         renderList();
       });
@@ -942,18 +1000,18 @@
     await renderPromptDictionaryUI(t);
     function getPath(v){return v?v.split('#')[0].trim():'';}
     const openBy = async (key)=>{ const p=featSuggest&&getPath(featSuggest.links[key]); if(p) await window.docs.open(p); };
-    document.getElementById('task-save').addEventListener('click', ()=>{ t.title=document.getElementById('task-title').value.trim(); t.category=document.getElementById('task-category').value.trim()||'Uncategorized'; t.priority=document.getElementById('task-priority').value; t.status=document.getElementById('task-status').value; t.featId=document.getElementById('task-feat').value.trim(); t.notes=document.getElementById('task-notes').value; const bdTextarea=document.getElementById('task-breakdown-prompt'); if(bdTextarea) t.breakdownPrompt=bdTextarea.value; const bdStatus=document.getElementById('task-breakdown-status'); if(bdStatus) t.breakdownStatus=bdStatus.value; t.promptPartIds = Array.from(promptSelection); t.updatedAt=new Date().toISOString(); selectedTaskCategory = t.category; selectedTaskId = t.id; renderCategories(tasks); renderList(); });
+    document.getElementById('task-save').addEventListener('click', ()=>{ t.title=document.getElementById('task-title').value.trim(); t.category=document.getElementById('task-category').value.trim()||'Uncategorized'; t.priority=document.getElementById('task-priority').value; t.status=document.getElementById('task-status').value; t.featId=document.getElementById('task-feat').value.trim(); t.notes=document.getElementById('task-notes').value; const bdTextarea=document.getElementById('task-breakdown-prompt'); if(bdTextarea) t.breakdownPrompt=bdTextarea.value; const bdStatus=document.getElementById('task-breakdown-status'); if(bdStatus) t.breakdownStatus=bdStatus.value; t.promptPartIds = Array.from(promptSelection); t.updatedAt=new Date().toISOString(); selectedTaskCategory = t.category; selectedTaskId = t.id; persistCategoryValue(selectedTaskCategory); renderCategories(tasks); renderList(); });
     if (featSuggest) { const map={PRD:'task-open-prd',UX:'task-open-ux',API:'task-open-api',DATA:'task-open-data',QA:'task-open-qa'}; for (const k of Object.keys(map)) { const btn=document.getElementById(map[k]); if(btn) btn.addEventListener('click',()=>openBy(k)); } }
     const genBtn=document.getElementById('task-generate-breakdown'); const copyBtn=document.getElementById('task-copy-breakdown');
     if(genBtn) genBtn.addEventListener('click', async ()=>{ const featId=document.getElementById('task-feat').value.trim(); const reg=await loadFeats(); const item=reg.items.find(i=>i.id===featId); const links=item?item.links:{}; let prompt=buildBreakdownPrompt({ title:document.getElementById('task-title').value.trim(), category:document.getElementById('task-category').value.trim(), priority:document.getElementById('task-priority').value, featId, links }); await ensurePromptLibraryLoaded(); const extraItems=getSelectedPromptItems(); if(extraItems.length){ const blocks=extraItems.map(part=>{ const lines=[]; lines.push(`### ${part.title||part.id}`); if(part.description) lines.push(part.description); if(part.body) lines.push(part.body); if(part.tags&&part.tags.length) lines.push(`タグ: ${part.tags.join(', ')}`); return lines.filter(Boolean).join('\n'); }).filter(Boolean); if(blocks.length){ prompt = [prompt, '', '## 追加プロンプトパーツ', blocks.join('\n\n')].join('\n').replace(/\n{3,}/g,'\n\n').trim(); }} const ta=document.getElementById('task-breakdown-prompt'); if(ta) ta.value=prompt; t.breakdownPrompt=prompt; t.promptPartIds = Array.from(promptSelection); t.lastBreakdownAt=new Date().toISOString(); const stamp=document.getElementById('task-breakdown-stamp'); if(stamp) stamp.textContent=`Last: ${new Date(t.lastBreakdownAt).toLocaleString('ja-JP')}`; });
     if(copyBtn) copyBtn.addEventListener('click', async ()=>{ const ta=document.getElementById('task-breakdown-prompt'); const txt=ta?ta.value:''; if(!txt){ alert('Breakdown Promptが空です'); return;} try{ await navigator.clipboard.writeText(txt); alert('コピーしました（Cursor autoに貼り付けてください）'); }catch(e){ alert('クリップボードへのコピーに失敗しました'); } });
   }
   function escapeHtml(s){return String(s||'').replace(/[&<>]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));}
-  if (bulkImportBtn) bulkImportBtn.addEventListener('click', ()=>{ const text=(bulkTextarea&&bulkTextarea.value)||''; if(!text.trim()){alert('貼り付け欄が空です'); return;} const newOnes=parsePasted(text); if(!newOnes.length){ alert('取り込み対象がありません'); return;} tasks=tasks.concat(newOnes); searchQuery=''; if(filterInput) filterInput.value=''; selectedTaskCategory=newOnes[0].category; selectedTaskId=newOnes[0].id; renderCategories(tasks); renderList(); bulkTextarea.value=''; alert(`${newOnes.length}件を取り込みました`); });
-  if (addOneBtn) addOneBtn.addEventListener('click', ()=>{ const cat=(addCatInput&&addCatInput.value.trim())||'Uncategorized'; const title=(addTitleInput&&addTitleInput.value.trim())||''; if(!title){alert('タイトルを入力してください'); return;} const [item]=parsePasted(`【${cat}】 ${title}`); tasks.push(item); selectedTaskCategory=item.category; selectedTaskId=item.id; searchQuery=''; if(filterInput) filterInput.value=''; renderCategories(tasks); renderList(); if(addTitleInput) addTitleInput.value=''; });
+  if (bulkImportBtn) bulkImportBtn.addEventListener('click', ()=>{ const text=(bulkTextarea&&bulkTextarea.value)||''; if(!text.trim()){alert('貼り付け欄が空です'); return;} const newOnes=parsePasted(text); if(!newOnes.length){ alert('取り込み対象がありません'); return;} tasks=tasks.concat(newOnes); searchQueryRaw=''; searchQuery=''; persistFilterValue(''); if(filterInput) filterInput.value=''; selectedTaskCategory=newOnes[0].category; persistCategoryValue(selectedTaskCategory); selectedTaskId=newOnes[0].id; renderCategories(tasks); renderList(); bulkTextarea.value=''; alert(`${newOnes.length}件を取り込みました`); });
+  if (addOneBtn) addOneBtn.addEventListener('click', ()=>{ const cat=(addCatInput&&addCatInput.value.trim())||'Uncategorized'; const title=(addTitleInput&&addTitleInput.value.trim())||''; if(!title){alert('タイトルを入力してください'); return;} const [item]=parsePasted(`【${cat}】 ${title}`); tasks.push(item); selectedTaskCategory=item.category; persistCategoryValue(selectedTaskCategory); selectedTaskId=item.id; searchQueryRaw=''; searchQuery=''; persistFilterValue(''); if(filterInput) filterInput.value=''; renderCategories(tasks); renderList(); if(addTitleInput) addTitleInput.value=''; });
   saveBtn.addEventListener('click', async ()=>{ const res=await window.tasks.writeJson(tasks); alert(res.success?'保存しました':`保存失敗: ${res.error}`); });
   exportBtn.addEventListener('click', async ()=>{ const lines=tasks.map(t=>`- [${t.status}] (${t.priority}) ${t.title} ${t.featId? '['+t.featId+']':''} #${t.category}`); const md=lines.join('\n'); const res=await window.tasks.appendMdc('human_todo.mdc', md); alert(res.success?'human_todo.mdcに追記しました':`エクスポート失敗: ${res.error}`); });
-  filterInput.addEventListener('input', ()=>{ searchQuery=filterInput.value.trim().toLowerCase(); renderList(); });
+  if (filterInput) filterInput.addEventListener('input', ()=>{ const raw=filterInput.value.trim(); searchQueryRaw=raw; searchQuery=raw.toLowerCase(); persistFilterValue(raw); renderList(); });
   (async ()=>{ const res=await window.tasks.readJson(); tasks=res.success&&Array.isArray(res.data)?res.data.map(applyTaskDefaults):[]; if(tasks.length){ selectedTaskId=tasks[0].id; } renderCategories(tasks); renderList(); })();
 })();
 
