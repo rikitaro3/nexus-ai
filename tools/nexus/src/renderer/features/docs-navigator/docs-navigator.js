@@ -352,6 +352,19 @@
     return `<li><strong>Modify</strong>: ${pathLabel}${actions}</li>`;
   }
 
+  function renderAutofixFiles(summary) {
+    const files = Array.isArray(summary?.files) ? summary.files.filter(Boolean) : [];
+    if (!files.length) return '';
+    const items = files.map(file => {
+      const label = escapeHtml(file);
+      return `<li><button class="btn btn-ghost btn-xs" data-open-autofix-file="${label}">${label}</button></li>`;
+    }).join('');
+    return `
+      <div class="rules-pipeline__diff-detail">修復ファイル (${files.length}件)</div>
+      <ul class="rules-pipeline__list">${items}</ul>
+    `;
+  }
+
   function renderAutofix(summary) {
     if (!summary) {
       return '<span class="rules-pipeline__diff-empty">自動修復はまだ実行されていません。</span>';
@@ -359,6 +372,7 @@
     const header = `<strong>自動修復 (${formatTimestamp(summary.timestamp)})</strong>`;
     const statusLabel = summary.status === 'ok' ? '成功' : '失敗';
     const statusLine = `<div>状態: ${escapeHtml(statusLabel)} (exit ${summary.exitCode}${summary.dryRun ? ', ドライラン' : ''})</div>`;
+    const fileList = renderAutofixFiles(summary);
     const operations = Array.isArray(summary.operations) && summary.operations.length
       ? `<ul class="rules-pipeline__list">${summary.operations.map(renderAutofixOperation).join('')}</ul>`
       : '<div class="rules-pipeline__diff-empty">適用された操作はありません。</div>';
@@ -371,7 +385,7 @@
     const rawOutput = summary.rawOutput
       ? `<details><summary>自動修復ログを表示</summary><pre>${escapeHtml(summary.rawOutput)}</pre>${summary.stderr ? `<pre>${escapeHtml(summary.stderr)}</pre>` : ''}</details>`
       : '';
-    return `${header}${statusLine}${operations}${warnings}${errors}${rawOutput}`;
+    return `${header}${statusLine}${fileList}${operations}${warnings}${errors}${rawOutput}`;
   }
 
   function renderRepoDiff(diff) {
@@ -534,6 +548,16 @@
     }
   }
 
+  async function openAutofixFile(relPath) {
+    if (!relPath) return;
+    try {
+      await window.docs.open(relPath);
+    } catch (err) {
+      console.error('[Docs Navigator] Failed to open autofix file', err);
+      setTreeStatus('修復ファイルを開けませんでした', 'error');
+    }
+  }
+
   async function applyRulesWatcherContext(nextPath) {
     if (!rulesWatcherApi || typeof rulesWatcherApi.setContextPath !== 'function') return;
     const normalized = typeof nextPath === 'string' && nextPath.trim() ? nextPath.trim() : null;
@@ -574,6 +598,13 @@
     if (pipelineAutofixEl) {
       const autofixSummary = (snapshot && snapshot.autofix) || event.autofix || null;
       pipelineAutofixEl.innerHTML = renderAutofix(autofixSummary);
+      pipelineAutofixEl.querySelectorAll('[data-open-autofix-file]').forEach(btn => {
+        btn.addEventListener('click', async e => {
+          e.preventDefault();
+          const rel = btn.getAttribute('data-open-autofix-file');
+          await openAutofixFile(rel);
+        });
+      });
     }
     if (pipelineRepoDiffEl) {
       const repoDiff = (snapshot && snapshot.repoDiff) || event.repoDiff || null;

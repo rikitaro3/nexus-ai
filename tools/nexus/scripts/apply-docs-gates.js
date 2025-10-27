@@ -198,6 +198,8 @@ async function applyDocsGatesAutofix(options) {
     });
   }
 
+  const affectedFiles = collectAffectedFiles(operations);
+
   const summary = {
     status: errors.length ? 'failed' : 'ok',
     timestamp,
@@ -206,8 +208,12 @@ async function applyDocsGatesAutofix(options) {
     dryRun: !!options.dryRun,
     operations,
     renameMap: renamePlan,
+    files: affectedFiles,
     warnings,
-    errors
+    errors,
+    rawOutput: '',
+    stderr: '',
+    exitCode: 0
   };
 
   return summary;
@@ -816,6 +822,22 @@ function slugify(text) {
 
 function normalizePath(value) {
   return value.replace(/\\/g, '/');
+}
+
+function collectAffectedFiles(operations) {
+  if (!Array.isArray(operations) || operations.length === 0) {
+    return [];
+  }
+  const files = new Set();
+  for (const op of operations) {
+    if (!op || typeof op !== 'object') continue;
+    if (op.type === 'modify' && op.path) {
+      files.add(normalizePath(op.path));
+    } else if (op.type === 'rename' && op.to) {
+      files.add(normalizePath(op.to));
+    }
+  }
+  return Array.from(files).sort((a, b) => a.localeCompare(b));
 }
 
 function escapeRegExp(text) {

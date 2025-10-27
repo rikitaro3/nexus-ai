@@ -62,6 +62,11 @@ describe('apply-docs-gates autofix', () => {
     const renamedPath = renameOperation?.to as string;
     const updatedContext = await fs.readFile(contextPath, 'utf8');
     expect(updatedContext).toContain(renamedPath);
+    expect(summary.files).toContain(renamedPath);
+    const touchedContext = summary.operations.some(op => op.type === 'modify' && op.path === 'context.mdc');
+    if (touchedContext) {
+      expect(summary.files).toContain('context.mdc');
+    }
 
     const updatedDoc = await fs.readFile(path.join(tempDir, renamedPath), 'utf8');
     expect(updatedDoc).toContain('> Breadcrumbs');
