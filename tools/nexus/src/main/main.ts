@@ -238,9 +238,20 @@ ipcMain.handle('dialog:selectContextFile', async () => {
 // Docs
 ipcMain.handle('docs:read', withPathValidation(async (event, validation) => {
   try {
-    logger.debug('Reading document', { relPath: validation.normalized, target: validation.target, repoRoot: validation.repoRoot });
+    const targetForLog = validation.allowedByWhitelist
+      ? validation.target
+      : path.relative(validation.repoRoot, validation.target);
+    logger.debug('Reading document', {
+      relPath: validation.normalized,
+      target: validation.target,
+      repoRoot: validation.repoRoot,
+      allowedByWhitelist: validation.allowedByWhitelist === true
+    });
     const content = fs.readFileSync(validation.target, 'utf8');
-    logger.info('Document read successfully', { target: path.relative(validation.repoRoot, validation.target) });
+    logger.info('Document read successfully', {
+      target: targetForLog,
+      allowedByWhitelist: validation.allowedByWhitelist === true
+    });
     return { success: true, content };
   } catch (e) {
     logger.error('Failed to read document', { error: (e as Error).message, target: validation.target });
@@ -250,10 +261,20 @@ ipcMain.handle('docs:read', withPathValidation(async (event, validation) => {
 
 ipcMain.handle('docs:open', withPathValidation(async (event, validation) => {
   try {
-    logger.debug('Opening document', { relPath: validation.normalized });
+    const targetForLog = validation.allowedByWhitelist
+      ? validation.target
+      : path.relative(validation.repoRoot, validation.target);
+    logger.debug('Opening document', {
+      relPath: validation.normalized,
+      target: validation.target,
+      allowedByWhitelist: validation.allowedByWhitelist === true
+    });
     const result = await shell.openPath(validation.target);
     if (result) throw new Error(result);
-    logger.info('Document opened successfully', { target: path.relative(validation.repoRoot, validation.target) });
+    logger.info('Document opened successfully', {
+      target: targetForLog,
+      allowedByWhitelist: validation.allowedByWhitelist === true
+    });
     return { success: true };
   } catch (e) {
     logger.error('Failed to open document', { error: (e as Error).message, target: validation.target });

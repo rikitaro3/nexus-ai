@@ -159,6 +159,16 @@ if (!target.startsWith(repoRoot)) {
 - システムファイル（`/etc/`, `C:\Windows\`など）へのアクセスは自動的に拒否される
 - 実行可能ファイル（`.exe`, `.bat`など）への書き込みは行っていない
 
+### 3.3 コンテキストファイル例外
+
+`context.mdc`（および`context.md`）はDocs Navigatorの基盤データであり、ユーザーがSettingsタブからリポジトリ外のファイルを選択するユースケースが存在します。そのため、`security.ts`の`validatePath`では以下の条件を満たす場合に限り絶対パスをホワイトリストで許可します。
+
+- 対象ファイル名が`context.mdc`または`context.md`
+- ユーザー入力が絶対パスである
+- ファイルが実際に存在する
+
+許可された場合でも`PathValidationResult`に`allowedByWhitelist`フラグを付与し、`main.ts`側の`docs:read`/`docs:open`ハンドラーはログ出力時にフラグを添えて監査証跡を残します。これにより、例外運用の根拠（Docs Navigatorのコンテキスト読み込み）と、想定外の利用を検知するためのログ方針（フラグ付きのinfoログ）が明確になります。
+
 ---
 
 関連文書:
