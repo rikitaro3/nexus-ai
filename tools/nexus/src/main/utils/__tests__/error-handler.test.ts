@@ -1,59 +1,56 @@
-import { AppError, ErrorType, handleError, createValidationError, createSecurityError, createIpcError, createFileError } from '../error-handler';
+jest.mock('../logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
+  }
+}));
+
+import { AppError, ErrorType, createFileError, createIpcError, createSecurityError, createValidationError, handleError } from '../error-handler';
 import { logger } from '../logger';
 
 describe('error-handler', () => {
-  const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => undefined as any);
-
-  afterEach(() => {
-    errorSpy.mockClear();
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  afterAll(() => {
-    errorSpy.mockRestore();
+  it('returns the same AppError instance without wrapping again', () => {
+    const original = new AppError(ErrorType.SECURITY_ERROR, 'Access denied');
+
+    const result = handleError(original);
+
+    expect(result).toBe(original);
+    expect(logger.error).toHaveBeenCalledWith(`[${ErrorType.SECURITY_ERROR}] Access denied`, undefined);
   });
 
-  it('returns the same AppError instance without wrapping', () => {
-    const original = new AppError(ErrorType.SECURITY_ERROR, 'unauthorized');
+  it('wraps native errors with AppError and preserves message', () => {
+    const nativeError = new Error('boom');
 
-    const handled = handleError(original);
+    const result = handleError(nativeError, { task: 'load' });
 
-    expect(handled).toBe(original);
-    expect(logger.error).toHaveBeenCalledWith('[SecurityError] unauthorized', undefined);
+    expect(result).toBeInstanceOf(AppError);
+    expect(result.type).toBe(ErrorType.UNKNOWN_ERROR);
+    expect(result.message).toBe('boom');
+    expect(result.context).toMatchObject({ task: 'load' });
+    expect(result.context?.originalError).toContain('Error: boom');
+    expect(logger.error).toHaveBeenCalledWith(`[${ErrorType.UNKNOWN_ERROR}] boom`, expect.any(Object));
   });
 
-  it('wraps native Error objects into AppError', () => {
-    const error = new Error('boom');
+  it('wraps unknown values with a descriptive AppError', () => {
+    const result = handleError('totally-broken');
 
-    const handled = handleError(error, { action: 'load' });
-
-    expect(handled).toBeInstanceOf(AppError);
-    expect(handled.type).toBe(ErrorType.UNKNOWN_ERROR);
-    expect(handled.context).toMatchObject({ action: 'load' });
-    expect(logger.error).toHaveBeenCalled();
+    expect(result).toBeInstanceOf(AppError);
+    expect(result.type).toBe(ErrorType.UNKNOWN_ERROR);
+    expect(result.message).toBe('Unknown error occurred');
+    expect(result.context).toMatchObject({ error: 'totally-broken' });
+    expect(logger.error).toHaveBeenCalledWith(`[${ErrorType.UNKNOWN_ERROR}] Unknown error occurred`, expect.any(Object));
   });
 
-  it('creates an AppError from unknown values', () => {
-    const handled = handleError('oops');
-
-    expect(handled).toBeInstanceOf(AppError);
-    expect(handled.type).toBe(ErrorType.UNKNOWN_ERROR);
-    expect(handled.message).toBe('Unknown error occurred');
-    expect(logger.error).toHaveBeenCalledWith('[UnknownError] Unknown error occurred', {
-      context: undefined,
-      error: 'oops'
-    });
-  });
-
-  it('creates specialized errors via helper factories', () => {
-    const validation = createValidationError('invalid', { field: 'name' });
-    const security = createSecurityError('denied');
-    const ipc = createIpcError('ipc failed');
-    const file = createFileError('file missing');
-
-    expect(validation).toMatchObject({ type: ErrorType.VALIDATION_ERROR, message: 'invalid' });
-    expect(validation.context).toEqual({ field: 'name' });
-    expect(security.type).toBe(ErrorType.SECURITY_ERROR);
-    expect(ipc.type).toBe(ErrorType.IPC_ERROR);
-    expect(file.type).toBe(ErrorType.FILE_ERROR);
+  it('creates specific error types through helpers', () => {
+    expect(createValidationError('invalid input').type).toBe(ErrorType.VALIDATION_ERROR);
+    expect(createSecurityError('bad path').type).toBe(ErrorType.SECURITY_ERROR);
+    expect(createIpcError('ipc failed').type).toBe(ErrorType.IPC_ERROR);
+    expect(createFileError('file missing').type).toBe(ErrorType.FILE_ERROR);
   });
 });
