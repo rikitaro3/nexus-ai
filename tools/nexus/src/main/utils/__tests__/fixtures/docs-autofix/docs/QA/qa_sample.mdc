@@ -1,0 +1,9 @@
+# QA Sample Document
+
+このドキュメントはQuality Gatesの自動修復テスト用です。
+
+## Purpose
+- 自動修復でBreadcrumbsや章番号を補完する必要があります。
+
+## Details
+セクション構成も正しくありません。

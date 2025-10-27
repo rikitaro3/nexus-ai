@@ -135,6 +135,8 @@
     <div class="rules-pipeline__status" data-role="status">Quality Gatesの状態を取得中...</div>
     <div class="rules-pipeline__summary" data-role="summary"></div>
     <div class="rules-pipeline__diff" data-role="diff"></div>
+    <div class="rules-pipeline__autofix" data-role="autofix"></div>
+    <div class="rules-pipeline__repo-diff" data-role="repo-diff"></div>
     <div class="rules-pipeline__analytics" data-role="analytics"></div>
     <div class="rules-pipeline__impacts" data-role="impacts"></div>
     <div class="rules-pipeline__logs" data-role="logs"></div>
@@ -151,6 +153,8 @@
   const pipelineStatusEl = pipelinePanel.querySelector('[data-role="status"]');
   const pipelineSummaryEl = pipelinePanel.querySelector('[data-role="summary"]');
   const pipelineDiffEl = pipelinePanel.querySelector('[data-role="diff"]');
+  const pipelineAutofixEl = pipelinePanel.querySelector('[data-role="autofix"]');
+  const pipelineRepoDiffEl = pipelinePanel.querySelector('[data-role="repo-diff"]');
   const pipelineAnalyticsEl = pipelinePanel.querySelector('[data-role="analytics"]');
   const pipelineImpactsEl = pipelinePanel.querySelector('[data-role="impacts"]');
   const pipelineLogsEl = pipelinePanel.querySelector('[data-role="logs"]');
@@ -331,6 +335,71 @@
     `;
   }
 
+  function renderAutofixOperation(operation) {
+    if (!operation || typeof operation !== 'object') {
+      return '<li>不明な操作</li>';
+    }
+    if (operation.type === 'rename') {
+      const from = escapeHtml(operation.from || '不明なパス');
+      const to = escapeHtml(operation.to || '不明なパス');
+      const reason = operation.reason ? ` (${escapeHtml(operation.reason)})` : '';
+      return `<li><strong>Rename</strong>: ${from} → ${to}${reason}</li>`;
+    }
+    const pathLabel = escapeHtml(operation.path || '不明なファイル');
+    const actions = Array.isArray(operation.actions) && operation.actions.length
+      ? `<ul class="rules-pipeline__list">${operation.actions.map(action => `<li>${escapeHtml(action)}</li>`).join('')}</ul>`
+      : '';
+    return `<li><strong>Modify</strong>: ${pathLabel}${actions}</li>`;
+  }
+
+  function renderAutofix(summary) {
+    if (!summary) {
+      return '<span class="rules-pipeline__diff-empty">自動修復はまだ実行されていません。</span>';
+    }
+    const header = `<strong>自動修復 (${formatTimestamp(summary.timestamp)})</strong>`;
+    const statusLabel = summary.status === 'ok' ? '成功' : '失敗';
+    const statusLine = `<div>状態: ${escapeHtml(statusLabel)} (exit ${summary.exitCode}${summary.dryRun ? ', ドライラン' : ''})</div>`;
+    const operations = Array.isArray(summary.operations) && summary.operations.length
+      ? `<ul class="rules-pipeline__list">${summary.operations.map(renderAutofixOperation).join('')}</ul>`
+      : '<div class="rules-pipeline__diff-empty">適用された操作はありません。</div>';
+    const warnings = Array.isArray(summary.warnings) && summary.warnings.length
+      ? `<div class="rules-pipeline__diff-detail">⚠️ ${escapeHtml(summary.warnings.join(' ／ '))}</div>`
+      : '';
+    const errors = Array.isArray(summary.errors) && summary.errors.length
+      ? `<div class="rules-pipeline__diff-detail">❌ ${escapeHtml(summary.errors.join(' ／ '))}</div>`
+      : '';
+    const rawOutput = summary.rawOutput
+      ? `<details><summary>自動修復ログを表示</summary><pre>${escapeHtml(summary.rawOutput)}</pre>${summary.stderr ? `<pre>${escapeHtml(summary.stderr)}</pre>` : ''}</details>`
+      : '';
+    return `${header}${statusLine}${operations}${warnings}${errors}${rawOutput}`;
+  }
+
+  function renderRepoDiff(diff) {
+    if (!diff) {
+      return '<span class="rules-pipeline__diff-empty">Git差分はありません。</span>';
+    }
+    const hasFiles = Array.isArray(diff.files) && diff.files.length > 0;
+    const hasPatch = typeof diff.patch === 'string' && diff.patch.trim().length > 0;
+    const hasNameStatus = typeof diff.nameStatus === 'string' && diff.nameStatus.trim().length > 0;
+    if (!hasFiles && !hasPatch && !hasNameStatus) {
+      return '<span class="rules-pipeline__diff-empty">Git差分はありません。</span>';
+    }
+    const header = '<strong>Git差分</strong>';
+    const filesList = hasFiles
+      ? `<div class="rules-pipeline__diff-detail">変更ファイル (${diff.files.length}件)</div><ul class="rules-pipeline__list">${diff.files.map(file => `<li>${escapeHtml(file)}</li>`).join('')}</ul>`
+      : '';
+    const nameStatusBlock = hasNameStatus
+      ? `<details><summary>name-status</summary><pre>${escapeHtml(diff.nameStatus)}</pre></details>`
+      : '';
+    const patchDownload = hasPatch
+      ? `<a href="data:text/plain;charset=utf-8,${encodeURIComponent(diff.patch)}" download="autofix.diff">差分をダウンロード</a>`
+      : '';
+    const patchBlock = hasPatch
+      ? `<details><summary>パッチを表示</summary><pre>${escapeHtml(diff.patch)}</pre></details>`
+      : '';
+    return `${header}${filesList}${nameStatusBlock}${patchDownload}${patchBlock}`;
+  }
+
   function renderAnalytics(analytics) {
     if (!analytics) {
       return '<span class="rules-pipeline__diff-empty">Analyticsデータを取得できませんでした。</span>';
@@ -502,6 +571,14 @@
     }
     pipelineSummaryEl.innerHTML = renderSummary(snapshot);
     pipelineDiffEl.innerHTML = renderDiff(snapshot);
+    if (pipelineAutofixEl) {
+      const autofixSummary = (snapshot && snapshot.autofix) || event.autofix || null;
+      pipelineAutofixEl.innerHTML = renderAutofix(autofixSummary);
+    }
+    if (pipelineRepoDiffEl) {
+      const repoDiff = (snapshot && snapshot.repoDiff) || event.repoDiff || null;
+      pipelineRepoDiffEl.innerHTML = renderRepoDiff(repoDiff);
+    }
     if (pipelineAnalyticsEl) {
       pipelineAnalyticsEl.innerHTML = renderAnalytics(event.analytics);
     }
@@ -529,6 +606,14 @@
     if (!rulesWatcherApi || typeof rulesWatcherApi.revalidate !== 'function') return;
     const targetBtn = mode === 'bulk' ? pipelineBulkBtn : pipelineRevalidateBtn;
     if (targetBtn) targetBtn.disabled = true;
+    if (mode === 'bulk' && typeof window !== 'undefined') {
+      const confirmed = window.confirm('Quality Gatesの自動修復を実行し、再検証と差分取得を行います。よろしいですか？');
+      if (!confirmed) {
+        if (targetBtn) targetBtn.disabled = false;
+        setTreeStatus('自動修復をキャンセルしました', 'info');
+        return;
+      }
+    }
     pipelineStatusEl.classList.remove('rules-pipeline__status--error');
     setTreeStatus(mode === 'bulk' ? 'Quality Gatesの一括更新を実行中...' : 'Quality Gatesを再検証中...', 'info');
     try {
