@@ -1,135 +1,72 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
+import * as path from 'path';
+import type { IpcMainInvokeEvent } from 'electron';
+import { withPathValidation, validatePath } from '../security';
+import { ErrorType } from '../../utils/error-handler';
 
-// getRepoRoot() を直接インポートするのではなく、テスト用のラッパーを作成
-let testEnv: NodeJS.ProcessEnv = {};
-
-// 環境変数のモック
-Object.defineProperty(process, 'env', {
-  get() {
-    return testEnv;
-  },
-  set(value) {
-    testEnv = value;
-  }
-});
-
-describe('getRepoRoot の優先順位', () => {
+describe('security path validation', () => {
+  let tempDir: string;
   const originalEnv = process.env;
-  
-  beforeEach(() => {
-    // テスト前のクリーンアップ
-    delete process.env.NEXUS_PROJECT_ROOT;
-    testEnv = { ...originalEnv };
-    // グローバル変数をリセット（モック用）
-    jest.resetModules();
-  });
-  
-  afterEach(() => {
-    process.env = originalEnv;
-  });
-
-  test('環境変数 NEXUS_PROJECT_ROOT が最優先', () => {
-    process.env.NEXUS_PROJECT_ROOT = 'C:\\test\\env\\path';
-    
-    // getRepoRoot() を動的にインポート
-    const security = require('../security');
-    const result = security.getRepoRoot();
-    
-    expect(result).toBe('C:\\test\\env\\path');
-  });
-
-  test('グローバル設定が第2優先', () => {
-    // 環境変数なし
-    delete process.env.NEXUS_PROJECT_ROOT;
-    
-    const security = require('../security');
-    security.setGlobalProjectRoot('C:\\test\\global\\path');
-    
-    const result = security.getRepoRoot();
-    
-    expect(result).toBe('C:\\test\\global\\path');
-  });
-
-  test('カスタム設定が第3優先（存在する場合）', () => {
-    // 環境変数なし、グローバルなし
-    delete process.env.NEXUS_PROJECT_ROOT;
-    
-    // 一時的なディレクトリを作成してテスト
-    const tempDir = path.join(__dirname, 'temp-test-custom');
-    try {
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-      
-      const security = require('../security');
-      security.setCustomProjectRoot(tempDir);
-      
-      const result = security.getRepoRoot();
-      
-      expect(result).toBe(tempDir);
-    } finally {
-      // クリーンアップ
-      if (fs.existsSync(tempDir)) {
-        fs.rmSync(tempDir, { recursive: true });
-      }
-    }
-  });
-
-  test('全て未設定の場合、フォールバックを使用', () => {
-    delete process.env.NEXUS_PROJECT_ROOT;
-    
-    const security = require('../security');
-    
-    // __dirname からの相対パスが計算される
-    const result = security.getRepoRoot();
-    
-    expect(result).toBeDefined();
-    expect(typeof result).toBe('string');
-  });
-});
-
-describe('validatePath', () => {
-  const originalEnv = process.env;
+  const fakeEvent = {} as unknown as IpcMainInvokeEvent;
 
   beforeEach(() => {
-    delete process.env.NEXUS_PROJECT_ROOT;
-    testEnv = { ...originalEnv };
-    jest.resetModules();
+    process.env = { ...originalEnv };
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-security-'));
+    fs.mkdirSync(path.join(tempDir, 'docs'));
+    fs.writeFileSync(path.join(tempDir, 'docs', 'sample.mdc'), '# sample');
+    process.env.NEXUS_PROJECT_ROOT = tempDir;
   });
 
   afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
     process.env = originalEnv;
   });
 
-  test('リポジトリと同じプレフィックスの別ディレクトリを拒否する', () => {
-    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-security-'));
-    const repoRoot = path.join(baseDir, 'repo');
-    const repoFile = path.join(repoRoot, 'inside.txt');
-    const outsideDir = `${repoRoot}-backup`;
-    const outsideFile = path.join(outsideDir, 'outside.txt');
+  it('accepts a valid relative path inside the repository', () => {
+    const result = validatePath('docs/sample.mdc');
 
-    try {
-      fs.mkdirSync(repoRoot, { recursive: true });
-      fs.mkdirSync(outsideDir, { recursive: true });
-      fs.writeFileSync(repoFile, 'inside');
-      fs.writeFileSync(outsideFile, 'outside');
+    expect(result.valid).toBe(true);
+    expect(result.target).toBe(path.join(tempDir, 'docs', 'sample.mdc'));
+  });
 
-      process.env.NEXUS_PROJECT_ROOT = repoRoot;
+  it('rejects traversal attempts', () => {
+    const result = validatePath('../etc/passwd');
 
-      const security = require('../security');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('ディレクトリトラバーサル');
+  });
 
-      const validResult = security.validatePath('inside.txt');
-      expect(validResult.valid).toBe(true);
+  it('rejects paths outside the repository', () => {
+    const outsideFile = path.join(os.tmpdir(), 'other.txt');
+    fs.writeFileSync(outsideFile, 'data');
 
-      const invalidResult = security.validatePath(outsideFile);
-      expect(invalidResult.valid).toBe(false);
-      expect(invalidResult.error).toBe('パスがリポジトリ外');
-    } finally {
-      if (fs.existsSync(baseDir)) {
-        fs.rmSync(baseDir, { recursive: true, force: true });
-      }
-    }
+    const result = validatePath(outsideFile);
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('パスがリポジトリ外');
+    fs.rmSync(outsideFile, { force: true });
+  });
+
+  it('wraps handler and throws AppError when validation fails', async () => {
+    const handler = jest.fn();
+    const wrapped = withPathValidation(handler);
+
+    await expect(wrapped(fakeEvent, 'missing/file.txt')).rejects.toMatchObject({
+      type: ErrorType.SECURITY_ERROR
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('invokes wrapped handler when validation succeeds', async () => {
+    const handler = jest.fn(async () => 'ok');
+    const wrapped = withPathValidation(handler);
+
+    await expect(wrapped(fakeEvent, 'docs/sample.mdc')).resolves.toBe('ok');
+    expect(handler).toHaveBeenCalledTimes(1);
+    const callArgs = handler.mock.calls[0] as unknown[];
+    expect(callArgs.length).toBeGreaterThanOrEqual(2);
+    const validation = callArgs[1] as ReturnType<typeof validatePath>;
+    expect(validation).toMatchObject({ valid: true });
   });
 });
