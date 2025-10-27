@@ -13,9 +13,14 @@
 <body>
   <div class="container">
     <header class="app-header">
-      <div class="app-brand">
-        <h1>Nexus</h1>
-        <p class="app-subtitle">Docs / Tasks workspace</p>
+      <div class="app-header__main">
+        <div class="app-brand">
+          <h1>Nexus</h1>
+          <p class="app-subtitle">Docs / Tasks workspace</p>
+        </div>
+        <div class="app-header__actions">
+          <button id="download-console" class="btn btn-ghost">📋 Console Logをダウンロード</button>
+        </div>
       </div>
     </header>
     <div class="primary-toolbar">
@@ -23,9 +28,6 @@
         <button class="tab-btn active" data-tab="docs" role="tab" aria-selected="true">Docs</button>
         <button class="tab-btn" data-tab="tasks" role="tab" aria-selected="false">Tasks</button>
       </nav>
-      <div class="toolbar-actions">
-        <button id="download-console" class="btn btn-ghost">📋 Console Logをダウンロード</button>
-      </div>
     </div>
     <main>
       <div id="docs" class="tab-content active">

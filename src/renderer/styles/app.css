@@ -1,9 +1,12 @@
 body { background: #f7f8fa; color: #222; }
 .container { display: flex; flex-direction: column; height: 100vh; }
 .app-header { padding: 16px 20px 12px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+.app-header__main { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .app-brand { display: flex; flex-direction: column; gap: 4px; }
 .app-brand h1 { margin: 0; font-size: 22px; font-weight: 700; color: #0f172a; }
 .app-subtitle { margin: 0; color: #6b7280; font-size: 13px; }
+.app-header__actions { display: flex; align-items: center; }
+.app-header__actions .btn { white-space: nowrap; }
 .primary-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 20px; background: #fff; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; }
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
 .tab-btn { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 8px 16px; border-radius: 9999px; cursor: pointer; color: #111827; font-weight: 600; transition: all 0.15s ease; }
