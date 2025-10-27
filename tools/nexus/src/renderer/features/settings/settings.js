@@ -120,7 +120,18 @@
       if (res && !res.canceled && res.filePath) {
         localStorage.setItem(CONTEXT_FILE_KEY, res.filePath);
         renderContextPath();
-        setStatus(contextStatusEl, 'Context file updated', 'ok');
+        let message = 'Context file updated';
+        try {
+          if (window.rulesWatcher && typeof window.rulesWatcher.setContextPath === 'function') {
+            await window.rulesWatcher.setContextPath(res.filePath);
+          }
+        } catch (err) {
+          console.warn('[Settings] Failed to propagate context to Quality Gates:', err);
+          message = 'Context updated (Quality Gates連携に失敗しました)';
+          setStatus(contextStatusEl, message, 'info');
+          return;
+        }
+        setStatus(contextStatusEl, message, 'ok');
       } else {
         setStatus(contextStatusEl, 'キャンセルしました', '');
       }
@@ -130,10 +141,18 @@
     }
   }
 
-  function handleClearContext() {
+  async function handleClearContext() {
     localStorage.removeItem(CONTEXT_FILE_KEY);
     renderContextPath();
-    setStatus(contextStatusEl, 'Cleared', 'ok');
+    try {
+      if (window.rulesWatcher && typeof window.rulesWatcher.setContextPath === 'function') {
+        await window.rulesWatcher.setContextPath(null);
+      }
+      setStatus(contextStatusEl, 'Cleared', 'ok');
+    } catch (err) {
+      console.warn('[Settings] Failed to clear Quality Gates context:', err);
+      setStatus(contextStatusEl, 'Cleared (Quality Gates連携に失敗しました)', 'info');
+    }
   }
 
   function refreshProviderDescription(provider) {

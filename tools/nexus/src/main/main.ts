@@ -558,6 +558,18 @@ ipcMain.handle('rules:listLogs', async () => {
   }
 });
 
+ipcMain.handle('rules:setContext', async (_event, payload: { contextPath?: string | null }) => {
+  try {
+    if (!rulesWatcher) throw new Error('Rules watcher is not initialized');
+    const next = typeof payload?.contextPath === 'string' ? payload.contextPath : null;
+    const snapshot = await rulesWatcher.setContextPath(next);
+    return { success: true, event: snapshot };
+  } catch (error) {
+    logger.error('Failed to update Quality Gates context', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
 // MDC append (optional)
 ipcMain.handle('mdc:append', async (event, relPath: string, content: string) => {
   try {
