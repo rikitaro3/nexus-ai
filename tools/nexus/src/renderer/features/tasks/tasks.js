@@ -1,5 +1,94 @@
 // Ported Tasks (import/edit/save/export/breakdown)
-(function initTasks() {
+(function initTasksModule() {
+  function taskDefaults() {
+    return {
+      notes: '',
+      breakdownPrompt: '',
+      breakdownStatus: 'DRAFT',
+      lastBreakdownAt: '',
+    };
+  }
+
+  function applyTaskDefaults(raw = {}) {
+    const merged = {
+      ...taskDefaults(),
+      ...raw,
+    };
+    merged.notes = typeof raw?.notes === 'string' ? raw.notes : '';
+    merged.breakdownPrompt = typeof raw?.breakdownPrompt === 'string' ? raw.breakdownPrompt : '';
+    merged.breakdownStatus = raw?.breakdownStatus || 'DRAFT';
+    merged.lastBreakdownAt = raw?.lastBreakdownAt || '';
+    return merged;
+  }
+
+  function defaultUid() {
+    return 'T' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function defaultTimestamp() {
+    return new Date().toISOString();
+  }
+
+  function parsePasted(text, options = {}) {
+    const { uidFn = defaultUid, timestampFn = defaultTimestamp } = options;
+    const out = [];
+    if (!text) return out;
+    const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    for (const line of lines) {
+      const match = line.match(/^【([^】]+)】\s*(.+)$/);
+      const category = match ? match[1] : 'Uncategorized';
+      const title = match ? match[2] : line;
+      const timestamp = timestampFn();
+      out.push(applyTaskDefaults({
+        id: uidFn(),
+        title,
+        category,
+        priority: 'MEDIUM',
+        status: 'TODO',
+        featId: '',
+        links: {},
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }));
+    }
+    return out;
+  }
+
+  function buildBreakdownPrompt({ title, category, priority, featId, links }) {
+    const linksText = Object.entries(links || {}).map(([k, v]) => `- ${k}: ${v}`).join('\n');
+    return [
+      'あなたはプロジェクトの実装ブレークダウン設計者です。以下の制約と入力を踏まえ、MECEなサブタスク（各項目に完了基準付き）を5〜10件で提案し、不明点（最大5件）と参照先（PRD/UX/API/DATA/QA）も挙げてください。',
+      '',
+      '[制約]',
+      '- 外部AI APIを使わない（Cursor autoのみ）',
+      '- 冗長禁止、簡潔さ重視',
+      '- DAG/MECE/Quality Gatesを尊重（context.mdc参照）',
+      '',
+      '[入力]',
+      `- タスク: ${title} / カテゴリ: ${category} / 優先度: ${priority} / FEAT: ${featId || ''}`,
+      '- 関連ドキュメント:',
+      linksText || '- (なし)',
+      '',
+      '[出力]',
+      '- サブタスク一覧: [ {name, acceptanceCriteria, refs} ... ]',
+      '- 不明点: [question1..]',
+      '- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]'
+    ].join('\n');
+  }
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      taskDefaults,
+      applyTaskDefaults,
+      parsePasted,
+      buildBreakdownPrompt,
+    };
+  }
+
+  if (typeof document === 'undefined') {
+    return;
+  }
+
   const listEl = document.getElementById('tasks-list');
   const catsEl = document.getElementById('tasks-categories');
   const detailEl = document.getElementById('task-detail');
@@ -32,7 +121,6 @@
     detailEl.classList.add('empty-state');
     detailEl.textContent = message;
   }
-  function uid() { return 'T' + Math.random().toString(36).slice(2, 10); }
   async function loadFeats() {
     if (featsRegistry) return featsRegistry;
     const res = await window.docs.read('docs/PRD/index.mdc');
@@ -44,7 +132,6 @@
     for (const raw of lines) { const line = raw.trim(); const h = line.match(/^\-\s*(FEAT-\d{4}):\s*(.+)$/); if (h) { cur = { id: h[1], title: h[2], links: {} }; out.items.push(cur); continue; } if (!cur) continue; const lk = line.match(/^\-\s*(PRD|UX|API|DATA|QA):\s*(.+)$/); if (lk) cur.links[lk[1]] = lk[2]; }
     featsRegistry = out; return out;
   }
-  function parsePasted(text) { const out = []; const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean); for (const line of lines) { const m = line.match(/^【([^】]+)】\s*(.+)$/); const category = m ? m[1] : 'Uncategorized'; const title = m ? m[2] : line; out.push({ id: uid(), title, category, priority: 'MEDIUM', status: 'TODO', featId: '', links: {}, notes: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); } return out; }
   function getVisibleTasks() {
     const query = searchQuery ? searchQuery.toLowerCase() : '';
     return tasks.filter(t => {
@@ -117,7 +204,8 @@
       li.appendChild(title);
       const meta = document.createElement('span');
       meta.className = 'meta';
-      meta.textContent = `${t.category} / ${t.priority} / ${t.status}${t.featId ? ' / ' + t.featId : ''}`;
+      const breakdownMeta = t.breakdownStatus ? ` / BD:${t.breakdownStatus}` : '';
+      meta.textContent = `${t.category} / ${t.priority} / ${t.status}${t.featId ? ' / ' + t.featId : ''}${breakdownMeta}`;
       li.appendChild(meta);
       li.addEventListener('click', (ev) => {
         ev.preventDefault();
@@ -156,7 +244,7 @@
           <div class="form-group"><label>FEAT-ID</label><select id="task-feat">${featOpts.map(v=>`<option ${t.featId===v?'selected':''}>${v}</option>`).join('')}</select></div>
           <div class="form-group"><label>Notes</label><textarea id="task-notes" rows="4">${escapeHtml(t.notes||'')}</textarea></div>
           <hr/>
-          <div class="form-group"><label>Breakdown Prompt</label><div class="control-group"><button id="task-generate-breakdown" class="btn btn-primary">Generate</button><button id="task-copy-breakdown" class="btn btn-secondary">Copy for Cursor auto</button><select id="task-breakdown-status"><option ${t.breakdownStatus==='DRAFT'?'selected':''}>DRAFT</option><option ${t.breakdownStatus=='READY'?'selected':''}>READY</option><option ${t.breakdownStatus==='REVIEWED'?'selected':''}>REVIEWED</option></select><span class="status" id="task-breakdown-stamp">${t.lastBreakdownAt?`Last: ${new Date(t.lastBreakdownAt).toLocaleString('ja-JP')}`:''}</span></div><textarea id="task-breakdown-prompt" rows="10" placeholder="Generateで雛形を作成">${escapeHtml(t.breakdownPrompt||'')}</textarea></div>
+          <div class="form-group"><label>Breakdown Prompt</label><div class="control-group"><button id="task-generate-breakdown" class="btn btn-primary">Generate</button><button id="task-copy-breakdown" class="btn btn-secondary">Copy for Cursor auto</button><select id="task-breakdown-status"><option ${t.breakdownStatus==='DRAFT'?'selected':''}>DRAFT</option><option ${t.breakdownStatus==='READY'?'selected':''}>READY</option><option ${t.breakdownStatus==='REVIEWED'?'selected':''}>REVIEWED</option></select><span class="status" id="task-breakdown-stamp">${t.lastBreakdownAt?`Last: ${new Date(t.lastBreakdownAt).toLocaleString('ja-JP')}`:''}</span></div><textarea id="task-breakdown-prompt" rows="10" placeholder="Generateで雛形を作成">${escapeHtml(t.breakdownPrompt||'')}</textarea></div>
           <div class="control-group"><button id="task-save" class="btn btn-primary">更新</button>${featSuggest?`<button id="task-open-prd" class="btn btn-secondary">PRD</button>`:''}${featSuggest?`<button id="task-open-ux" class="btn btn-secondary">UX</button>`:''}${featSuggest?`<button id="task-open-api" class="btn btn-secondary">API</button>`:''}${featSuggest?`<button id="task-open-data" class="btn btn-secondary">DATA</button>`:''}${featSuggest?`<button id="task-open-qa" class="btn btn-secondary">QA</button>`:''}</div>
         </div>
       </div>`;
@@ -169,20 +257,11 @@
     if(copyBtn) copyBtn.addEventListener('click', async ()=>{ const ta=document.getElementById('task-breakdown-prompt'); const txt=ta?ta.value:''; if(!txt){ alert('Breakdown Promptが空です'); return;} try{ await navigator.clipboard.writeText(txt); alert('コピーしました（Cursor autoに貼り付けてください）'); }catch(e){ alert('クリップボードへのコピーに失敗しました'); } });
   }
   function escapeHtml(s){return String(s||'').replace(/[&<>]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));}
-  function buildBreakdownPrompt({ title, category, priority, featId, links }) {
-    const linksText = Object.entries(links || {}).map(([k,v]) => `- ${k}: ${v}`).join('\n');
-    return [
-      'あなたはプロジェクトの実装ブレークダウン設計者です。以下の制約と入力を踏まえ、MECEなサブタスク（各項目に完了基準付き）を5〜10件で提案し、不明点（最大5件）と参照先（PRD/UX/API/DATA/QA）も挙げてください。',
-      '', '[制約]', '- 外部AI APIを使わない（Cursor autoのみ）', '- 冗長禁止、簡潔さ重視', '- DAG/MECE/Quality Gatesを尊重（context.mdc参照）',
-      '', '[入力]', `- タスク: ${title} / カテゴリ: ${category} / 優先度: ${priority} / FEAT: ${featId||''}`, '- 関連ドキュメント:', linksText || '- (なし)',
-      '', '[出力]', '- サブタスク一覧: [ {name, acceptanceCriteria, refs} ... ]', '- 不明点: [question1..]', '- 参照: [PRD/UX/API/DATA/QAの相対パスとアンカー]'
-    ].join('\n');
-  }
   if (bulkImportBtn) bulkImportBtn.addEventListener('click', ()=>{ const text=(bulkTextarea&&bulkTextarea.value)||''; if(!text.trim()){alert('貼り付け欄が空です'); return;} const newOnes=parsePasted(text); if(!newOnes.length){ alert('取り込み対象がありません'); return;} tasks=tasks.concat(newOnes); searchQuery=''; if(filterInput) filterInput.value=''; selectedTaskCategory=newOnes[0].category; selectedTaskId=newOnes[0].id; renderCategories(tasks); renderList(); bulkTextarea.value=''; alert(`${newOnes.length}件を取り込みました`); });
   if (addOneBtn) addOneBtn.addEventListener('click', ()=>{ const cat=(addCatInput&&addCatInput.value.trim())||'Uncategorized'; const title=(addTitleInput&&addTitleInput.value.trim())||''; if(!title){alert('タイトルを入力してください'); return;} const [item]=parsePasted(`【${cat}】 ${title}`); tasks.push(item); selectedTaskCategory=item.category; selectedTaskId=item.id; searchQuery=''; if(filterInput) filterInput.value=''; renderCategories(tasks); renderList(); if(addTitleInput) addTitleInput.value=''; });
   saveBtn.addEventListener('click', async ()=>{ const res=await window.tasks.writeJson(tasks); alert(res.success?'保存しました':`保存失敗: ${res.error}`); });
   exportBtn.addEventListener('click', async ()=>{ const lines=tasks.map(t=>`- [${t.status}] (${t.priority}) ${t.title} ${t.featId? '['+t.featId+']':''} #${t.category}`); const md=lines.join('\n'); const res=await window.tasks.appendMdc('human_todo.mdc', md); alert(res.success?'human_todo.mdcに追記しました':`エクスポート失敗: ${res.error}`); });
   filterInput.addEventListener('input', ()=>{ searchQuery=filterInput.value.trim().toLowerCase(); renderList(); });
-  (async ()=>{ const res=await window.tasks.readJson(); tasks=res.success&&Array.isArray(res.data)?res.data:[]; if(tasks.length){ selectedTaskId=tasks[0].id; } renderCategories(tasks); renderList(); })();
+  (async ()=>{ const res=await window.tasks.readJson(); tasks=res.success&&Array.isArray(res.data)?res.data.map(applyTaskDefaults):[]; if(tasks.length){ selectedTaskId=tasks[0].id; } renderCategories(tasks); renderList(); })();
 })();
 
