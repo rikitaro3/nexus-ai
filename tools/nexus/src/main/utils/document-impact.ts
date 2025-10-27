@@ -18,6 +18,21 @@ export interface ImpactScanSummary {
   categories: Record<string, number>;
 }
 
+export interface RulesDiffEntry {
+  path: string;
+  event: 'add' | 'change' | 'unlink';
+  previousLineCount: number;
+  nextLineCount: number;
+  addedLines: number;
+  removedLines: number;
+  addedHeadings: string[];
+  removedHeadings: string[];
+}
+
+export interface RulesDiffPayload {
+  files: RulesDiffEntry[];
+}
+
 export interface ImpactScanResult {
   scannedAt: string;
   projectRoot: string;
@@ -25,11 +40,16 @@ export interface ImpactScanResult {
   documents: ImpactedDocument[];
   summary: ImpactScanSummary;
   warnings: string[];
+  rulesDiff?: RulesDiffPayload | null;
 }
 
 interface ContextEntry {
   category: string | null;
   path: string;
+}
+
+interface ScanQualityGateImpactsOptions {
+  rulesDiff?: RulesDiffPayload | null;
 }
 
 const CONTEXT_SECTION_HEADER = '## Context Map';
@@ -137,7 +157,11 @@ function summarizeDocuments(documents: ImpactedDocument[]): ImpactScanSummary {
   return summary;
 }
 
-export async function scanQualityGateImpacts(projectRoot: string, contextOverride?: string | null): Promise<ImpactScanResult> {
+export async function scanQualityGateImpacts(
+  projectRoot: string,
+  contextOverride?: string | null,
+  options?: ScanQualityGateImpactsOptions
+): Promise<ImpactScanResult> {
   const { path: resolvedContext, warnings } = await resolveContextPath(projectRoot, contextOverride);
   let entries: ContextEntry[] = [];
 
@@ -194,6 +218,7 @@ export async function scanQualityGateImpacts(projectRoot: string, contextOverrid
     contextPath: resolvedContext ? path.relative(projectRoot, resolvedContext) : null,
     documents,
     summary,
-    warnings
+    warnings,
+    rulesDiff: options?.rulesDiff ?? null
   };
 }
