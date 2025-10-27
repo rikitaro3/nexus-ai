@@ -26,6 +26,7 @@ const PROJECT_ROOT = process.env.NEXUS_PROJECT_ROOT
     })();
 
 const NEXUS_DIR = path.dirname(path.dirname(__dirname)); // dist/src/main -> dist
+const PROMPTS_JSON_PATH = path.join(PROJECT_ROOT, 'tools', 'nexus', 'prompts.json');
 
 logger.info('Project root initialized', { 
   __dirname,
@@ -316,6 +317,48 @@ ipcMain.handle('tasks:writeJson', async (event, data: unknown) => {
     return { success: true };
   } catch (e) {
     logger.error('Failed to write tasks.json', { error: (e as Error).message });
+    return { success: false, error: (e as Error).message };
+  }
+});
+
+// Prompts dictionary
+ipcMain.handle('prompts:readJson', async () => {
+  try {
+    logger.debug('Reading prompts.json', { target: PROMPTS_JSON_PATH });
+    if (!fs.existsSync(PROMPTS_JSON_PATH)) {
+      logger.info('prompts.json not found, returning null data');
+      return { success: true, data: null };
+    }
+    const text = fs.readFileSync(PROMPTS_JSON_PATH, 'utf8');
+    const data = JSON.parse(text);
+    logger.info('prompts.json read successfully', {
+      categories: Array.isArray(data?.categories) ? data.categories.length : 0
+    });
+    return { success: true, data };
+  } catch (e) {
+    logger.error('Failed to read prompts.json', { error: (e as Error).message });
+    return { success: false, error: (e as Error).message };
+  }
+});
+
+ipcMain.handle('prompts:writeJson', async (_event, data: unknown) => {
+  try {
+    const dir = path.dirname(PROMPTS_JSON_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const payload = data ?? {};
+    logger.debug('Writing prompts.json', {
+      target: PROMPTS_JSON_PATH,
+      categories: Array.isArray((payload as any)?.categories)
+        ? (payload as any).categories.length
+        : 'unknown'
+    });
+    fs.writeFileSync(PROMPTS_JSON_PATH, JSON.stringify(payload, null, 2), 'utf8');
+    logger.info('prompts.json written successfully');
+    return { success: true };
+  } catch (e) {
+    logger.error('Failed to write prompts.json', { error: (e as Error).message });
     return { success: false, error: (e as Error).message };
   }
 });

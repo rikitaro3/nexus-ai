@@ -20,6 +20,7 @@ describe('tasks helpers', () => {
         breakdownPrompt: '',
         breakdownStatus: 'DRAFT',
         lastBreakdownAt: '',
+        promptPartIds: [],
       });
     });
 
@@ -30,12 +31,14 @@ describe('tasks helpers', () => {
         breakdownPrompt: 'Existing prompt',
         breakdownStatus: 'READY',
         lastBreakdownAt: now,
+        promptPartIds: ['TASK-BD-01', 'DOC-RD-01'],
       });
       expect(result).toMatchObject({
         notes: 'Keep me',
         breakdownPrompt: 'Existing prompt',
         breakdownStatus: 'READY',
         lastBreakdownAt: now,
+        promptPartIds: ['TASK-BD-01', 'DOC-RD-01'],
       });
     });
   });
@@ -61,6 +64,7 @@ describe('tasks helpers', () => {
         breakdownPrompt: '',
         breakdownStatus: 'DRAFT',
         lastBreakdownAt: '',
+        promptPartIds: [],
         createdAt: timestamp,
         updatedAt: timestamp,
       });

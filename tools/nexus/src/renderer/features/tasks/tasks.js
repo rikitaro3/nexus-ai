@@ -6,6 +6,7 @@
       breakdownPrompt: '',
       breakdownStatus: 'DRAFT',
       lastBreakdownAt: '',
+      promptPartIds: [],
     };
   }
 
@@ -18,6 +19,9 @@
     merged.breakdownPrompt = typeof raw?.breakdownPrompt === 'string' ? raw.breakdownPrompt : '';
     merged.breakdownStatus = raw?.breakdownStatus || 'DRAFT';
     merged.lastBreakdownAt = raw?.lastBreakdownAt || '';
+    merged.promptPartIds = Array.isArray(raw?.promptPartIds)
+      ? raw.promptPartIds.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim())
+      : [];
     return merged;
   }
 
@@ -76,6 +80,161 @@
     ].join('\n');
   }
 
+  function promptLibraryDefaults() {
+    return {
+      version: 1,
+      metadata: {
+        description: '',
+        updatedAt: '',
+      },
+      categories: [],
+    };
+  }
+
+  function normalizePromptLibrary(raw = {}) {
+    const base = promptLibraryDefaults();
+    const version = typeof raw?.version === 'number' ? raw.version : base.version;
+    const metadata = {
+      description: typeof raw?.metadata?.description === 'string' ? raw.metadata.description : '',
+      updatedAt: typeof raw?.metadata?.updatedAt === 'string' ? raw.metadata.updatedAt : '',
+    };
+    const categories = Array.isArray(raw?.categories)
+      ? raw.categories.map(normalizePromptCategory).filter(cat => cat.id)
+      : [];
+    return { version, metadata, categories };
+  }
+
+  function normalizePromptCategory(raw = {}) {
+    const id = typeof raw?.id === 'string' && raw.id.trim()
+      ? raw.id.trim()
+      : typeof raw?.key === 'string' && raw.key.trim()
+        ? raw.key.trim()
+        : '';
+    const label = typeof raw?.label === 'string' && raw.label.trim()
+      ? raw.label.trim()
+      : typeof raw?.title === 'string' && raw.title.trim()
+        ? raw.title.trim()
+        : id;
+    const description = typeof raw?.description === 'string' ? raw.description : '';
+    const items = Array.isArray(raw?.items)
+      ? raw.items.map(normalizePromptItem).filter(item => item.id)
+      : [];
+    return { id, label, description, items };
+  }
+
+  function normalizePromptItem(raw = {}) {
+    const id = typeof raw?.id === 'string' && raw.id.trim() ? raw.id.trim() : '';
+    const title = typeof raw?.title === 'string' && raw.title.trim()
+      ? raw.title.trim()
+      : id;
+    const body = typeof raw?.body === 'string'
+      ? raw.body
+      : typeof raw?.text === 'string'
+        ? raw.text
+        : '';
+    const description = typeof raw?.description === 'string' ? raw.description : '';
+    const tags = Array.isArray(raw?.tags)
+      ? raw.tags.map(tag => (tag != null ? String(tag) : '')).filter(Boolean)
+      : [];
+    return { id, title, body, description, tags };
+  }
+
+  function slugifyPromptId(value) {
+    if (!value) return '';
+    return String(value)
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^A-Za-z0-9\-_/]+/g, '')
+      .replace(/--+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '')
+      .toUpperCase();
+  }
+
+  function collectPromptItemIds() {
+    const ids = new Set();
+    for (const category of promptLibrary.categories) {
+      for (const item of category.items) {
+        ids.add(item.id);
+      }
+    }
+    return ids;
+  }
+
+  function generatePromptItemId(categoryId) {
+    const base = (categoryId || 'PROMPT')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-');
+    const ids = collectPromptItemIds();
+    let index = 1;
+    let candidate = `${base}-${String(index).padStart(2, '0')}`;
+    while (ids.has(candidate)) {
+      index += 1;
+      candidate = `${base}-${String(index).padStart(2, '0')}`;
+    }
+    return candidate;
+  }
+
+  function findPromptCategory(id) {
+    if (!id) return null;
+    return promptLibrary.categories.find(cat => cat.id === id) || null;
+  }
+
+  function findPromptItem(id) {
+    if (!id) return null;
+    for (const category of promptLibrary.categories) {
+      const found = category.items.find(item => item.id === id);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function getSelectedPromptItems() {
+    const items = [];
+    for (const id of promptSelection) {
+      const item = findPromptItem(id);
+      if (item) {
+        items.push(item);
+      }
+    }
+    return items;
+  }
+
+  async function ensurePromptLibraryLoaded() {
+    if (promptLibraryLoaded) return promptLibrary;
+    if (typeof window === 'undefined' || !window.prompts || typeof window.prompts.readJson !== 'function') {
+      promptLibraryLoaded = true;
+      promptLibrary = promptLibraryDefaults();
+      return promptLibrary;
+    }
+    try {
+      const res = await window.prompts.readJson();
+      if (res && res.success && res.data) {
+        promptLibrary = normalizePromptLibrary(res.data);
+      } else {
+        promptLibrary = promptLibraryDefaults();
+      }
+    } catch (err) {
+      console.error('Failed to load prompts.json', err);
+      promptLibrary = promptLibraryDefaults();
+    }
+    promptLibraryLoaded = true;
+    if (!promptCategoryId && promptLibrary.categories.length) {
+      promptCategoryId = promptLibrary.categories[0].id;
+    }
+    return promptLibrary;
+  }
+
+  let promptLibrary = promptLibraryDefaults();
+  let promptLibraryLoaded = false;
+  let promptLibraryDirty = false;
+  let promptCategoryId = '';
+  let promptActiveItemId = '';
+  let promptSearchQuery = '';
+  let promptSelection = new Set();
+  let promptStatusTimer = null;
+  let currentTaskForPrompts = null;
+
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       taskDefaults,
@@ -131,6 +290,482 @@
     const lines = body.split('\n'); let cur = null;
     for (const raw of lines) { const line = raw.trim(); const h = line.match(/^\-\s*(FEAT-\d{4}):\s*(.+)$/); if (h) { cur = { id: h[1], title: h[2], links: {} }; out.items.push(cur); continue; } if (!cur) continue; const lk = line.match(/^\-\s*(PRD|UX|API|DATA|QA):\s*(.+)$/); if (lk) cur.links[lk[1]] = lk[2]; }
     featsRegistry = out; return out;
+  }
+
+  async function renderPromptDictionaryUI(task) {
+    const container = document.getElementById('task-prompt-dictionary');
+    if (!container) return;
+
+    await ensurePromptLibraryLoaded();
+
+    if (promptStatusTimer) {
+      clearTimeout(promptStatusTimer);
+      promptStatusTimer = null;
+    }
+
+    currentTaskForPrompts = task || null;
+    const initialIds = Array.isArray(task?.promptPartIds)
+      ? task.promptPartIds.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim())
+      : [];
+    promptSelection = new Set(initialIds);
+
+    const statusEl = document.getElementById('task-prompt-status');
+    const metaEl = document.getElementById('task-prompt-meta');
+    const selectedEl = document.getElementById('task-prompt-selected');
+    const categorySelect = document.getElementById('task-prompt-category');
+    const addCategoryBtn = document.getElementById('task-prompt-add-category');
+    const searchInput = document.getElementById('task-prompt-search');
+    const itemsEl = document.getElementById('task-prompt-items');
+    const itemsEmptyEl = document.getElementById('task-prompt-items-empty');
+    const addItemBtn = document.getElementById('task-prompt-add-item');
+    const itemIdInput = document.getElementById('task-prompt-item-id');
+    const itemTitleInput = document.getElementById('task-prompt-item-title');
+    const itemDescriptionInput = document.getElementById('task-prompt-item-description');
+    const itemBodyInput = document.getElementById('task-prompt-item-body');
+    const itemTagsInput = document.getElementById('task-prompt-item-tags');
+    const itemSaveBtn = document.getElementById('task-prompt-item-save');
+    const itemDeleteBtn = document.getElementById('task-prompt-item-delete');
+    const saveDictionaryBtn = document.getElementById('task-prompt-save-dictionary');
+
+    function updateStatus(message, variant = 'info', autoHide = false) {
+      if (!statusEl) return;
+      const variantClasses = ['status-info', 'status-success', 'status-error', 'status-warn'];
+      statusEl.classList.remove(...variantClasses);
+      if (!message) {
+        statusEl.textContent = '';
+        statusEl.classList.add('hidden');
+        return;
+      }
+      statusEl.textContent = message;
+      statusEl.classList.remove('hidden');
+      statusEl.classList.add(`status-${variant === 'warn' ? 'warn' : variant}`);
+      if (promptStatusTimer) {
+        clearTimeout(promptStatusTimer);
+        promptStatusTimer = null;
+      }
+      if (autoHide) {
+        promptStatusTimer = setTimeout(() => {
+          if (statusEl) {
+            statusEl.classList.add('hidden');
+          }
+        }, 2500);
+      }
+    }
+
+    function syncTaskSelection() {
+      if (currentTaskForPrompts) {
+        currentTaskForPrompts.promptPartIds = Array.from(promptSelection);
+      }
+    }
+
+    function pruneSelection() {
+      const validIds = collectPromptItemIds();
+      let changed = false;
+      for (const id of Array.from(promptSelection)) {
+        if (!validIds.has(id)) {
+          promptSelection.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) {
+        syncTaskSelection();
+      }
+    }
+
+    function replacePromptIdAcrossTasks(oldId, newId) {
+      if (!oldId || oldId === newId) return;
+      if (promptSelection.has(oldId)) {
+        promptSelection.delete(oldId);
+        promptSelection.add(newId);
+      }
+      for (const t of tasks) {
+        if (Array.isArray(t.promptPartIds)) {
+          t.promptPartIds = t.promptPartIds.map(id => (id === oldId ? newId : id));
+        }
+      }
+      syncTaskSelection();
+    }
+
+    function updateMeta() {
+      if (!metaEl) return;
+      const parts = [];
+      if (promptLibrary.metadata.description) parts.push(promptLibrary.metadata.description);
+      if (promptLibrary.metadata.updatedAt) {
+        try {
+          const stamp = new Date(promptLibrary.metadata.updatedAt);
+          if (!isNaN(stamp.getTime())) {
+            parts.push(`最終更新: ${stamp.toLocaleString('ja-JP')}`);
+          } else {
+            parts.push(`最終更新: ${promptLibrary.metadata.updatedAt}`);
+          }
+        } catch {
+          parts.push(`最終更新: ${promptLibrary.metadata.updatedAt}`);
+        }
+      }
+      if (parts.length) {
+        metaEl.textContent = parts.join(' / ');
+        metaEl.classList.remove('hidden');
+      } else {
+        metaEl.textContent = '';
+        metaEl.classList.add('hidden');
+      }
+    }
+
+    function renderSelectedChips() {
+      if (!selectedEl) return;
+      selectedEl.innerHTML = '';
+      if (!promptSelection.size) {
+        const empty = document.createElement('p');
+        empty.className = 'text-muted';
+        empty.textContent = '辞書パーツを選択するとここに表示されます。';
+        selectedEl.appendChild(empty);
+        return;
+      }
+      for (const id of promptSelection) {
+        const item = findPromptItem(id);
+        const pill = document.createElement('span');
+        pill.className = 'tasks-meta-pill';
+        const label = document.createElement('span');
+        label.textContent = item ? `${item.id}: ${item.title}` : `${id} (未定義)`;
+        pill.appendChild(label);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-ghost btn-sm';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+          promptSelection.delete(id);
+          syncTaskSelection();
+          renderSelectedChips();
+          refreshItemsList();
+        });
+        pill.appendChild(removeBtn);
+        selectedEl.appendChild(pill);
+      }
+    }
+
+    function updateEditor() {
+      if (!itemIdInput || !itemTitleInput || !itemBodyInput || !itemSaveBtn || !itemDeleteBtn || !itemDescriptionInput || !itemTagsInput) return;
+      const item = findPromptItem(promptActiveItemId);
+      if (!item) {
+        itemIdInput.value = '';
+        itemTitleInput.value = '';
+        itemDescriptionInput.value = '';
+        itemBodyInput.value = '';
+        itemTagsInput.value = '';
+        itemSaveBtn.disabled = true;
+        itemDeleteBtn.disabled = true;
+        return;
+      }
+      itemIdInput.value = item.id;
+      itemTitleInput.value = item.title;
+      itemDescriptionInput.value = item.description || '';
+      itemBodyInput.value = item.body || '';
+      itemTagsInput.value = item.tags.join(', ');
+      itemSaveBtn.disabled = false;
+      itemDeleteBtn.disabled = false;
+    }
+
+    function refreshCategoryOptions() {
+      if (!categorySelect) return;
+      categorySelect.innerHTML = '';
+      if (!promptLibrary.categories.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '(カテゴリなし)';
+        categorySelect.appendChild(option);
+        categorySelect.disabled = true;
+        if (addItemBtn) addItemBtn.disabled = true;
+        promptCategoryId = '';
+        return;
+      }
+      categorySelect.disabled = false;
+      if (addItemBtn) addItemBtn.disabled = false;
+      if (!promptCategoryId || !findPromptCategory(promptCategoryId)) {
+        promptCategoryId = promptLibrary.categories[0].id;
+      }
+      for (const cat of promptLibrary.categories) {
+        const opt = document.createElement('option');
+        opt.value = cat.id;
+        opt.textContent = cat.label || cat.id;
+        categorySelect.appendChild(opt);
+      }
+      categorySelect.value = promptCategoryId;
+    }
+
+    function refreshItemsList() {
+      if (!itemsEl) return;
+      const category = findPromptCategory(promptCategoryId);
+      const filtered = category
+        ? category.items.filter(item => {
+            if (!promptSearchQuery) return true;
+            const haystack = `${item.id} ${item.title} ${item.description} ${item.tags.join(' ')} ${item.body}`.toLowerCase();
+            return haystack.includes(promptSearchQuery);
+          })
+        : [];
+
+      itemsEl.innerHTML = '';
+
+      if (!category) {
+        if (itemsEmptyEl) {
+          itemsEmptyEl.textContent = 'カテゴリを追加してください。';
+          itemsEmptyEl.classList.remove('hidden');
+        }
+        promptActiveItemId = '';
+        updateEditor();
+        return;
+      }
+
+      if (!filtered.length) {
+        if (itemsEmptyEl) {
+          itemsEmptyEl.textContent = promptSearchQuery ? '一致するプロンプトがありません。' : 'このカテゴリにはプロンプトがありません。';
+          itemsEmptyEl.classList.remove('hidden');
+        }
+        promptActiveItemId = '';
+        updateEditor();
+        return;
+      }
+
+      if (itemsEmptyEl) {
+        itemsEmptyEl.classList.add('hidden');
+      }
+
+      if (!filtered.some(item => item.id === promptActiveItemId)) {
+        promptActiveItemId = filtered[0].id;
+      }
+
+      for (const item of filtered) {
+        const li = document.createElement('li');
+        li.className = 'task-prompts__item';
+        if (item.id === promptActiveItemId) {
+          li.classList.add('active');
+        }
+        const label = document.createElement('label');
+        label.className = 'task-prompts__item-label';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = promptSelection.has(item.id);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            promptSelection.add(item.id);
+          } else {
+            promptSelection.delete(item.id);
+          }
+          syncTaskSelection();
+          renderSelectedChips();
+        });
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `${item.id} · ${item.title}`;
+        label.appendChild(checkbox);
+        label.appendChild(nameSpan);
+        li.appendChild(label);
+        if (item.description) {
+          const desc = document.createElement('div');
+          desc.className = 'task-prompts__item-desc';
+          desc.textContent = item.description;
+          li.appendChild(desc);
+        }
+        if (item.tags.length) {
+          const tags = document.createElement('div');
+          tags.className = 'task-prompts__item-tags';
+          tags.textContent = item.tags.map(tag => `#${tag}`).join(' ');
+          li.appendChild(tags);
+        }
+        li.addEventListener('click', (ev) => {
+          if (ev.target && ev.target.tagName === 'INPUT') return;
+          promptActiveItemId = item.id;
+          refreshItemsList();
+        });
+        itemsEl.appendChild(li);
+      }
+
+      updateEditor();
+    }
+
+    pruneSelection();
+    syncTaskSelection();
+    renderSelectedChips();
+    refreshCategoryOptions();
+    refreshItemsList();
+    updateMeta();
+
+    if (promptLibraryDirty) {
+      updateStatus('未保存の変更があります', 'warn');
+    } else {
+      updateStatus('', 'info');
+    }
+
+    if (categorySelect) {
+      categorySelect.addEventListener('change', () => {
+        promptCategoryId = categorySelect.value;
+        promptActiveItemId = '';
+        refreshItemsList();
+      });
+    }
+
+    if (searchInput) {
+      searchInput.value = promptSearchQuery;
+      searchInput.addEventListener('input', () => {
+        promptSearchQuery = searchInput.value.trim().toLowerCase();
+        refreshItemsList();
+      });
+    }
+
+    if (addCategoryBtn) {
+      addCategoryBtn.addEventListener('click', () => {
+        const label = window.prompt('新しいカテゴリ名を入力してください');
+        if (!label) return;
+        const id = slugifyPromptId(label);
+        if (!id) {
+          alert('カテゴリIDを生成できませんでした');
+          return;
+        }
+        if (findPromptCategory(id)) {
+          alert('同じIDのカテゴリが存在します');
+          return;
+        }
+        promptLibrary.categories.push({ id, label: label.trim(), description: '', items: [] });
+        promptCategoryId = id;
+        promptActiveItemId = '';
+        promptLibraryDirty = true;
+        updateStatus('未保存の変更があります', 'warn');
+        refreshCategoryOptions();
+        refreshItemsList();
+      });
+    }
+
+    if (addItemBtn) {
+      addItemBtn.addEventListener('click', () => {
+        if (!promptCategoryId) {
+          alert('先にカテゴリを追加してください');
+          return;
+        }
+        const category = findPromptCategory(promptCategoryId);
+        if (!category) {
+          alert('カテゴリが見つかりません');
+          return;
+        }
+        const newItem = {
+          id: generatePromptItemId(promptCategoryId),
+          title: '新規プロンプト',
+          description: '',
+          body: '',
+          tags: [],
+        };
+        category.items.push(newItem);
+        promptActiveItemId = newItem.id;
+        promptLibraryDirty = true;
+        updateStatus('未保存の変更があります', 'warn');
+        refreshItemsList();
+        renderSelectedChips();
+      });
+    }
+
+    if (itemSaveBtn) {
+      itemSaveBtn.addEventListener('click', () => {
+        if (!promptCategoryId) return;
+        const category = findPromptCategory(promptCategoryId);
+        if (!category) {
+          alert('カテゴリが見つかりません');
+          return;
+        }
+        const index = category.items.findIndex(entry => entry.id === promptActiveItemId);
+        if (index === -1) {
+          alert('編集対象が見つかりません');
+          return;
+        }
+        const entry = category.items[index];
+        const newId = (itemIdInput?.value || '').trim();
+        if (!newId) {
+          alert('IDを入力してください');
+          itemIdInput?.focus();
+          return;
+        }
+        if (newId !== entry.id && findPromptItem(newId)) {
+          alert('同じIDのアイテムが存在します');
+          return;
+        }
+        const newTitle = (itemTitleInput?.value || '').trim() || newId;
+        const newDescription = (itemDescriptionInput?.value || '').trim();
+        const newBody = itemBodyInput?.value || '';
+        const newTags = (itemTagsInput?.value || '')
+          .split(',')
+          .map(tag => tag.trim())
+          .filter(Boolean);
+        const oldId = entry.id;
+        entry.id = newId;
+        entry.title = newTitle;
+        entry.description = newDescription;
+        entry.body = newBody;
+        entry.tags = newTags;
+        if (oldId !== newId) {
+          replacePromptIdAcrossTasks(oldId, newId);
+          promptActiveItemId = newId;
+        }
+        promptLibraryDirty = true;
+        updateStatus('未保存の変更があります', 'warn');
+        refreshItemsList();
+        renderSelectedChips();
+        updateEditor();
+      });
+    }
+
+    if (itemDeleteBtn) {
+      itemDeleteBtn.addEventListener('click', () => {
+        if (!promptCategoryId) return;
+        const category = findPromptCategory(promptCategoryId);
+        if (!category) return;
+        const index = category.items.findIndex(entry => entry.id === promptActiveItemId);
+        if (index === -1) return;
+        const targetId = category.items[index].id;
+        if (!window.confirm(`「${targetId}」を削除しますか？`)) return;
+        category.items.splice(index, 1);
+        if (promptSelection.has(targetId)) {
+          promptSelection.delete(targetId);
+          syncTaskSelection();
+        }
+        for (const t of tasks) {
+          if (Array.isArray(t.promptPartIds)) {
+            t.promptPartIds = t.promptPartIds.filter(id => id !== targetId);
+          }
+        }
+        const fallback = category.items[index] || category.items[index - 1] || null;
+        promptActiveItemId = fallback ? fallback.id : '';
+        promptLibraryDirty = true;
+        updateStatus('未保存の変更があります', 'warn');
+        refreshItemsList();
+        renderSelectedChips();
+      });
+    }
+
+    if (saveDictionaryBtn) {
+      saveDictionaryBtn.disabled = !(window.prompts && typeof window.prompts.writeJson === 'function');
+      saveDictionaryBtn.addEventListener('click', async () => {
+        if (!window.prompts || typeof window.prompts.writeJson !== 'function') {
+          alert('保存APIが利用できません');
+          return;
+        }
+        try {
+          promptLibrary.metadata.updatedAt = new Date().toISOString();
+          const payload = JSON.parse(JSON.stringify(promptLibrary));
+          const res = await window.prompts.writeJson(payload);
+          if (res && res.success) {
+            promptLibraryDirty = false;
+            updateStatus('prompts.jsonに保存しました', 'success', true);
+            updateMeta();
+          } else {
+            const errorMessage = res?.error || '保存に失敗しました';
+            updateStatus(errorMessage, 'error');
+            alert(errorMessage);
+          }
+        } catch (error) {
+          console.error('Failed to save prompts.json', error);
+          updateStatus('保存に失敗しました', 'error');
+          alert('保存に失敗しました');
+        }
+      });
+    } else if (!window.prompts || typeof window.prompts.writeJson !== 'function') {
+      updateStatus('prompts APIが利用できません', 'warn');
+    }
   }
   function getVisibleTasks() {
     const query = searchQuery ? searchQuery.toLowerCase() : '';
@@ -246,14 +881,71 @@
           <hr/>
           <div class="form-group"><label>Breakdown Prompt</label><div class="control-group"><button id="task-generate-breakdown" class="btn btn-primary">Generate</button><button id="task-copy-breakdown" class="btn btn-secondary">Copy for Cursor auto</button><select id="task-breakdown-status"><option ${t.breakdownStatus==='DRAFT'?'selected':''}>DRAFT</option><option ${t.breakdownStatus==='READY'?'selected':''}>READY</option><option ${t.breakdownStatus==='REVIEWED'?'selected':''}>REVIEWED</option></select><span class="status" id="task-breakdown-stamp">${t.lastBreakdownAt?`Last: ${new Date(t.lastBreakdownAt).toLocaleString('ja-JP')}`:''}</span></div><textarea id="task-breakdown-prompt" rows="10" placeholder="Generateで雛形を作成">${escapeHtml(t.breakdownPrompt||'')}</textarea></div>
           <div class="control-group"><button id="task-save" class="btn btn-primary">更新</button>${featSuggest?`<button id="task-open-prd" class="btn btn-secondary">PRD</button>`:''}${featSuggest?`<button id="task-open-ux" class="btn btn-secondary">UX</button>`:''}${featSuggest?`<button id="task-open-api" class="btn btn-secondary">API</button>`:''}${featSuggest?`<button id="task-open-data" class="btn btn-secondary">DATA</button>`:''}${featSuggest?`<button id="task-open-qa" class="btn btn-secondary">QA</button>`:''}</div>
+          <hr/>
+          <div class="task-prompts" id="task-prompt-dictionary">
+            <div class="task-prompts__header">
+              <h4>Prompt Dictionary</h4>
+              <span class="status hidden" id="task-prompt-status"></span>
+            </div>
+            <p class="text-muted hidden" id="task-prompt-meta"></p>
+            <div class="task-prompts__selected" id="task-prompt-selected"></div>
+            <div class="task-prompts__grid">
+              <div class="task-prompts__list">
+                <div class="form-group">
+                  <label>カテゴリ</label>
+                  <div class="control-group">
+                    <select id="task-prompt-category"></select>
+                    <button id="task-prompt-add-category" class="btn btn-secondary btn-sm" type="button">カテゴリ追加</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="task-prompt-search">検索</label>
+                  <input id="task-prompt-search" type="text" placeholder="キーワードで絞り込み" />
+                </div>
+                <ul id="task-prompt-items" class="task-prompts__items"></ul>
+                <p class="task-prompts__empty hidden" id="task-prompt-items-empty"></p>
+                <button id="task-prompt-add-item" class="btn btn-secondary btn-sm" type="button">アイテム追加</button>
+              </div>
+              <div class="task-prompts__editor">
+                <div class="form-group">
+                  <label for="task-prompt-item-id">ID</label>
+                  <input id="task-prompt-item-id" type="text" placeholder="例: TASK-BD-01" />
+                </div>
+                <div class="form-group">
+                  <label for="task-prompt-item-title">タイトル</label>
+                  <input id="task-prompt-item-title" type="text" />
+                </div>
+                <div class="form-group">
+                  <label for="task-prompt-item-description">説明</label>
+                  <textarea id="task-prompt-item-description" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="task-prompt-item-body">本文</label>
+                  <textarea id="task-prompt-item-body" rows="6" placeholder="プロンプト本文を入力"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="task-prompt-item-tags">タグ（カンマ区切り）</label>
+                  <input id="task-prompt-item-tags" type="text" placeholder="MECE,Cursor" />
+                </div>
+                <div class="task-prompts__actions">
+                  <button id="task-prompt-item-save" class="btn btn-primary btn-sm" type="button">エントリ保存</button>
+                  <button id="task-prompt-item-delete" class="btn btn-secondary btn-sm" type="button">削除</button>
+                </div>
+              </div>
+            </div>
+            <div class="task-prompts__actions">
+              <button id="task-prompt-save-dictionary" class="btn btn-secondary btn-sm" type="button">辞書を保存</button>
+            </div>
+          </div>
         </div>
       </div>`;
+    await renderPromptDictionaryUI(t);
     function getPath(v){return v?v.split('#')[0].trim():'';}
     const openBy = async (key)=>{ const p=featSuggest&&getPath(featSuggest.links[key]); if(p) await window.docs.open(p); };
-    document.getElementById('task-save').addEventListener('click', ()=>{ t.title=document.getElementById('task-title').value.trim(); t.category=document.getElementById('task-category').value.trim()||'Uncategorized'; t.priority=document.getElementById('task-priority').value; t.status=document.getElementById('task-status').value; t.featId=document.getElementById('task-feat').value.trim(); t.notes=document.getElementById('task-notes').value; const bdTextarea=document.getElementById('task-breakdown-prompt'); if(bdTextarea) t.breakdownPrompt=bdTextarea.value; const bdStatus=document.getElementById('task-breakdown-status'); if(bdStatus) t.breakdownStatus=bdStatus.value; t.updatedAt=new Date().toISOString(); selectedTaskCategory = t.category; selectedTaskId = t.id; renderCategories(tasks); renderList(); });
+    document.getElementById('task-save').addEventListener('click', ()=>{ t.title=document.getElementById('task-title').value.trim(); t.category=document.getElementById('task-category').value.trim()||'Uncategorized'; t.priority=document.getElementById('task-priority').value; t.status=document.getElementById('task-status').value; t.featId=document.getElementById('task-feat').value.trim(); t.notes=document.getElementById('task-notes').value; const bdTextarea=document.getElementById('task-breakdown-prompt'); if(bdTextarea) t.breakdownPrompt=bdTextarea.value; const bdStatus=document.getElementById('task-breakdown-status'); if(bdStatus) t.breakdownStatus=bdStatus.value; t.promptPartIds = Array.from(promptSelection); t.updatedAt=new Date().toISOString(); selectedTaskCategory = t.category; selectedTaskId = t.id; renderCategories(tasks); renderList(); });
     if (featSuggest) { const map={PRD:'task-open-prd',UX:'task-open-ux',API:'task-open-api',DATA:'task-open-data',QA:'task-open-qa'}; for (const k of Object.keys(map)) { const btn=document.getElementById(map[k]); if(btn) btn.addEventListener('click',()=>openBy(k)); } }
     const genBtn=document.getElementById('task-generate-breakdown'); const copyBtn=document.getElementById('task-copy-breakdown');
-    if(genBtn) genBtn.addEventListener('click', async ()=>{ const featId=document.getElementById('task-feat').value.trim(); const reg=await loadFeats(); const item=reg.items.find(i=>i.id===featId); const links=item?item.links:{}; const prompt=buildBreakdownPrompt({ title:document.getElementById('task-title').value.trim(), category:document.getElementById('task-category').value.trim(), priority:document.getElementById('task-priority').value, featId, links }); const ta=document.getElementById('task-breakdown-prompt'); if(ta) ta.value=prompt; t.breakdownPrompt=prompt; t.lastBreakdownAt=new Date().toISOString(); const stamp=document.getElementById('task-breakdown-stamp'); if(stamp) stamp.textContent=`Last: ${new Date(t.lastBreakdownAt).toLocaleString('ja-JP')}`; });
+    if(genBtn) genBtn.addEventListener('click', async ()=>{ const featId=document.getElementById('task-feat').value.trim(); const reg=await loadFeats(); const item=reg.items.find(i=>i.id===featId); const links=item?item.links:{}; let prompt=buildBreakdownPrompt({ title:document.getElementById('task-title').value.trim(), category:document.getElementById('task-category').value.trim(), priority:document.getElementById('task-priority').value, featId, links }); await ensurePromptLibraryLoaded(); const extraItems=getSelectedPromptItems(); if(extraItems.length){ const blocks=extraItems.map(part=>{ const lines=[]; lines.push(`### ${part.title||part.id}`); if(part.description) lines.push(part.description); if(part.body) lines.push(part.body); if(part.tags&&part.tags.length) lines.push(`タグ: ${part.tags.join(', ')}`); return lines.filter(Boolean).join('\n'); }).filter(Boolean); if(blocks.length){ prompt = [prompt, '', '## 追加プロンプトパーツ', blocks.join('\n\n')].join('\n').replace(/\n{3,}/g,'\n\n').trim(); }} const ta=document.getElementById('task-breakdown-prompt'); if(ta) ta.value=prompt; t.breakdownPrompt=prompt; t.promptPartIds = Array.from(promptSelection); t.lastBreakdownAt=new Date().toISOString(); const stamp=document.getElementById('task-breakdown-stamp'); if(stamp) stamp.textContent=`Last: ${new Date(t.lastBreakdownAt).toLocaleString('ja-JP')}`; });
     if(copyBtn) copyBtn.addEventListener('click', async ()=>{ const ta=document.getElementById('task-breakdown-prompt'); const txt=ta?ta.value:''; if(!txt){ alert('Breakdown Promptが空です'); return;} try{ await navigator.clipboard.writeText(txt); alert('コピーしました（Cursor autoに貼り付けてください）'); }catch(e){ alert('クリップボードへのコピーに失敗しました'); } });
   }
   function escapeHtml(s){return String(s||'').replace(/[&<>]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));}
