@@ -1,0 +1,5 @@
+[submodule "tools/nexus"]
+	path = tools/nexus
+	url = https://github.com/rikitaro3/nexus-ai.git
+	branch = master
+	update = checkout
