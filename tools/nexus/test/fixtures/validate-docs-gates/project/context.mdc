@@ -1,0 +1,18 @@
+# Fixture Context
+
+## Context Map
+
+### Strategy
+- docs/STRATEGY/STRATEGY_ROOT.mdc … Valid strategy baseline
+- docs/STRATEGY/STRATEGY_NoBreadcrumbs.mdc … Missing breadcrumbs sample
+
+### Architecture
+- docs/ARCH/ARCH_BadLayer.mdc … Invalid layer definition
+
+### Product Requirements
+- docs/PRD/PRD_BadStructure.mdc … Structural issues to trigger gates
+
+### Quality Assurance
+- docs/QA/QA_CYCLE_A.mdc … Cycle start
+- docs/QA/QA_CYCLE_B.mdc … Cycle end
+- docs/QA/qa-bad-name.mdc … Naming rule violation

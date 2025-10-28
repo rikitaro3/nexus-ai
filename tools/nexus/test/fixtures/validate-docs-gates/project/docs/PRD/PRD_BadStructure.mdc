@@ -1,0 +1,15 @@
+# Problematic PRD
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: docs/STRATEGY/DOES_NOT_EXIST.mdc
+> Downstream: docs/QA/QA_CYCLE_B.mdc, docs/QA/DOES_NOT_EXIST.mdc
+
+## 目次
+- [Overview](#1-overview)
+
+## Overview
+章番号が付いていない見出しです。
+
+## Scope
+- 対象: 新プロダクトの一部機能

@@ -1,0 +1,46 @@
+{
+  "name": "nexus",
+  "version": "0.1.0",
+  "description": "Nexus - Docs Navigator and Tasks (Electron)",
+  "main": "dist/src/main/main.js",
+  "scripts": {
+    "build": "tsc",
+    "build:main": "tsc",
+    "build:renderer": "echo 'Renderer build skipped (plain HTML/CSS/JS)'",
+    "build:all": "tsc",
+    "start": "electron .",
+    "start:dev": "tsc && electron .",
+    "start:windows": "cross-env NEXUS_PROJECT_ROOT=%cd% electron .",
+    "start:unix": "NEXUS_PROJECT_ROOT=$(pwd) electron .",
+    "test": "jest",
+    "test:unit": "jest --testPathPatterns src/main/utils/__tests__",
+    "test:integration": "jest --testPathPatterns test/integration",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:e2e": "node legacy/tests/test-nexus-e2e.js",
+    "test:e2e:old": "node legacy/tests/test-e2e-puppeteer.js",
+    "test:e2e:smoke": "playwright test",
+    "test:e2e:playwright": "node legacy/tests/test-e2e-playwright.js",
+    "test:startup": "playwright test test/e2e/app-startup.spec.ts",
+    "validate:docs": "node scripts/validate-docs-gates.js",
+    "capture:screenshots": "node scripts/capture-screenshots.js"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
+    "@playwright/test": "^1.56.1",
+    "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.9.1",
+    "electron": "^30.0.0",
+    "jest": "^30.2.0",
+    "playwright": "^1.56.1",
+    "puppeteer-core": "^21.5.0",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.9.3"
+  }
+}

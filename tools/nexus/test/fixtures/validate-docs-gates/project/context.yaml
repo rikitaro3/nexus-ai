@@ -1,0 +1,24 @@
+version: "1.0"
+contextMap:
+  - category: Strategy
+    entries:
+      - path: docs/STRATEGY/STRATEGY_ROOT.mdc
+        description: Valid strategy baseline
+      - path: docs/STRATEGY/STRATEGY_NoBreadcrumbs.mdc
+        description: Missing breadcrumbs sample
+  - category: Architecture
+    entries:
+      - path: docs/ARCH/ARCH_BadLayer.mdc
+        description: Invalid layer definition
+  - category: Product Requirements
+    entries:
+      - path: docs/PRD/PRD_BadStructure.mdc
+        description: Structural issues to trigger gates
+  - category: Quality Assurance
+    entries:
+      - path: docs/QA/QA_CYCLE_A.mdc
+        description: Cycle start
+      - path: docs/QA/QA_CYCLE_B.mdc
+        description: Cycle end
+      - path: docs/QA/qa-bad-name.mdc
+        description: Naming rule violation
