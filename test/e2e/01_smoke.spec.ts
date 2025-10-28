@@ -8,17 +8,17 @@ test.describe('Nexus smoke test', () => {
     const fileUrl = 'file://' + path.resolve(__dirname, './fixtures/smoke.html');
 
     await page.goto(fileUrl);
-    await expect(page.locator('text=Docs Navigator')).toBeVisible();
+    await expect(page.getByTestId('docs-navigator__heading')).toBeVisible();
 
-    const treeButton = page.locator('button[data-mode="tree"]');
+    const treeButton = page.getByTestId('docs-navigator__mode-tree-button');
     await expect(treeButton).toBeVisible();
 
     await treeButton.click();
 
-    const status = page.locator('#tree-status');
+    const status = page.getByTestId('docs-navigator__tree-status');
     await expect(status).toHaveText(TREE_READY_MESSAGE);
 
-    const treeView = page.locator('#tree-view .tree-node');
+    const treeView = page.getByTestId('docs-navigator__tree-node');
     await expect(treeView.first()).toHaveText('Root Node');
   });
 });
