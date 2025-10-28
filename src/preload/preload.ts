@@ -8,7 +8,9 @@ import type {
 
 contextBridge.exposeInMainWorld('docs', {
   read: (relPath: string): Promise<string> => ipcRenderer.invoke('docs:read', relPath),
-  open: (relPath: string): Promise<void> => ipcRenderer.invoke('docs:open', relPath)
+  open: (relPath: string): Promise<void> => ipcRenderer.invoke('docs:open', relPath),
+  listTemplates: (): Promise<any> => ipcRenderer.invoke('docs:listTemplates'),
+  createFromTemplate: (payload: any): Promise<any> => ipcRenderer.invoke('docs:createFromTemplate', payload)
 });
 
 contextBridge.exposeInMainWorld('tasks', {

@@ -77,9 +77,9 @@ describe('apply-docs-gates autofix', () => {
     expect(updatedDoc).toMatch(/##\s+4\.\s+Details/);
 
     const entries = parseContextEntries(updatedContext);
-    const { nodes, docStatus, docContents } = await parseAllBreadcrumbs(entries, tempDir);
+    const { nodes, docStatus, docRecords } = await parseAllBreadcrumbs(entries, tempDir);
     const results = createEmptyGateResults();
-    validateDocumentGates(nodes, docStatus, docContents, results);
+    validateDocumentGates(nodes, docStatus, docRecords, results);
 
     for (const gateId of ['DOC-01', 'DOC-02', 'DOC-03', 'DOC-05', 'DOC-06', 'DOC-07', 'DOC-08']) {
       const violations = results[gateId] || [];

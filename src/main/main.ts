@@ -1,9 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getRepoRoot, withPathValidation } from './handlers/security.js';
+import { getRepoRoot, validateNewDocumentPath, withPathValidation } from './handlers/security.js';
 import { logger } from './utils/logger.js';
 import { createRulesWatcher, RulesWatcherController, RulesWatcherEvent } from './watchers/rules-watcher.js';
+import { generateDocumentFromTemplate, listDocumentTemplates } from './utils/doc-templates.js';
 
 let mainWindow: BrowserWindow | null = null;
 let rulesWatcher: RulesWatcherController | null = null;
@@ -307,6 +308,95 @@ ipcMain.handle('docs:read', withPathValidation(async (event, validation) => {
     return { success: false, error: (e as Error).message };
   }
 }));
+
+ipcMain.handle('docs:listTemplates', async () => {
+  try {
+    const repoRoot = getRepoRoot();
+    const templates = await listDocumentTemplates(repoRoot);
+    return { success: true, templates };
+  } catch (error) {
+    logger.error('Failed to list document templates', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('docs:createFromTemplate', async (_event, payload) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      return { success: false, error: 'リクエストが不正です' };
+    }
+
+    const {
+      templateId,
+      outputPath,
+      title,
+      layer,
+      upstream,
+      downstream,
+      tags,
+      extra,
+      force
+    } = payload as Record<string, unknown>;
+
+    if (typeof templateId !== 'string' || !templateId.trim()) {
+      return { success: false, error: 'テンプレートIDが指定されていません' };
+    }
+    if (typeof outputPath !== 'string' || !outputPath.trim()) {
+      return { success: false, error: '出力先パスを指定してください' };
+    }
+
+    const validation = validateNewDocumentPath(outputPath.trim());
+    if (!validation.valid) {
+      return { success: false, error: validation.error || '出力先パスの検証に失敗しました' };
+    }
+    if (validation.exists && force !== true) {
+      return { success: false, error: '出力先ファイルが既に存在します (--force で上書き可能)' };
+    }
+
+    const repoRoot = validation.repoRoot;
+    const absoluteOutputPath = validation.target;
+    const relativePath = path.relative(repoRoot, absoluteOutputPath);
+
+    await generateDocumentFromTemplate({
+      projectRoot: repoRoot,
+      templateIdOrPath: templateId.trim(),
+      absoluteOutputPath,
+      title: typeof title === 'string' ? title : undefined,
+      layer: typeof layer === 'string' ? layer : undefined,
+      upstream: Array.isArray(upstream) ? upstream as string[] : [],
+      downstream: Array.isArray(downstream) ? downstream as string[] : [],
+      tags: Array.isArray(tags) ? tags as string[] : [],
+      extra: isPlainObject(extra) ? mapStringRecord(extra as Record<string, unknown>) : {},
+      force: force === true
+    });
+
+    logger.info('Document generated from template', {
+      templateId: templateId.trim(),
+      outputPath: absoluteOutputPath,
+      relativePath
+    });
+
+    return { success: true, path: relativePath, absolutePath: absoluteOutputPath };
+  } catch (error) {
+    logger.error('Failed to generate document from template', { error: (error as Error).message });
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') return false;
+  return Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function mapStringRecord(input: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof key !== 'string' || !key) continue;
+    if (value == null) continue;
+    result[key] = String(value);
+  }
+  return result;
+}
 
 ipcMain.handle('docs:open', withPathValidation(async (event, validation) => {
   try {

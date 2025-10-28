@@ -35,6 +35,14 @@ main { flex: 1; overflow: auto; padding: 20px; }
 .docs-middle li span { color: #6b7280; font-size: 12px; }
 .docs-mode { display: none; }
 .docs-mode.active { display: block; }
+.docs-create { margin-bottom: 16px; border: 1px dashed #bfdbfe; background: #f8fafc; border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.docs-create__toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.docs-create__hint { color: #475569; font-size: 13px; }
+.docs-create__form { display: flex; flex-direction: column; gap: 12px; }
+.docs-create__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.docs-create__status { font-size: 12px; color: #1d4ed8; min-height: 18px; display: inline-flex; align-items: center; }
+.docs-create__status.error { color: #b91c1c; }
+.docs-create__description { margin: 0; }
 .rules-pipeline { margin-bottom: 16px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; display: flex; flex-direction: column; gap: 8px; }
 .rules-pipeline.hidden { display: none; }
 .rules-pipeline__header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -183,6 +191,11 @@ body.dark .rules-pipeline__status { color: #e0e0e0; }
 body.dark .rules-pipeline__summary, body.dark .rules-pipeline__diff, body.dark .rules-pipeline__analytics { color: #d1d5db; }
 body.dark .rules-pipeline__meta { color: #9ca3af; }
 body.dark .docs-mode-meta { color: #9ca3af; }
+body.dark .docs-create { background: #1f2937; border-color: #374151; }
+body.dark .docs-create__hint { color: #d1d5db; }
+body.dark .docs-create__status { color: #93c5fd; }
+body.dark .docs-create__status.error { color: #fca5a5; }
+body.dark .docs-create__description { color: #9ca3af; }
 body.dark .form-group input[type="text"], body.dark .form-group textarea, body.dark .feats-toolbar input[type="text"], body.dark .tasks-inputs input[type="text"], body.dark .tasks-inputs textarea { background: #3d3d3d; border-color: #4d4d4d; color: #e0e0e0; }
 body.dark .control-group select { background: #3d3d3d; border-color: #4d4d4d; color: #e0e0e0; }
 body.dark .tasks-recommendations { background: #2d2d2d; border-color: #3d3d3d; }
