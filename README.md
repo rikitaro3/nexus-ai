@@ -70,6 +70,7 @@ npm run lint
 npm test
 npm run test:watch
 npm run test:coverage
+npm run test:e2e
 ```
 
 ### CLI ユーティリティ
