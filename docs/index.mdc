@@ -20,9 +20,12 @@
 
 ### DEVELOPMENT（開発ガイド）
 - **DEVELOPMENT/index.mdc** … 実装方針、コーディング規約
+- **DEVELOPMENT/Rendererドメインサービス設計.mdc** … Docs Navigator / Tasks の詳細設計
+- **DEVELOPMENT/AIプロバイダー拡張ガイド.mdc** … AIプロバイダー追加手順
 
 ### QA（品質）
 - **QA/index.mdc** … テストシナリオ、品質基準
+- **QA/QualityGatesパイプライン詳細設計.mdc** … Quality Gates監視の詳細設計
 
 ### GATES（品質ゲート）
 - **GATES/index.mdc** … Quality Gates定義

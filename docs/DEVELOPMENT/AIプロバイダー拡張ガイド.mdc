@@ -1,0 +1,110 @@
+# AIプロバイダー拡張ガイド
+
+> Breadcrumbs
+> Layer: DEVELOPMENT
+> Upstream: docs/DEVELOPMENT/index.mdc
+> Downstream: docs/QA/index.mdc
+
+## 目的
+`services/ai/registry.js` に新しいAIプロバイダーを追加し、TasksモジュールおよびSettings画面から利用可能にするための手順とAPI契約を定義します。
+
+## 1. レジストリAPI概要
+`services/ai/registry.js` は即時関数で初期化され、以下のAPIを公開します。
+
+| 関数 | 説明 |
+|------|------|
+| `registerProvider(provider)` | プロバイダーを登録し `Map` に保持。戻り値は正規化済みオブジェクト |
+| `getProvider(id)` | IDでプロバイダーを取得 |
+| `getActiveProvider()` / `getActiveProviderId()` | 現在選択中のプロバイダー情報 |
+| `setActiveProvider(id, { silent?, force? })` | アクティブプロバイダーを設定。未登録の場合は `pendingActiveProviderId` に退避 |
+| `ensureActiveProvider({ silent? })` | アクティブプロバイダーが未設定の時に候補から選択 |
+| `listProviders()` | UI表示用に `{ id, label, description, metadata }[]` を返却 |
+| `subscribe(listener)` | アクティブプロバイダー変更通知を購読（解除関数を返却） |
+| `onTokenUsage(listener)` | トークン使用イベント購読 |
+| `recordTokenUsage(payload)` | Token消費メトリクスを通知 |
+| `createProviderSkeleton(overrides)` | 実装テンプレートを生成 |
+
+初期化時に `restoreFromSettings()` が呼ばれ、`window.settings.getAiProvider()` で保存済みプロバイダーIDを復元します。
+
+## 2. プロバイダー実装要件
+登録オブジェクトは以下のプロパティを持つ必要があります。
+
+```js
+{
+  id: 'provider-id',               // 必須・一意
+  label: 'Provider Label',         // 任意（未指定時はid）
+  description: 'UI表示用説明',     // 任意
+  metadata: { ... },               // 任意（オブジェクトのみ）
+  buildBreakdownPrompt(context, helpers) { ... } // 必須
+}
+```
+
+### 2.1 `buildBreakdownPrompt(context, helpers)`
+- `context`
+  - `{ title, category, priority, featId, links }`
+  - すべて文字列、`links` は `Record<string,string>`
+- `helpers`
+  - `registry` … レジストリAPIへの参照
+  - `options` … Tasks側から渡される任意オプション
+  - `recordUsage(usage)` … `{ promptTokens, completionTokens, totalTokens, model }` などを記録
+- 戻り値
+  - `string` または `{ prompt: string, usage?: UsagePayload }`
+  - `usage` を返した場合は Settings画面の利用統計に反映される
+
+### 2.2 エラーハンドリング
+- 実装内で例外が発生すると Tasks はフォールバックテンプレートを利用
+- プロバイダー側でエラー内容を `console.error('[ProviderID]', err)` などでログ出力すること
+
+## 3. 拡張手順
+1. **モジュール作成**
+   - `src/renderer/services/ai/providers/<provider-id>.js` を追加
+   - 以下のように登録関数を呼び出す
+     ```js
+     const registry = require('../registry.js');
+     registry.registerProvider({
+       id: 'my-provider',
+       label: 'My Provider',
+       description: 'LLM XYZを利用',
+       metadata: { vendor: 'Example' },
+       buildBreakdownPrompt(context, helpers) {
+         // context.title 等を利用しプロンプトを生成
+         const prompt = `タスク:${context.title}\n...`;
+         helpers.recordUsage?.({ providerId: 'my-provider', model: 'xyz-1', totalTokens: 123 });
+         return { prompt };
+       }
+     });
+     ```
+2. **Settingsへの表示**
+   - `registerProvider` を呼び出すと自動で `listProviders()` に反映
+   - Settings画面 (`features/settings/settings.js`) は `aiRegistry.subscribe()` で変更を監視し、選択肢を再描画
+3. **デフォルト設定**
+   - `window.settings.setAiProvider('my-provider')` を呼び出すと
+     - Main Processが `settings:setAiProvider` IPCで保存
+     - レジストリが `setActiveProvider` を呼び出して即時反映
+4. **Tasks連携確認**
+   - Tasks詳細ペインで「Breakdown生成」を実行し、`my-provider` が選択されていることを確認
+   - `helpers.recordUsage` 経由で `registry.recordTokenUsage()` が呼ばれると、Settingsの統計欄に使用量が表示される
+
+## 4. Settings画面との契約
+- `window.settings.getAiProvider()` → `{ providerId }`
+- `window.settings.setAiProvider(id)` → 成功時は `providerStatusEl` に完了メッセージ
+- レジストリは `subscribe(listener)` で選択変更を通知し、Settingsでは以下のUI更新を行う
+  - ドロップダウン選択状態
+  - 説明文 (`providerDescriptionEl`)
+  - 選択中プロバイダーの `metadata` を整形して表示
+
+## 5. トークン使用記録
+- プロバイダーは `helpers.recordUsage()` を利用するか、`buildBreakdownPrompt` の戻り値に `usage` を含める
+- レジストリは `notifyTokenUsage()` 経由で購読者へ `{ providerId, ...payload }` を送信
+- Settings側では `aiRegistry.onTokenUsage()` を利用し、セッション内の合計トークンを表示予定（拡張ポイント）
+
+## 6. チェックリスト
+- [ ] `id` がユニークである
+- [ ] `buildBreakdownPrompt` が必ず文字列または `{ prompt }` を返す
+- [ ] エラー時にフォールバックテンプレートで破綻しない
+- [ ] `window.settings.setAiProvider` で永続化されることを確認
+- [ ] `helpers.recordUsage` でトークン使用量を記録（任意だが推奨）
+
+## 7. 関連文書
+- [Rendererドメインサービス設計.mdc](Rendererドメインサービス設計.mdc)
+- [QualityGatesパイプライン詳細設計.mdc](../QA/QualityGatesパイプライン詳細設計.mdc)

@@ -3,111 +3,98 @@
 > Breadcrumbs
 > Layer: DEVELOPMENT
 > Upstream: docs/ARCH/index.mdc
-> Downstream: N/A
+> Downstream: docs/DEVELOPMENT/Rendererドメインサービス設計.mdc
 
-## 概要
-Nexusの実装方針、コーディング規約、開発フロー。
+## 目的
+Nexusの実装構成・開発規約・ビルド/テスト手順をTypeScript版コードベースに合わせて最新化します。
 
-## 実装方針
-
-### コア機能
-1. **Docs Navigator**
-   - Context Map（.cursor/context.mdc or context.mdc）をパース
-   - カテゴリ×ドキュメント一覧を表示
-   - 詳細表示（Breadcrumbs, Traceability Map, Waypoints, MECE Domains）
-   - Openボタンで外部エディタ起動
-
-2. **FEAT横断ビュー**
-   - Features Registry（docs/PRD/index.mdc）をパース
-   - FEAT一覧＋カバレッジ率表示
-   - 不足リンク警告（PRD/UX/API/DATA/QA）
-
-3. **Orphan検出**
-   - docs/*/index.mdcのBreadcrumbsを解析
-   - Upstream/Downstreamが両方空＝Orphan
-   - 一覧表示
-
-4. **Tasks管理**
-   - 一括インポート（【カテゴリ】タイトル）
-   - 個別追加（カテゴリ＋タイトル）
-   - 編集（title, category, priority, status, featId, notes）
-   - 保存（tasks.json）
-   - エクスポート（human_todo.mdc）
-
-5. **Breakdown生成**
-   - FEAT連携で自動入力
-   - 定型プロンプト生成（PRD_DocsNavigator_TasksBreakdown.mdc準拠）
-   - クリップボードコピー（Cursor auto用）
-
-### コンテキスト切替（デバッグ時のみ）
-- 環境変数 `NEXUS_DEBUG=1` または `!app.isPackaged` で有効
-- セレクトで Repo / Nexus を切り替え
-- 選択をlocalStorageに記憶
-
-## コーディング規約
-
-### JavaScript
-- 依存: なし（Vanilla JS + DOM API）
-- モジュール: IIFE（即時関数）でスコープ分離
-- 非同期: async/await
-- エラー: try-catch + console.error
-- ドキュメント: JSDoc（必要に応じて）
-
-### IPC
-- preload.js: contextBridge.exposeInMainWorld() で公開
-- main.js: ipcMain.handle() で処理
-- 戻り値: `{ success: bool, data/error }` 形式
-
-### DOM操作
-- DOM要素は直接操作
-- イベント: addEventListener
-- テンプレート: インライン文字列（シンプルさ重視）
-
-### データパース
-- Context Map: 正規表現でカテゴリ/パス/説明を抽出
-- Features Registry: 正規表現でFEAT-ID/タイトル/リンクを抽出
-- Breadcrumbs: 正規表現で Upstream/Downstream を抽出
-
-## ファイル構成
+## 1. ディレクトリ構成
 ```
-
-├── package.json
-├── main.js (IPC handlers)
-├── preload.js (contextBridge)
-├── context.mdc (Nexus専用Context)
-├── tasks.json (タスクデータ)
-├── docs/
-│   ├── ARCH/index.mdc
-│   ├── DEVELOPMENT/index.mdc (本ファイル)
-│   ├── PRD/index.mdc (Features Registry)
-│   └── PRD/PRD_Nexus.mdc (要求仕様)
-└── renderer/
-    ├── index.html (UI)
-    ├── styles.css
-    ├── app.js (タブ切替)
-    ├── docs-navigator.js
-    └── tasks.js
+src/
+├── main/                # Electron Main Process (TypeScript)
+│   ├── handlers/        # セキュリティ/設定などのIPCロジック
+│   ├── utils/           # Quality Gates, impact解析, ロガー
+│   └── watchers/        # Quality Gatesパイプライン監視 (rules-watcher)
+├── preload/             # contextBridge公開API（TypeScript）
+├── renderer/            # ブラウザサイド実装（Vanilla JS + DOM）
+│   ├── features/        # docs-navigator / tasks / settings モジュール
+│   ├── services/        # AIプロバイダー登録・永続化ラッパー
+│   └── shared/          # UIユーティリティ・定数
+└── types/               # Main/Renderer共通で参照する型定義
 ```
+補助ファイル:
+- `context.mdc` / `prompts.json` … 初期データ
+- `logs/quality-gates` … Quality Gates実行ログ
+- `scripts/` … ビルド・検証コマンド
 
-## 開発フロー
-1. 機能追加: PRD更新 → ARCH更新 → 実装 → テスト
-2. バグ修正: 再現 → 修正 → テスト
-3. リファクタ: 小規模・段階的に実施
+## 2. メインプロセス実装方針
+- `src/main/main.ts`
+  - アプリ起動・BrowserWindow生成
+  - `rules-watcher`初期化結果をRendererへブロードキャスト
+  - Settings IPC（プロジェクトルート、AIプロバイダー）を管理
+- `src/main/watchers/rules-watcher.ts`
+  - chokidarで`docs/**`を監視し、差分 → Quality Gates再実行
+  - パイプライン状態（auto/semiAuto/manual）と最新ログをイベント化
+  - 詳細: [QualityGatesパイプライン詳細設計.mdc](../QA/QualityGatesパイプライン詳細設計.mdc)
+- `src/main/handlers/security.ts`
+  - パス検証とホワイトリスト判定を共通化
+  - Settingsからのプロジェクトルート変更を受け付け
+  - 詳細: [セキュリティ設計.mdc](../ARCH/セキュリティ設計.mdc)
 
-## テスト方針
-- 手動テスト（Electron起動で確認）
-- IPCは main/preload 単体で動作確認
-- レンダラーはDOM操作をブラウザコンソールで確認
-- ファイルI/Oは実際のtasks.jsonで確認
+## 3. Preload/APIレイヤー
+- `src/preload/preload.ts`
+  - `contextBridge.exposeInMainWorld`でMain APIを公開
+  - `rulesWatcher` APIは `RulesWatcherEventEnvelope` を返却（共通型: `src/types/rules-watcher.ts`）
+  - 例外はすべて `{ success: false, error }` 形式に統一
+- IPC命名規約: `<ドメイン>:<動詞>`（例: `tasks:writeJson`, `rules:scanImpacts`）
 
-## デバッグ
-- DevTools: `mainWindow.webContents.openDevTools()`
-- ログ: console.log/error
-- IPC: main.js でリクエスト/レスポンスをログ
+## 4. Renderer実装概要
+- 詳細仕様は [Rendererドメインサービス設計.mdc](Rendererドメインサービス設計.mdc)
+- `features/docs-navigator/`
+  - Docs/FEAT/Treeモード切替
+  - Quality Gatesパネル描画（rulesWatcherイベント連携）
+  - `localStorage`キー: `nexus.docs.mode`
+- `features/tasks/`
+  - タスクCRUD + 推奨タスクスコアリング + Breakdownプロンプト生成
+  - `localStorage`キー: `nexus.tasks.filter`, `nexus.tasks.category`
+  - AIプロバイダーは `services/ai/registry.js` で取得
+- `services/ai/`
+  - `registry.js` … AIプロバイダーの登録・選択・トークン使用記録
+  - `providers/` … 既定プロバイダー（Cursorなど）
+  - 拡張手順: [AIプロバイダー拡張ガイド.mdc](AIプロバイダー拡張ガイド.mdc)
 
-## 注意事項
-- 外部API不使用（オフライン運用）
-- ファイルパス検証必須（セキュリティ）
-- 同期I/O使用（簡素化優先）
-alwaysApply: true
----
+## 5. コーディング規約
+### TypeScript (Main/Preload)
+- `strict`モード有効 (`tsconfig.json`)
+- importはESModule形式（拡張子なし）
+- IPCレスポンスは `{ success, data?, error? }`
+- 例外ログは `logger.error` で構造化出力
+
+### Renderer (Vanilla JS)
+- 即時関数でスコープ封じ込め (IIFE)
+- `console`ログは`[モジュール名]`プレフィックス
+- DOM取得は`document.getElementById/querySelector`
+- 状態はモジュールローカル変数と`localStorage`に保持
+- AI連携時は `registry.recordTokenUsage()` で消費量を記録
+
+## 6. ビルド & 実行
+| コマンド | 目的 |
+|----------|------|
+| `npm run build` | TypeScriptコンパイル (dist出力) |
+| `npm start` | 開発モードでElectron起動（ts-node/register） |
+| `npm run lint` | ESLintチェック |
+| `npm test` | Jest + Integrationテスト |
+| `npm run test:e2e` | Playwright E2E |
+
+## 7. テスト指針
+- Quality Gates監視の統合テスト: `test/integration/rules-watcher.integration.spec.ts`
+- セキュリティ検証: `test/integration/security.integration.spec.ts`
+- RendererロジックはJestモックで主要ユーティリティを検証
+- QA観点は [docs/QA/index.mdc](../QA/index.mdc) を参照
+
+## 8. 関連詳細設計
+- [QualityGatesパイプライン詳細設計.mdc](../QA/QualityGatesパイプライン詳細設計.mdc)
+- [Rendererドメインサービス設計.mdc](Rendererドメインサービス設計.mdc)
+- [AIプロバイダー拡張ガイド.mdc](AIプロバイダー拡張ガイド.mdc)
+- [セキュリティ設計.mdc](../ARCH/セキュリティ設計.mdc)
+- [IPC設計.mdc](../ARCH/IPC設計.mdc)
