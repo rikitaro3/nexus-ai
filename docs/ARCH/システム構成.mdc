@@ -6,7 +6,7 @@ upstream:
   - "docs/ARCH/index.mdc"
 downstream:
   - "docs/ARCH/セキュリティ設計.mdc"
-  - "docs/ARCH/IPC設計.mdc"
+  - "docs/ARCH/共通コンポーネント設計.mdc"
 tags: []
 ---
 
@@ -15,200 +15,109 @@ tags: []
 > Breadcrumbs
 > Layer: ARCH
 > Upstream: docs/ARCH/index.mdc
-> Downstream: docs/ARCH/セキュリティ設計.mdc, docs/ARCH/IPC設計.mdc
+> Downstream: docs/ARCH/セキュリティ設計.mdc, docs/ARCH/共通コンポーネント設計.mdc
 
 ## 目次
 
-- [システム構成](#システム構成)
-  - [目次](#目次)
-  - [1. システム概要](#1-システム概要)
-    - [1.1 通信フロー](#11-通信フロー)
-  - [2. プロセス構成](#2-プロセス構成)
-    - [2.1 Main Process (main.ts)](#21-main-process-maints)
-    - [2.2 Renderer Process (src/renderer/)](#22-renderer-process-srcrenderer)
-    - [2.3 Preload (preload.js)](#23-preload-preloadjs)
-  - [3. ディレクトリ構造](#3-ディレクトリ構造)
-    - [3.1 推奨構造](#31-推奨構造)
-    - [3.2 ディレクトリ説明](#32-ディレクトリ説明)
-    - [3.3 ビルドツール](#33-ビルドツール)
+- [1. システム概要](#1-システム概要)
+  - [1.1 ランタイム構成](#11-ランタイム構成)
+  - [1.2 技術スタック](#12-技術スタック)
+- [2. Next.js アプリ構造](#2-nextjs-アプリ構造)
+  - [2.1 App Router](#21-app-router)
+  - [2.2 API Routes](#22-api-routes)
+  - [2.3 ドメインコンポーネント](#23-ドメインコンポーネント)
+- [3. ディレクトリ構成](#3-ディレクトリ構成)
+  - [3.1 推奨構造](#31-推奨構造)
+  - [3.2 ディレクトリ説明](#32-ディレクトリ説明)
+- [4. 外部連携](#4-外部連携)
+  - [4.1 ドキュメント資産](#41-ドキュメント資産)
+  - [4.2 CLI スクリプト](#42-cli-スクリプト)
 
 ---
 
 ## 1. システム概要
 
-NexusはElectronアプリケーションとして、3つのプロセスで構成されます：
+Nexus は Next.js をベースとした Web アプリケーションです。App Router により UI を構成し、ドキュメント・タスクなどのデータはサーバーコンポーネントおよび Route Handler を介して取得します。アプリは Node.js 上でサーバーレンダリングされ、ブラウザに対して React コンポーネントをストリーミングします。
 
-1. **Main Process (Node.js)**: ファイルI/O、セキュリティ検証、ウィンドウ管理
-2. **Renderer Process (Chromium)**: UI表示、ユーザー操作、ロジック実行
-3. **Preload**: Main/Renderer間の安全な通信橋渡し
+### 1.1 ランタイム構成
 
-### 1.1 通信フロー
+1. **Next.js Server (Node.js)**: サーバーコンポーネントのレンダリング、API Route の実行、環境変数の管理を担います。
+2. **Browser (React 18)**: クライアントコンポーネントで対話 UI を提供し、データフェッチ結果を描画します。
+3. **CLI/バッチ (Node.js Scripts)**: 品質ゲート検証やテンプレート生成などの補助タスクを提供します。
 
-- Renderer → Preload: `window.docs.read()`, `window.tasks.readJson()`
-- Preload → Main: IPC経由でファイル操作
-- Main → File System: セキュリティ検証後にファイルI/O
+### 1.2 技術スタック
 
-## 2. プロセス構成
+- Next.js 14 (App Router)
+- React 18 / TypeScript
+- Jest (ユニットテスト)
+- Playwright (E2E 自動化予定)
+- Zod によるスキーマ検証
 
-### 2.1 Main Process (main.ts)
+## 2. Next.js アプリ構造
 
-役割: アプリケーションのエントリーポイント
+### 2.1 App Router
 
-主要責務:
-- ウィンドウ管理（BrowserWindow）
-- IPCハンドラー（docs:read, tasks:*, env:isDebug）
-- セキュリティ検証（リポジトリ外パス検出）
-- DevTools制御（debug mode）
-- E2Eテスト支援（auto-click）
+`src/app/(routes)` でページとレイアウトを定義します。最上位の `layout.tsx` がグローバルな HTML スケルトンを提供し、`page.tsx` がドキュメントナビゲーションとタスク管理の複合ビューを描画します。App Router を採用することで以下を実現します。
 
-技術:
-- TypeScript
-- Electron IPC（`ipcMain.handle()`）
-- Node.js File System（`fs`モジュール）
+- サーバーコンポーネントによる初期データ取得と SEO 向上
+- クライアントコンポーネント（DocsNavigator, TasksWorkspace など）を必要箇所に限定
+- ルートごとのサーバーアクション導入余地を確保
 
-セキュリティ:
-- パス検証: リポジトリルート外へのアクセス拒否
-- エラーハンドリング: 全てのIPCコールでエラー処理
+### 2.2 API Routes
 
-実装方針:
-- IPCハンドラーは`handlers/`ディレクトリに分割
-- 型定義ファイルで型安全性を確保
-- エラーレスポンスは統一フォーマット
+`src/app/api/**/route.ts` に Next.js Route Handler を配置し、ヘルスチェックや将来的なデータフェッチ API のエントリーポイントを提供します。Route Handler は Next.js の標準 Response API を返し、ドメインロジックは `src/lib/` へ集約します。
 
-ファイル:
-- main.ts: エントリーポイント
-- handlers/: IPCハンドラー（docs.ts, tasks.ts）
-- utils/: ユーティリティ（security.ts, file.ts）
-- dist/main/main.js: ビルド後JavaScript
+### 2.3 ドメインコンポーネント
 
-### 2.2 Renderer Process (src/renderer/)
+- `src/components/docs/DocsNavigator.tsx`: ドキュメントカテゴリ、FEAT クロスリファレンス、ツリー表示を提供
+- `src/components/tasks/TasksWorkspace.tsx`: タスク CRUD、フィルタリング、エクスポート UI
+- `src/components/settings/SettingsPanel.tsx`: プロジェクト設定や品質ゲートトグル等の UI
+- `src/components/layout/`: Header / Footer / MainLayout など共通レイアウト
 
-役割: UI表示・ユーザーインタラクション
+各コンポーネントは `src/lib/` のサービス層を通じてドキュメントデータやタスクデータにアクセスします。Zod スキーマでバリデーションを行い、サーバー／クライアントの境界で型安全性を維持します。
 
-主要責務:
-- Docs Navigator UI
-- Tree表示
-- Tasks管理 UI
-- Quality Gates検証
-
-技術:
-- HTML/CSS/JavaScript (ES6+)
-- DOM操作（Vanilla JS）
-- Event Driven
-
-セキュリティ:
-- CSP（Content Security Policy）設定
-- 信頼できるソースからのみコンテンツ読み込み
-
-実装方針:
-- 機能別にモジュール分割（features/）
-- 共通コードはshared/に配置
-- 型定義ファイルでAPIの型安全性を確保
-
-ファイル:
-- index.html: UI構造
-- styles/: スタイルファイル（app.css, theme.css）
-- features/: 機能別モジュール
-  - docs-navigator/: Docs Navigator
-  - tasks/: Tasks管理
-- shared/: 共通コード（app.js, utils.js）
-
-### 2.3 Preload (preload.js)
-
-役割: Main/Renderer間の橋渡し
-
-主要責務:
-- contextBridgeによる安全なAPI公開
-- window.docs, window.tasks, window.envの提供
-- IPC Proxy経由での通信仲介
-
-技術:
-- contextBridge API (`contextBridge.exposeInMainWorld`)
-- IPC Proxy
-- 型定義の明示（TypeScript）
-
-安全性:
-- contextIsolation: true（RendererとMainを分離）
-- nodeIntegration: false（Rendererからの直接Nodeアクセス禁止）
-
-API設計:
-- 命名規則: `window.[namespace].[method]`
-- 型定義: TypeScriptインターフェース定義
-- エラーハンドリング: 統一エラーレスポンス
-
-実装方針:
-- contextBridge.exposeInMainWorld()でAPI公開
-- 関数単位で公開（オブジェクト単位ではない）
-- 全てのAPIに型定義を付与
-
-## 3. ディレクトリ構造
+## 3. ディレクトリ構成
 
 ### 3.1 推奨構造
 
-NexusはElectron + TypeScriptの標準的な構造を採用します。
-
 ```
-
-├── src/                      # ソースコード
-│   ├── main/                 # Main Process
-│   ├── preload/              # Preload script
-│   └── renderer/             # Renderer Process (HTML/JS/CSS)
-├── dist/                     # TypeScriptビルド成果物
-├── docs/                     # 仕様・設計ドキュメント
-├── test/                     # テストコード
-│   ├── e2e/                  # Playwright E2Eテスト
-│   │   ├── fixtures/
-│   │   └── 01_smoke.spec.ts
-│   └── unit/                 # ユニットテスト（将来拡張用）
-├── legacy/                   # 旧構成（main.js, renderer/ 等）
-│   └── tests/                # レガシーE2Eスクリプト
-├── scripts/                  # CLIスクリプト群
-│   └── validate-docs-gates.js
-├── e2e-proof/                # 自動化実装の検証資産
-├── context.mdc               # Nexus context map
-├── package.json              # プロジェクト設定
-├── tsconfig.json             # TypeScript設定
-├── jest.config.js            # Jest設定
-└── playwright.config.ts      # Playwright設定
+src/
+├── app/
+│   ├── (routes)/             # App Router のページとレイアウト
+│   ├── api/                  # Route Handlers
+│   └── globals.css           # グローバルスタイル
+├── components/
+│   ├── layout/               # レイアウトコンポーネント
+│   ├── docs/                 # Docs Navigator UI
+│   ├── tasks/                # Tasks Workspace UI
+│   └── ui/                   # ボタンなどの汎用 UI
+├── lib/                      # ドメインサービス・ユーティリティ
+├── config/                   # 設定およびデータ取得ラッパー
+├── styles/                   # 共有スタイル（CSS Modules 等）
+└── types/                    # 型定義
+public/                       # アセット (context.mdc など)
+docs/                         # ドキュメント
+scripts/                      # CLI スクリプト
 ```
 
 ### 3.2 ディレクトリ説明
 
-- **src/main/**: Main Processのソースコード
-  - handlers/: IPCハンドラーを機能別に分割
-  - utils/: ユーティリティ関数
-- **src/preload/**: Preload script（Bridge API）
-- **src/renderer/**: Renderer ProcessのUIコード
-  - features/: 機能別モジュール（Docs Navigator, Tasks）
-  - shared/: 共通コード
-- **dist/**: ビルド成果物（gitignore対象）
-- **docs/**: ドキュメント（ARCH/PRD/DEVELOPMENT等）
-- **test/**: テストコード
-  - e2e/: Playwright E2Eテスト（01_smoke.spec.ts）
-  - unit/: ユニットテストの配置場所（`.gitkeep`のみ）
-- **legacy/**: 旧Electron構成（`main.js`や`renderer/`など）。参照のみで更新禁止
-- **scripts/**: CLIユーティリティ（Quality Gates検証など）
-- **e2e-proof/**: 完全自動化E2Eテストの検証成果
+- **src/app/**: Next.js App Router エントリーポイント。`layout.tsx` で HTML 構造、`(routes)` 以下でページを定義。
+- **src/components/**: ドメイン別の React コンポーネント群。UI の再利用性と責務分離を意識する。
+- **src/lib/**: ファイル読み書き、タスクデータ操作、品質ゲート連携などのビジネスロジック。
+- **src/config/**: 環境設定やパス解決などの設定値を提供。
+- **src/styles/**: CSS Modules や共通スタイルを格納。`app/globals.css` 以外のスタイルを管理。
+- **src/types/**: API レスポンスやドメインデータの TypeScript 型定義。
+- **public/**: ブラウザから直接取得する静的アセット。
+- **docs/**: プロジェクト全体の仕様・設計ドキュメント。
+- **scripts/**: Node.js ベースの CLI スクリプト。Next.js とは独立したユースケースを担う。
 
-### 3.3 ビルドツール
+## 4. 外部連携
 
-**Webpack**（予定）:
-- Main Process: TypeScript → JavaScript
-- Renderer Process: HTML/CSS/JSをバンドル
-- 設定ファイル: `webpack.config.ts`
+### 4.1 ドキュメント資産
 
-**TypeScript**:
-- 設定ファイル: `tsconfig.json`
-- 型チェック: ビルド時に実行
-- 出力先: `dist/`
+`public/context.mdc` および `docs/` 配下のマークダウンドキュメントを Next.js アプリから読み込み、Docs Navigator で参照できるようにします。ファイルシステムアクセスはサーバーコンポーネント／API Routes 経由で行い、ブラウザへは安全な JSON として返却します。
 
-**Electron Builder**（将来的）:
-- パッケージング: 実行可能ファイル生成
-- インストーラー作成: Windows/macOS/Linux対応
+### 4.2 CLI スクリプト
 
----
-
-関連文書:
-- ARCH/index.mdc: アーキテクチャ設計書一覧
-- ARCH/セキュリティ設計.mdc: セキュリティ設計
-- ARCH/データフロー設計.mdc: データフロー設計
+`node scripts/*.js` で提供される品質ゲートやテンプレート生成スクリプトは Next.js アプリとは別プロセスで実行します。これにより Web レイヤーのデプロイとは切り離してドキュメント資産の整合性を確保できます。

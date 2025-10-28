@@ -1,30 +1,44 @@
 # Nexus
 
-Document navigator and tasks management tool for multi-repository development projects.
+ドキュメントナビゲーションとタスク管理を統合した、マルチリポジトリ開発向けの Next.js アプリケーションです。
 
 ## Features
 
-- **Docs Navigator**: Browse documents by category, view details, and open files
-- **FEAT Cross-reference**: View feature coverage across PRD/UX/API/DATA/QA
-- **Orphan Detection**: Find documents with missing upstream/downstream links
-- **Tree View**: Visualize document relationships (DAG)
-- **Tasks Management**: Import, edit, save, and export tasks
-- **Breakdown Generation**: Generate prompts for AI task breakdown
+- **Docs Navigator**: カテゴリ別にドキュメントを探索し、詳細ビューからファイルを開けます
+- **FEAT Cross-reference**: PRD / UX / API / DATA などのドキュメント横断で網羅性を確認できます
+- **Orphan Detection**: 上流・下流リンクの不足を検出します
+- **Tree View**: ドキュメント間の依存関係を DAG で可視化します
+- **Tasks Management**: タスクのインポート・編集・保存・エクスポートに対応します
+- **Breakdown Generation**: AI へ投げるタスク分解プロンプトを生成できます
 
 ## 使い方
 
-1. `npm install` を実行して依存関係をインストールします。
-2. ドキュメント品質ゲートを CLI で確認したい場合は `npm run validate:docs` または `npm run validate:docs -- --json` を利用します。
-3. GUI でアプリを利用する場合は `npm run start:dev` でビルドと起動をまとめて行うか、`npm run build` の後に `npm start` で Electron アプリを起動します。
-4. ドキュメントやタスクの編集結果を確認したい場合は、アプリ上でカテゴリやリンクを辿って目的のファイルを開き、必要に応じてエクスポート機能を使用します。
-5. E2E テストで動作を検証する場合は `npm run test:e2e:playwright` を実行します。
+1. 依存関係をインストールします。
+   ```bash
+   npm install
+   ```
+2. 開発サーバーを起動します。
+   ```bash
+   npm run dev
+   ```
+3. 本番ビルドを行う場合は次を実行します。
+   ```bash
+   npm run build
+   npm start        # 本番ビルドを起動
+   ```
+4. Lint とテストは以下を利用します。
+   ```bash
+   npm run lint
+   npm test
+   ```
+5. CI などで e2e テストを実施する場合は Playwright/Jest テンプレートを参照してください（Next.js 版のテスト基盤は docs/QA を参照）。
 
 ## ユースケース
 
-- **大規模ドキュメントの横断的な可視化**: PRD、UX、API、データ仕様など複数の文書を横断して関連性を確認し、抜け漏れを防ぎたい場合に有効です。
-- **タスク分解の効率化**: 既存ドキュメントを参照しながら、タスクをインポート・編集・エクスポートして開発計画を整備するシーンで活用できます。
-- **品質ゲートの自動チェック**: CI などで `npm run validate:docs` を用いれば、文書間のリンク切れや不足を自動で検出できます。
-- **サブモジュールとしての組み込み**: 親プロジェクトに組み込んで、複数リポジトリを横断したドキュメント管理のハブとして運用できます。
+- **大規模ドキュメントの横断的な可視化**: PRD、UX、API、データ仕様など複数文書を横断して関連性を確認し、抜け漏れを防ぎます。
+- **タスク分解の効率化**: 既存ドキュメントを参照しながら、タスクの取り込み・編集・エクスポートを行って開発計画を整備できます。
+- **品質ゲートの自動チェック**: CLI やワーカーから品質ゲートを実行して、リンク切れや不足を自動検出できます。
+- **親プロジェクトへの組み込み**: Next.js アプリとして組織内ポータルやドキュメントハブに組み込めます。
 
 ## Development
 
@@ -34,32 +48,39 @@ Document navigator and tasks management tool for multi-repository development pr
 npm install
 ```
 
-### Build (TypeScript)
+### Build
 
 ```bash
 npm run build
 ```
 
-This compiles the Electron main and preload processes into `dist/`.
+Next.js のビルド成果物は `.next/` に配置されます。
 
 ### Run
 
 ```bash
-npm start              # Run (uses dist/main.js)
-npm run start:dev      # Build + Run
+npm run dev        # Next.js 開発サーバー
+npm start          # 本番ビルド後に Next.js サーバーを起動
+```
+
+### Lint & Test
+
+```bash
+npm run lint
+npm test
+npm run test:watch
+npm run test:coverage
 ```
 
 ### CLI ユーティリティ
 
-GUI を起動せずにドキュメント管理を自動化できる CLI が複数用意されています。
+品質ゲートやテンプレート生成などの CLI スクリプトは `scripts/` 以下にまとめています。Next.js 化後も Node.js ランタイムで実行できます。
 
 #### ドキュメント品質ゲートの検証
 
-品質ゲート（リンク切れ検出や章構造チェックなど）を手元や CI から実行できます。
-
 ```bash
-npm run validate:docs            # 人が読む想定のサマリーを出力
-npm run validate:docs -- --json  # CI 連携向けの JSON を出力
+node scripts/validate-docs-gates.js            # 人が読む想定のサマリーを出力（例）
+node scripts/validate-docs-gates.js --json     # CI 連携向けの JSON を出力
 ```
 
 主なオプション:
@@ -68,8 +89,6 @@ npm run validate:docs -- --json  # CI 連携向けの JSON を出力
 - `--project-root <path>` – ドキュメントを探索するプロジェクトルートを上書き
 
 #### 品質ゲートの自動修正
-
-ドキュメントに自動修正を適用して章番号や Breadcrumbs を補完したい場合は以下を利用します。
 
 ```bash
 node scripts/apply-docs-gates.js --table     # 修正内容を表形式で確認
@@ -84,8 +103,6 @@ node scripts/apply-docs-gates.js --dry-run   # 変更を加えずに影響範囲
 - `--json` / `--table` – 出力形式を切り替え
 
 #### テンプレートからのドキュメント生成
-
-CLI からテンプレートを指定して新規ドキュメントを作成できます。GUI の「新規ドキュメント作成」と同じロジックを利用しており、タイトルやタグの上書きにも対応します。
 
 ```bash
 node scripts/generate-doc-from-template.js \
@@ -106,7 +123,7 @@ node scripts/generate-doc-from-template.js \
 
 #### UI スクリーンショットのキャプチャ
 
-Electron アプリを自動起動し、主要画面のスクリーンショットを Playwright で取得します。PR の説明資料やデザイン確認に利用できます。
+Playwright を使って Next.js アプリをヘッドレスブラウザで操作し、主要画面のスクリーンショットを取得できます。
 
 ```bash
 npm run capture:screenshots
@@ -116,64 +133,62 @@ npm run capture:screenshots
 
 ### E2E Tests
 
+Next.js アプリを起動した状態で Playwright や Jest のテストスイートを動かします。環境構築の詳細は `docs/QA/` を参照してください。
+
 ```bash
-npm run test:e2e:playwright
+npm test
 ```
 
 ## File Structure
 
 ```
 src/
-├── main/           # Main Process (TypeScript)
-│   └── main.ts
-├── preload/        # Preload script (TypeScript)
-│   └── preload.ts
-└── renderer/       # Renderer Process UI (HTML/JS/CSS)
-    ├── index.html
-    ├── styles/
-    │   └── app.css
-    ├── features/
-    │   ├── docs-navigator/
-    │   │   └── docs-navigator.js
-    │   └── tasks/
-    │       └── tasks.js
-    └── shared/
-        └── app.js
-docs/               # Documentation
-test/               # Playwright, integration, and unit tests
-legacy/             # Archived pre-TypeScript assets
-context.mdc         # Nexus context map
+├── app/                  # Next.js App Router エントリーポイント
+│   ├── (routes)/         # ページとレイアウト
+│   ├── api/              # Route Handlers (API Routes)
+│   └── globals.css       # グローバルスタイル
+├── components/           # UI/ドメインコンポーネント
+│   ├── layout/           # レイアウト関連（Header/Footer など）
+│   ├── docs/             # ドキュメントナビゲーション UI
+│   └── tasks/            # タスク管理 UI
+├── lib/                  # ドメインサービス・ユーティリティ
+├── config/               # 設定値・フェッチャー
+├── styles/               # 共有スタイル（CSS Modules など）
+└── types/                # 共通型定義
+public/                   # 公開アセット（context.mdc など）
+docs/                     # プロジェクトドキュメント
+scripts/                  # CLI スクリプト
 ```
 
 ## Current Status
 
-✅ TypeScript build working
-⚠️ E2E tests need debugging (Tree view not rendering)
-✅ Manual testing confirmed working
+✅ Next.js 開発サーバーでの基本的な画面遷移を確認済み
+⚠️ Playwright を用いた Next.js 版 E2E テストは整備中
+✅ Jest によるドメインロジックの単体テストは通過
 
 ## Repository Management
 
-This repository can be used as a Git submodule in parent projects.
+このリポジトリは親プロジェクトからの依存として取り込むことができます。Next.js アプリとしてサブモジュールに組み込む場合の手順は従来どおりです。
 
 ### Using as a Submodule
 
-Add to parent project:
+親プロジェクトへ追加:
 ```bash
 git submodule add <nexus-ai-repo-url> tools/nexus
 ```
 
-Initialize after cloning parent:
+クローン後に初期化:
 ```bash
 git submodule init
 git submodule update
 ```
 
-Or clone with submodules:
+サブモジュール込みでクローン:
 ```bash
 git clone --recurse-submodules <parent-repo-url>
 ```
 
-Update submodule reference:
+参照先を更新:
 ```bash
 cd tools/nexus
 git pull origin main
@@ -184,8 +199,6 @@ git commit -m "Update nexus submodule"
 
 ## Troubleshooting
 
-If you see blank screen:
-1. Make sure `dist/` exists: `npm run build`
-2. Check that renderer files are in `src/renderer/`
-3. Verify paths in `src/main/main.ts` are correct for TypeScript output
-
+- `npm run dev` でサーバーが立ち上がらない: 依存関係が最新か (`npm install`) を確認してください。
+- ページが 404 になる: App Router のルーティング構成（`src/app/(routes)`）にページファイルが存在するか確認してください。
+- API Routes が失敗する: `src/app/api/**/route.ts` でレスポンス形式と依存関係を確認してください。
