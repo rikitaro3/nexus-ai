@@ -550,6 +550,7 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 - 生成方式: Node CLI `scripts/generate-doc-from-template.js`
 - テンプレート形式: `docs/templates/*.yaml`（frontMatter defaults + Markdown本文）
 - 出力形式: `.mdc` + YAMLフロントマター + Breadcrumbs表示ブロック
+- 新規作成時は常にテンプレート適用済みの初期コンテンツを提供し、CLI/GUI/手動コピペいずれのフローでも同一レイアウトを保証する
 
 #### 実装方針
 
@@ -557,7 +558,9 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 - js-yamlでテンプレートを読み込み、defaultsとCLI上書きをマージしてfrontMatterを生成
 - mergeLists()/dedupeList()で配列値を正規化し、空値・重複を排除
 - テンプレート本文は`{{title}}`等のプレースホルダをfrontMatter値で展開
-- 既存文書は一括移行済み（frontMatterを付与し`.mdc`へ統一）。新規作成はCLI利用を必須化
+- GUIからの新規作成画面ではテンプレート一覧から選択し、選択テンプレートの本文を初期表示として挿入する
+- 手動作成（テンプレートコピペ）向けに、`docs/templates/*.yaml`の本文をMarkdownエディタへ貼り付けるだけでBreadcrumbsや章立てが揃うよう維持する
+- 既存文書は一括移行済み（frontMatterを付与し`.mdc`へ統一）。新規作成はいずれの経路でもテンプレートを起点にする
 
 #### 制約
 

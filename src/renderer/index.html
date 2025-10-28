@@ -82,6 +82,37 @@
             </div>
           </div>
           <div id="docs-mode-docs" class="docs-mode" data-testid="docs-navigator__mode-docs">
+            <div id="docs-create" class="docs-create" data-testid="docs-navigator__create">
+              <div class="docs-create__toolbar">
+                <button
+                  id="docs-create-toggle"
+                  class="btn btn-primary"
+                  type="button"
+                  data-testid="docs-navigator__create-button"
+                >新規ドキュメント作成</button>
+                <span class="docs-create__hint" id="docs-create-hint">テンプレートから初期コンテンツを生成します</span>
+              </div>
+              <form id="docs-create-form" class="docs-create__form hidden" data-testid="docs-navigator__create-form">
+                <div class="form-group">
+                  <label for="docs-create-template">テンプレート</label>
+                  <select id="docs-create-template" data-testid="docs-navigator__create-template"></select>
+                </div>
+                <p class="text-muted docs-create__description" id="docs-create-template-desc"></p>
+                <div class="form-group">
+                  <label for="docs-create-title">タイトル</label>
+                  <input type="text" id="docs-create-title" data-testid="docs-navigator__create-title" placeholder="ドキュメントタイトル">
+                </div>
+                <div class="form-group">
+                  <label for="docs-create-path">出力先パス (リポジトリ相対)</label>
+                  <input type="text" id="docs-create-path" data-testid="docs-navigator__create-path" placeholder="docs/PRD/新規ドキュメント.mdc">
+                </div>
+                <div class="docs-create__actions">
+                  <button type="submit" class="btn btn-primary" id="docs-create-submit" data-testid="docs-navigator__create-submit">テンプレートから生成</button>
+                  <button type="button" class="btn btn-secondary" id="docs-create-cancel" data-testid="docs-navigator__create-cancel">キャンセル</button>
+                  <span class="docs-create__status" id="docs-create-status" role="status" aria-live="polite"></span>
+                </div>
+              </form>
+            </div>
             <div class="docs-split" data-testid="docs-navigator__docs-split">
               <div class="docs-left" data-testid="docs-navigator__category-column">
                 <h3 data-testid="docs-navigator__category-heading">カテゴリ</h3>

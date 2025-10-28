@@ -14,6 +14,16 @@
   const treeStatusEl = document.getElementById('tree-status');
   const treeDetailPanel = document.getElementById('tree-detail');
   const gateResultsPanel = document.getElementById('gate-results');
+  const createSection = document.getElementById('docs-create');
+  const createToggleBtn = document.getElementById('docs-create-toggle');
+  const createForm = document.getElementById('docs-create-form');
+  const createTemplateSelect = document.getElementById('docs-create-template');
+  const createTitleInput = document.getElementById('docs-create-title');
+  const createPathInput = document.getElementById('docs-create-path');
+  const createStatus = document.getElementById('docs-create-status');
+  const createCancelBtn = document.getElementById('docs-create-cancel');
+  const createSubmitBtn = document.getElementById('docs-create-submit');
+  const createDescription = document.getElementById('docs-create-template-desc');
   const modeDescriptions = {
     docs: 'カテゴリからドキュメントを探索します',
     feats: 'FEATのカバレッジと関連ドキュメントを確認します',
@@ -89,6 +99,9 @@
   });
   let selectedCategory = null;
   let selectedDocPath = null;
+  let docTemplates = [];
+  let docCreatePathDirty = false;
+  let docCreateTitleDirty = false;
   console.log('[Docs Navigator] Basic elements - catEl:', !!catEl, 'listEl:', !!listEl, 'detailEl:', !!detailEl);
   console.log('[Docs Navigator] modeButtons count:', modeButtons.length);
 
@@ -110,11 +123,242 @@
     treeStatusEl.className = `status status-${tone}`;
   }
 
+  function setCreateStatus(message, tone = 'info') {
+    if (!createStatus) return;
+    if (typeof message !== 'string' || !message.trim()) {
+      createStatus.textContent = '';
+      createStatus.classList.remove('error');
+      return;
+    }
+    createStatus.textContent = message;
+    if (tone === 'error') {
+      createStatus.classList.add('error');
+    } else {
+      createStatus.classList.remove('error');
+    }
+  }
+
+  function findTemplateById(templateId) {
+    if (!templateId) return null;
+    return docTemplates.find(t => t && t.id === templateId) || null;
+  }
+
+  function extractDefaultTitle(template) {
+    if (!template) return '';
+    const defaults = template.defaults || {};
+    if (typeof defaults.title === 'string' && defaults.title.trim()) {
+      return defaults.title.trim();
+    }
+    if (typeof template.name === 'string' && template.name.trim()) {
+      return template.name.trim();
+    }
+    if (typeof template.id === 'string') {
+      return template.id;
+    }
+    return '';
+  }
+
+  function applyTemplateDefaults(templateId, { resetDirty = false } = {}) {
+    if (!createTemplateSelect) return;
+    if (resetDirty) {
+      resetCreateDirtyFlags();
+    }
+    const template = findTemplateById(templateId) || (docTemplates.length > 0 ? docTemplates[0] : null);
+    if (!template) return;
+    if (!createTemplateSelect.value) {
+      createTemplateSelect.value = template.id;
+    }
+    if (createDescription) {
+      const desc = typeof template.description === 'string' ? template.description : '';
+      createDescription.textContent = desc;
+      createDescription.classList.toggle('hidden', !desc);
+    }
+    const suggestedPath = typeof template.suggestedOutputPath === 'string' ? template.suggestedOutputPath : '';
+    if (createPathInput) {
+      createPathInput.placeholder = suggestedPath || 'docs/新規ドキュメント.mdc';
+      if (!docCreatePathDirty || !(createPathInput.value || '').trim()) {
+        createPathInput.value = suggestedPath;
+      }
+    }
+    const defaultTitle = extractDefaultTitle(template) || 'ドキュメントタイトル';
+    if (createTitleInput) {
+      createTitleInput.placeholder = defaultTitle;
+      if (!docCreateTitleDirty || !(createTitleInput.value || '').trim()) {
+        createTitleInput.value = defaultTitle === 'ドキュメントタイトル' ? '' : defaultTitle;
+      }
+    }
+  }
+
+  function resetCreateDirtyFlags() {
+    docCreatePathDirty = false;
+    docCreateTitleDirty = false;
+  }
+
+  function setCreateFormDisabled(disabled) {
+    const targets = [createTemplateSelect, createTitleInput, createPathInput, createSubmitBtn, createCancelBtn];
+    for (const el of targets) {
+      if (!el) continue;
+      try {
+        el.disabled = disabled;
+      } catch (err) {
+        console.warn('[Docs Navigator] Failed to toggle disabled state', err);
+      }
+    }
+  }
+
+  async function initDocCreation() {
+    if (!createSection || !createToggleBtn || !createForm || !createTemplateSelect) {
+      return;
+    }
+    if (!window.docs || typeof window.docs.listTemplates !== 'function' || typeof window.docs.createFromTemplate !== 'function') {
+      createSection.classList.add('hidden');
+      return;
+    }
+
+    try {
+      createToggleBtn.disabled = true;
+      setCreateStatus('テンプレートを読み込み中...', 'info');
+      const res = await window.docs.listTemplates();
+      if (!res || res.success !== true || !Array.isArray(res.templates) || res.templates.length === 0) {
+        const message = res && res.error ? `テンプレートを取得できませんでした: ${res.error}` : '利用可能なテンプレートが見つかりません';
+        setCreateStatus(message, 'error');
+        createToggleBtn.disabled = true;
+        return;
+      }
+
+      docTemplates = res.templates;
+      createTemplateSelect.innerHTML = '';
+      for (const template of docTemplates) {
+        if (!template || typeof template.id !== 'string') continue;
+        const option = document.createElement('option');
+        option.value = template.id;
+        option.textContent = template.name || template.id;
+        createTemplateSelect.appendChild(option);
+      }
+
+      if (docTemplates.length === 0) {
+        setCreateStatus('利用可能なテンプレートが見つかりません', 'error');
+        createToggleBtn.disabled = true;
+        return;
+      }
+
+      createToggleBtn.disabled = false;
+      setCreateStatus('');
+      applyTemplateDefaults(createTemplateSelect.value || docTemplates[0].id, { resetDirty: true });
+
+      createToggleBtn.addEventListener('click', () => {
+        if (!createForm) return;
+        createForm.classList.toggle('hidden');
+        const expanded = !createForm.classList.contains('hidden');
+        createToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        if (expanded) {
+          applyTemplateDefaults(createTemplateSelect.value || docTemplates[0].id, { resetDirty: false });
+          setCreateStatus('');
+          setTimeout(() => {
+            if (createTitleInput) {
+              createTitleInput.focus();
+            }
+          }, 0);
+        } else {
+          setCreateStatus('');
+        }
+      });
+
+      if (createCancelBtn) {
+        createCancelBtn.addEventListener('click', () => {
+          createForm.classList.add('hidden');
+          createToggleBtn.setAttribute('aria-expanded', 'false');
+          if (typeof createForm.reset === 'function') {
+            createForm.reset();
+          }
+          applyTemplateDefaults(createTemplateSelect.value || docTemplates[0].id, { resetDirty: true });
+          setCreateStatus('');
+        });
+      }
+
+      createTemplateSelect.addEventListener('change', () => {
+        applyTemplateDefaults(createTemplateSelect.value, {});
+      });
+
+      if (createTitleInput) {
+        createTitleInput.addEventListener('input', () => {
+          docCreateTitleDirty = (createTitleInput.value || '').trim().length > 0;
+        });
+      }
+
+      if (createPathInput) {
+        createPathInput.addEventListener('input', () => {
+          docCreatePathDirty = (createPathInput.value || '').trim().length > 0;
+        });
+      }
+
+      createForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!createTemplateSelect.value) {
+          setCreateStatus('テンプレートを選択してください', 'error');
+          createTemplateSelect.focus();
+          return;
+        }
+        const outputPath = (createPathInput && createPathInput.value ? createPathInput.value : '').trim();
+        if (!outputPath) {
+          setCreateStatus('出力先パスを入力してください', 'error');
+          if (createPathInput) createPathInput.focus();
+          return;
+        }
+        const titleValue = (createTitleInput && createTitleInput.value ? createTitleInput.value : '').trim();
+        const payload = {
+          templateId: createTemplateSelect.value,
+          outputPath
+        };
+        if (titleValue) {
+          payload.title = titleValue;
+        }
+        setCreateFormDisabled(true);
+        setCreateStatus('テンプレートから生成中...', 'info');
+        try {
+          const result = await window.docs.createFromTemplate(payload);
+          if (!result || result.success !== true) {
+            const message = result && result.error ? result.error : 'ドキュメントの生成に失敗しました';
+            setCreateStatus(message, 'error');
+            return;
+          }
+          const createdPath = result.path || outputPath;
+          setCreateStatus(`生成しました: ${createdPath}`, 'info');
+          if (typeof createForm.reset === 'function') {
+            createForm.reset();
+          }
+          applyTemplateDefaults(createTemplateSelect.value || docTemplates[0].id, { resetDirty: true });
+          if (createdPath && window.docs && typeof window.docs.open === 'function') {
+            try {
+              await window.docs.open(createdPath);
+            } catch (err) {
+              console.warn('[Docs Navigator] Failed to open generated document', err);
+            }
+          }
+        } catch (err) {
+          const message = err && err.message ? err.message : 'ドキュメントの生成に失敗しました';
+          setCreateStatus(message, 'error');
+        } finally {
+          resetCreateDirtyFlags();
+          setCreateFormDisabled(false);
+        }
+      });
+    } catch (error) {
+      console.error('[Docs Navigator] Failed to initialize document creation UI', error);
+      setCreateStatus('テンプレートを読み込めませんでした', 'error');
+      if (createToggleBtn) {
+        createToggleBtn.disabled = true;
+      }
+    }
+  }
+
   if (!catEl || !listEl || !detailEl) {
     console.error('[Docs Navigator] Required elements not found!');
     window.docsNavigatorReady = true;
     return;
   }
+
+  await initDocCreation();
 
   const treeModeRoot = document.getElementById('docs-mode-tree');
   const pipelinePanel = document.createElement('div');

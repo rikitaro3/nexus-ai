@@ -49,19 +49,70 @@ npm start              # Run (uses dist/main.js)
 npm run start:dev      # Build + Run
 ```
 
-### Quality Gates Validation (CLI)
+### CLI ユーティリティ
 
-Run the documentation quality gates without launching the GUI:
+GUI を起動せずにドキュメント管理を自動化できる CLI が複数用意されています。
+
+#### ドキュメント品質ゲートの検証
+
+品質ゲート（リンク切れ検出や章構造チェックなど）を手元や CI から実行できます。
 
 ```bash
-npm run validate:docs            # Human-readable summary
-npm run validate:docs -- --json  # JSON output for automation
+npm run validate:docs            # 人が読む想定のサマリーを出力
+npm run validate:docs -- --json  # CI 連携向けの JSON を出力
 ```
 
-Options:
+主なオプション:
 
-- `--context <path>` – specify an alternate `context.mdc` file.
-- `--project-root <path>` – override the project root for resolving document paths.
+- `--context <path>` – `context.mdc` の代替パスを指定
+- `--project-root <path>` – ドキュメントを探索するプロジェクトルートを上書き
+
+#### 品質ゲートの自動修正
+
+ドキュメントに自動修正を適用して章番号や Breadcrumbs を補完したい場合は以下を利用します。
+
+```bash
+node scripts/apply-docs-gates.js --table     # 修正内容を表形式で確認
+node scripts/apply-docs-gates.js --dry-run   # 変更を加えずに影響範囲を確認
+```
+
+主なオプション:
+
+- `--project-root <path>` – 対象プロジェクトルートを指定
+- `--context <path>` – 対象の `context.mdc` を明示的に指定
+- `--dry-run` – 修正を保存せずにレポートのみ出力
+- `--json` / `--table` – 出力形式を切り替え
+
+#### テンプレートからのドキュメント生成
+
+CLI からテンプレートを指定して新規ドキュメントを作成できます。GUI の「新規ドキュメント作成」と同じロジックを利用しており、タイトルやタグの上書きにも対応します。
+
+```bash
+node scripts/generate-doc-from-template.js \
+  --template prd-system-requirements \
+  --output docs/PRD/システム要件定義書.mdc \
+  --title "システム要件定義書" \
+  --upstream docs/PRD/index.mdc \
+  --downstream docs/ARCH/index.mdc
+```
+
+主なオプション:
+
+- `--template <id or path>` – テンプレート ID もしくは YAML ファイルパス（必須）
+- `--output <path>` – 生成先ファイル（必須、相対パスはプロジェクトルート基準）
+- `--title`, `--layer`, `--tags`, `--upstream`, `--downstream` – フロントマターを上書き
+- `--set key=value` – 任意のメタデータを追加
+- `--force` – 既存ファイルを上書き
+
+#### UI スクリーンショットのキャプチャ
+
+Electron アプリを自動起動し、主要画面のスクリーンショットを Playwright で取得します。PR の説明資料やデザイン確認に利用できます。
+
+```bash
+npm run capture:screenshots
+```
+
+実行すると `e2e-proof/screenshots/<timestamp>/` 以下に PNG を保存します。
 
 ### E2E Tests
 

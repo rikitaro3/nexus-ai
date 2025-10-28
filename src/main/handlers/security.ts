@@ -20,6 +20,16 @@ export interface PathValidationResult {
   allowedByWhitelist?: boolean;
 }
 
+export interface NewDocumentPathValidationResult {
+  valid: boolean;
+  repoRoot: string;
+  normalized: string;
+  target: string;
+  error?: string;
+  isInsideRepo?: boolean;
+  exists?: boolean;
+}
+
 export interface SecurityConfig {
   allowPaths: string[];
   denyPaths: string[];
@@ -176,6 +186,73 @@ export function validatePath(relPath: string): PathValidationResult {
       normalized: '',
       target: '',
       error: (e as Error).message
+    };
+  }
+}
+
+export function validateNewDocumentPath(relPath: string): NewDocumentPathValidationResult {
+  try {
+    const repoRoot = getRepoRoot();
+    const resolvedRepoRoot = path.resolve(repoRoot);
+
+    let normalized = relPath;
+    let target: string;
+    if (path.isAbsolute(relPath)) {
+      target = path.resolve(relPath);
+      normalized = path.relative(resolvedRepoRoot, target);
+    } else {
+      normalized = path.normalize(relPath);
+      target = path.resolve(resolvedRepoRoot, normalized);
+      if (normalized.includes('..')) {
+        logger.warn('ディレクトリトラバーサル攻撃を検出 (new document)', { relPath, normalized });
+        return {
+          valid: false,
+          repoRoot: resolvedRepoRoot,
+          normalized,
+          target,
+          error: 'ディレクトリトラバーサル攻撃を検出'
+        };
+      }
+    }
+
+    const resolvedTarget = path.resolve(target);
+    const relativeToRepo = path.relative(resolvedRepoRoot, resolvedTarget);
+    const isInsideRepo = !relativeToRepo.startsWith('..') && !path.isAbsolute(relativeToRepo);
+
+    if (!isInsideRepo) {
+      logger.warn('新規ドキュメントの出力パスがリポジトリ外です', {
+        relPath,
+        normalized,
+        target: resolvedTarget,
+        repoRoot: resolvedRepoRoot
+      });
+      return {
+        valid: false,
+        repoRoot: resolvedRepoRoot,
+        normalized,
+        target: resolvedTarget,
+        error: 'パスがリポジトリ外'
+      };
+    }
+
+    const exists = fs.existsSync(resolvedTarget);
+
+    return {
+      valid: true,
+      repoRoot: resolvedRepoRoot,
+      normalized: relativeToRepo || normalized,
+      target: resolvedTarget,
+      isInsideRepo,
+      exists
+    };
+  } catch (error) {
+    logger.error('新規ドキュメント用パス検証中にエラーが発生', { relPath, error: (error as Error).message });
+    return {
+      valid: false,
+      repoRoot: '',
+      normalized: '',
+      target: '',
+      error: (error as Error).message
     };
   }
 }
