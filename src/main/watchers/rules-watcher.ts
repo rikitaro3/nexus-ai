@@ -3,65 +3,30 @@ import { readFile } from 'fs/promises';
 import * as path from 'path';
 import { logger } from '../utils/logger';
 import { ImpactScanResult, RulesDiffEntry, RulesDiffPayload, scanQualityGateImpacts } from '../utils/document-impact';
-import { collectDocumentAnalytics, DocumentAnalyticsSnapshot } from '../utils/document-analytics';
+import { collectDocumentAnalytics } from '../utils/document-analytics';
 import {
-  DocsAutofixSummary,
   listQualityGateLogs,
   loadLatestQualityGateLog,
-  QualityGateDiffSummary,
-  QualityGateResults,
-  QualityGateRunResult,
-  RepoDiffSummary,
   runQualityGatesAutofix,
   runQualityGatesValidation,
   summarizeGateResults
 } from '../utils/quality-gates';
+import type {
+  PipelineSegmentState,
+  QualityGateSnapshot,
+  RulesWatcherEvent,
+  RulesWatcherTrigger,
+  RulesWatcherLogList,
+  QualityGateRunResultLike
+} from '../../types/rules-watcher.js';
+import type { QualityGateResults } from '../utils/quality-gates';
 
-export type RulesWatcherTrigger = 'init' | 'auto' | 'manual' | 'bulk' | 'context' | 'scan';
-
-export interface PipelineSegmentState {
-  mode: 'auto' | 'manual' | 'bulk';
-  status: 'idle' | 'running' | 'completed' | 'error';
-  lastRunAt: string | null;
-  logPath: string | null;
-  exitCode: number | null;
-  error?: string | null;
-}
-
-export interface QualityGateSnapshot {
-  timestamp: string;
-  mode: 'auto' | 'manual' | 'bulk';
-  exitCode: number;
-  summary: ReturnType<typeof summarizeGateResults>;
-  diff: QualityGateDiffSummary | null;
-  logPath: string | null;
-  results: QualityGateResults;
-  contextPath: string | null;
-  autofix: DocsAutofixSummary | null;
-  repoDiff: RepoDiffSummary | null;
-}
-
-export interface RulesWatcherEvent {
-  type: 'quality-gates:update';
-  trigger: RulesWatcherTrigger;
-  timestamp: string;
-  impact: ImpactScanResult;
-  rulesDiff?: RulesDiffPayload | null;
-  pipeline: {
-    state: {
-      auto: PipelineSegmentState;
-      semiAuto: PipelineSegmentState;
-      manual: PipelineSegmentState;
-    };
-    lastRun: QualityGateSnapshot | null;
-  };
-  logs: Awaited<ReturnType<typeof listQualityGateLogs>>;
-  analytics: DocumentAnalyticsSnapshot;
-  message?: string;
-  error?: { message: string; stack?: string };
-  autofix?: DocsAutofixSummary | null;
-  repoDiff?: RepoDiffSummary | null;
-}
+export type {
+  PipelineSegmentState,
+  QualityGateSnapshot,
+  RulesWatcherEvent,
+  RulesWatcherTrigger
+} from '../../types/rules-watcher.js';
 
 interface RulesWatcherOptions {
   projectRoot: string;
@@ -188,7 +153,7 @@ export class RulesWatcherController {
   private watcherReady = false;
   private debounceTimer: NodeJS.Timeout | null = null;
   private latestEvent: RulesWatcherEvent | null = null;
-  private lastRun: QualityGateRunResult | null = null;
+  private lastRun: QualityGateRunResultLike = null;
   private pendingRuleDiffs: RulesDiffEntry[] = [];
   private ruleFileCache = new Map<string, string>();
   private pipelineState = {
@@ -368,7 +333,7 @@ export class RulesWatcherController {
     };
   }
 
-  private makeSnapshot(run: QualityGateRunResult | null): QualityGateSnapshot | null {
+  private makeSnapshot(run: QualityGateRunResultLike): QualityGateSnapshot | null {
     if (!run) return null;
     return {
       timestamp: run.timestamp,
@@ -393,7 +358,7 @@ export class RulesWatcherController {
     await this.ensureLastRunLoaded();
     const impact = await scanQualityGateImpacts(this.projectRoot, this.contextOverride, { rulesDiff });
     let error: { message: string; stack?: string } | undefined;
-    let runResult: QualityGateRunResult | null = this.lastRun;
+    let runResult: QualityGateRunResultLike = this.lastRun;
 
     if (options.runValidation) {
       const segmentKey = mapTriggerToSegment(options.trigger);
@@ -428,7 +393,7 @@ export class RulesWatcherController {
       }
     }
 
-    const logs = await listQualityGateLogs(this.projectRoot);
+    const logs: RulesWatcherLogList = await listQualityGateLogs(this.projectRoot);
     const analytics = collectDocumentAnalytics({
       results: runResult?.payload?.results ?? null,
       docStatus: runResult?.payload?.docStatus ?? null
@@ -471,7 +436,7 @@ export class RulesWatcherController {
     return this.refresh({ trigger: 'scan', runValidation: false, reason: 'manual-scan' });
   }
 
-  async listLogs() {
+  async listLogs(): Promise<RulesWatcherLogList> {
     return listQualityGateLogs(this.projectRoot);
   }
 

@@ -1,0 +1,108 @@
+# Quality Gatesパイプライン詳細設計
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/QA/index.mdc
+> Downstream: docs/DEVELOPMENT/Rendererドメインサービス設計.mdc
+
+## 目的
+Quality Gates監視パイプライン（`src/main/watchers/rules-watcher.ts`）と Renderer 連携 (`window.rulesWatcher`) の処理フロー、イベント契約、エラーハンドリング方針を明文化します。
+
+## 1. アーキテクチャ概要
+```
+┌────────────┐    file events     ┌──────────────────┐    IPC invoke    ┌────────────────────┐
+│ chokidar     │ ───────────────→ │ RulesWatcherCtrl │ ───────────────→ │ ipcMain handlers   │
+│ (docs/**)    │                   │ (main/watchers)  │                  │ (rules:*)          │
+└────────────┘                   │                  │ ←─────────────── │                    │
+                                  │   RulesWatcherEvent (publish)        │                    │
+                                  └──────────────────┘    via preload   └────────────────────┘
+                                                                ↓
+                                                        Renderer (Docs Navigator)
+```
+- 監視対象: `docs/**/*.mdc`、`context.mdc` など Quality Gates対象ドキュメント
+- 通信経路:
+  1. `rules-watcher` が差分検知/Quality Gates実行
+  2. `ipcMain` (`rules:*`) が Renderer リクエストを受付
+  3. `preload` (`window.rulesWatcher`) が Envelope 形式で返却
+  4. Docs Navigator が UI 更新
+
+## 2. トリガー定義
+| Trigger | 発火条件 | Pipelineセグメント | 主処理 |
+|---------|----------|--------------------|--------|
+| `init` | アプリ起動時に `getLatest()` | manual | ログ読み込みのみ（検証なし） |
+| `auto` | chokidarで`add/change/unlink`検知 | auto | 差分計算 → `runQualityGatesValidation()` |
+| `manual` | Rendererの「再検証」ボタン | manual | 差分無視で検証のみ実行 |
+| `bulk` | 「一括更新」ボタン | semiAuto | `runQualityGatesAutofix()` → 再検証 |
+| `context` | Settings/Docs NavigatorでContextファイル変更 | manual | `scanQualityGateImpacts()` のみ、検証なし |
+| `scan` | 「影響再スキャン」ボタン | manual | `scanQualityGateImpacts()` のみ |
+
+- `mapTriggerToSegment()` が `auto`/`semiAuto`/`manual` にマッピングし、各セグメントの状態 (`PipelineSegmentState`) を更新
+- Autoトリガーは 400ms デバウンス、複数差分を `pendingRuleDiffs` にバッファリング
+
+## 3. Quality Gates実行フロー
+1. `refresh(options)` 呼び出し
+2. `ensureLastRunLoaded()` で最新ログをメモリにロード
+3. `scanQualityGateImpacts(projectRoot, contextOverride, { rulesDiff })`
+4. `runValidation === true` の場合は以下を実行
+   - `runQualityGatesValidation()` (manual/auto)
+   - `runQualityGatesAutofix()` (semiAuto=bulk)
+   - 実行結果 (`QualityGateRunResult`) を `lastRun` に保持
+   - `pipelineState[segmentKey]` を `running → completed/error` に更新
+5. `collectDocumentAnalytics()` で違反件数・カバレッジを集計
+6. `listQualityGateLogs()` でログ一覧を取得
+7. `notify(event)` で Renderer へ `RulesWatcherEvent` を送信
+
+## 4. イベント契約 (`RulesWatcherEvent`)
+| フィールド | 型 | 説明 |
+|------------|----|------|
+| `type` | `'quality-gates:update'` | 固定値 |
+| `trigger` | `RulesWatcherTrigger` | `init/auto/manual/bulk/context/scan` |
+| `timestamp` | ISO文字列 | イベント生成時刻 |
+| `impact` | `ImpactScanResult` | 影響を受けたドキュメント一覧・文書カテゴリ別件数 |
+| `rulesDiff` | `RulesDiffPayload` | 監視中に検出されたファイル差分（`addedHeadings`等含む） |
+| `pipeline.state` | `{ auto, semiAuto, manual }` | 各セグメントの `PipelineSegmentState`（mode/status/lastRunAt/logPath/exitCode/error） |
+| `pipeline.lastRun` | `QualityGateSnapshot` | 直近実行のサマリ（`summary`=ゲート別件数、`results`=違反詳細、`autofix`/`repoDiff`含む） |
+| `logs` | `RulesWatcherLogList` | `logs/quality-gates/*.json` の一覧 |
+| `analytics` | `DocumentAnalyticsSnapshot` | ドキュメント整備状況（カテゴリ別達成率など） |
+| `message` | string? | 手動操作の説明メッセージ (`user:manual` など) |
+| `error` | `{ message, stack? }` | 実行中に発生したエラー情報（例: Gatesコマンド失敗） |
+| `autofix` | `DocsAutofixSummary` | 直近Autofix結果。`pipeline.lastRun.autofix` と重複する場合あり |
+| `repoDiff` | `RepoDiffSummary` | Git差分（patch/nameStatus） |
+
+Renderer側では Envelope (`{ success, event?, error? }`) を介して取得します。
+
+## 5. ログ・永続化
+- Quality Gates実行ログ: `logs/quality-gates/<timestamp>-<mode>.json`
+  - `QualityGateRunResult` がJSON出力され、`relativeLogPath` でアクセス
+- Autofix結果: `DocsAutofixSummary` に `operations`/`renameMap` を保持
+- Repo diff: `git diff --name-status` / `--patch` をパイプライン内で取得
+- `ensureLastRunLoaded()` が起動時に最新ログを読み込み、パイプライン状態に反映
+
+## 6. エラーハンドリング
+- chokidar初期化失敗 → `logger.error('Failed to initialize rules watcher', …)`
+- Quality Gatesコマンド失敗 → 対象セグメントを `status: 'error'`, `error: message`
+- Rendererへの通知は常に行い、UIは `event.error` を赤字表示
+- `rulesWatcher.dispose()` はアプリ終了時に呼ばれ、ウォッチャーを明示的に終了
+
+## 7. Renderer連携
+- `preload` (`src/preload/preload.ts`)
+  - `onEvent(callback)` … IPC購読をラップし `RulesWatcherEvent` を引数に渡す
+  - `getState()` / `revalidate(mode)` / `scan()` / `setContextPath()` / `listLogs()` をPromiseで返却
+- Docs Navigator
+  - `updatePipelineView()` で `event.pipeline.state/lastRun` を表示
+  - `renderAutofix`, `renderRepoDiff` はイベント内の`autofix`/`repoDiff`を参照
+  - `setTreeStatus()` でトリガー種別に応じたメッセージを描画
+
+## 8. テスト指針
+- 自動テスト: `test/integration/rules-watcher.integration.spec.ts`
+  - chokidarモックで `auto` トリガーを再現
+  - `RulesWatcherEvent` のフィールドをスナップショット検証
+- 推奨手動テスト
+  1. `npm start`
+  2. docsファイルを編集 → 自動再検証が走りUIが更新されるか確認
+  3. Docs Navigatorで「再検証」「一括更新」「影響再スキャン」を順に実行し、ログ・差分が表示されるか確認
+
+## 9. 関連文書
+- [Rendererドメインサービス設計.mdc](../DEVELOPMENT/Rendererドメインサービス設計.mdc)
+- [セキュリティ設計.mdc](../ARCH/セキュリティ設計.mdc)
+- [IPC設計.mdc](../ARCH/IPC設計.mdc)

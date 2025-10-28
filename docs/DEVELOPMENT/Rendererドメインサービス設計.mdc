@@ -1,0 +1,172 @@
+# Rendererドメインサービス詳細設計
+
+> Breadcrumbs
+> Layer: DEVELOPMENT
+> Upstream: docs/DEVELOPMENT/index.mdc
+> Downstream: docs/QA/index.mdc
+
+## 目的
+Docs Navigatorおよび Tasks モジュールが担うドメイン処理・状態管理・外部連携の詳細仕様を整理し、Quality GatesパネルやAIプロバイダーとの契約を明文化します。
+
+## 1. 全体構成
+- `src/renderer/features/docs-navigator/docs-navigator.js`
+  - Context Mapのロード/解析・ビュー切替・Quality Gatesダッシュボード表示
+- `src/renderer/features/tasks/tasks.js`
+  - タスクCRUD、推奨タスク生成、Breakdownプロンプト作成、プロンプトライブラリ編集
+- 共通依存
+  - `window.docs` / `window.tasks` / `window.settings` / `window.rulesWatcher` （preload経由）
+  - `services/ai/registry.js` （AIプロバイダー登録）
+
+---
+
+## 2. Docs Navigator
+### 2.1 状態モデル
+| 変数 | 役割 | 永続化 |
+|------|------|--------|
+| `selectedCategory` | 現在選択中のカテゴリID | 非永続（メモリのみ） |
+| `selectedDocPath` | 詳細表示中のドキュメント相対パス | 非永続 |
+| `docModePreference` | `docs`/`feats`/`tree` の表示モード | `localStorage['nexus.docs.mode']` |
+| `expandedPaths` | Treeモードで展開済みのノード | 非永続（Set） |
+| `latestGateResults` | `RulesWatcherEvent.pipeline.lastRun.results`のキャッシュ | 非永続 |
+| `currentRulesWatcherContext` | Quality GatesのContextファイル | `localStorage['context-file-path']`を初期化時に参照 |
+
+### 2.2 Contextファイル切替
+1. 初期値: `.cursor/context.mdc`
+2. デバッグモード (`window.env.isDebug() === true`) でContextセレクトボックスを表示
+3. ユーザーがコンテキストを変更 → `applyRulesWatcherContext()` が `window.rulesWatcher.setContextPath()` を呼び出し、Quality Gatesパイプラインへ伝播
+4. 変更成功時は `currentRulesWatcherContext` を更新し、失敗時はステータスメッセージをWARN表示
+
+### 2.3 Quality Gatesパイプライン連携
+- `window.rulesWatcher` API
+  - `getState()` で `RulesWatcherEventEnvelope` を取得し初期描画
+  - `onEvent()` で`RulesWatcherEvent`を購読し `updatePipelineView()` を実行
+  - `revalidate('manual'|'bulk')` / `scan()` / `setContextPath()` をトリガーボタンにバインド
+- `updatePipelineView(event)` 処理内容
+  1. `event.pipeline.state` を `renderPipelineSegments()` でUI化
+  2. `event.pipeline.lastRun` が存在する場合 `setLatestGateResults()` → `renderGateResults()` でゲート別結果を描画
+  3. 差分 (`renderDiff`)、Autofix (`renderAutofix`)、Repo diff (`renderRepoDiff`)、Analytics (`renderAnalytics`)、Impacts (`renderImpacts`)、Logs (`renderLogs`) をセクションごとに出力
+  4. `event.trigger` に応じて `setTreeStatus()` でステータス文言を更新
+  5. `event.logs` の各要素に `[data-open-log]` クリックハンドラを付与し `window.docs.open()` でログを開く
+- 失敗時の扱い
+  - Envelopeの`success=false` または `event.error` を受信した場合、`rules-pipeline__status--error` クラスで強調表示
+
+### 2.4 Docs/FEAT/Tree表示
+- Context Map解析
+  - `extractSection()` で `###` セクション抽出 → `parseContextEntriesFromSection()` で `{ category, path, desc }[]`
+  - `renderCategories()` / `renderDocs()` / `renderDocDetail()` でカテゴリー → ドキュメント → 詳細を段階表示
+- FEATモード
+  - `loadFeats()` が `window.docs.read('docs/PRD/index.mdc')` 結果を正規表現で解析
+  - カバレッジリンク（PRD/UX/API/DATA/QA）を欠落チェック
+- Treeモード
+  - Breadcrumbs/Traceability/Waypoints/MECEセクションを解析し、双方向リンクをツリー表示
+  - Quality GatesパネルをTreeモードヘッダ直下に配置
+
+### 2.5 イベントフロー
+```
+ユーザー操作            Docs Navigator                       Main Process
+--------------          ---------------------                -------------
+モード切替      →   docModePreference.write()      →   (Main連携なし)
+ドキュメント選択 → setSelectedDoc()                →   window.docs.read(path)
+Context変更      → applyRulesWatcherContext()       → rules:setContext (ipcMain)
+再検証クリック   → triggerRulesAction('manual')     → rules:revalidate → RulesWatcherEvent
+Bulk実行         → triggerRulesAction('bulk')       → runQualityGatesAutofix → RulesWatcherEvent
+影響スキャン     → pipelineScanBtn handler         → rules:scanImpacts → RulesWatcherEvent
+```
+
+---
+
+## 3. Tasksモジュール
+### 3.1 状態モデル
+| 変数 | 役割 | 永続化 |
+|------|------|--------|
+| `tasks` | タスク配列（`applyTaskDefaults` 済） | `window.tasks.readJson()`/`writeJson()` |
+| `selectedTaskId` | 詳細ペインで編集中のタスクID | 非永続 |
+| `selectedTaskCategory` | 選択中カテゴリ | `localStorage['nexus.tasks.category']` |
+| `searchQuery` | フィルタ入力値 | `localStorage['nexus.tasks.filter']` |
+| `promptLibrary` | `prompts.json` の正規化結果 | `window.prompts.readJson()`/`writeJson()` |
+| `promptSelection` | 推薦テンプレートの選択セット | 非永続 (Set) |
+| `recommendationAnalysisState` | 推奨生成の中間成果（Artifacts/エラー/タイムスタンプ） | 非永続 |
+
+### 3.2 主要ユースケース
+1. **タスク読み込み**
+   - `loadTasks()` → `window.tasks.readJson()`
+   - 失敗時は空配列で初期化しステータスにエラー表示
+2. **タスク保存**
+   - `saveTasks()` → `window.tasks.writeJson(tasks)`
+   - 成功時は`setStatus('保存しました', 'success')`
+3. **一括インポート**
+   - `parsePasted(text)` で `【カテゴリ】タイトル` 形式を配列化
+   - 既存配列に `applyTaskDefaults()` した新タスクをマージ
+4. **推奨タスク生成**
+   - `refreshRecommendations({ force })`
+     - `window.tasks.readRecommendationHistory()` で既存分析を取得
+     - Context/Quality Gates結果を参照してスコアリング
+     - 重み: `PRIORITY_WEIGHTS`, `STATUS_WEIGHTS`, `COVERAGE_WEIGHT`, `GATE_ERROR_WEIGHT`, `GATE_WARN_WEIGHT`, `LAYER_GATE_WEIGHT`
+     - 実行履歴は `window.tasks.recordRecommendationSelection()` で記録
+5. **Breakdown生成**
+   - `buildBreakdownPrompt(context, { providerId })`
+     - `resolveBreakdownProvider()` でAIプロバイダーを決定
+     - プロバイダー実装が `buildBreakdownPrompt(context, helpers)` を返す
+     - `normalizePromptResult()` で `{ prompt, usage }` 形式・文字列両対応
+     - 失敗時は `callFallbackPrompt()` → 固定テンプレート
+
+### 3.3 プロンプトライブラリ
+- `prompts.json` スキーマ
+  ```json
+  {
+    "version": 1,
+    "metadata": { "description": "", "updatedAt": "" },
+    "categories": [
+      { "id": "BREAKDOWN", "label": "Breakdown", "items": [ { "id": "BK-01", "body": "..." } ] }
+    ]
+  }
+  ```
+- 正規化関数
+  - `normalizePromptLibrary()`/`normalizePromptCategory()`/`normalizePromptItem()` が空値を除去
+  - `generatePromptItemId(categoryId)` が `PROMPT-01` 形式IDを自動採番
+- UI操作
+  - カテゴリ選択 → `promptCategoryId`
+  - アイテム選択 → `promptActiveItemId`
+  - 検索 → `promptSearchQuery`
+
+### 3.4 推奨アルゴリズム概要
+1. `collectTaskSignals(task)` で優先度・ステータス・Quality Gates違反・レイヤーカバレッジをスコア化
+2. `rankRecommendations()` が総合点でソートし上位N件を返却
+3. `renderRecommendations(list)` でUI表示、選択時は `recordRecommendationSelection()` で履歴更新
+4. Quality Gates結果が未取得の場合はリクエストを保留し、`latestGateResults` がセットされたタイミングで再実行
+
+### 3.5 AIプロバイダー連携
+- `aiProviderRegistry` 取得順序
+  1. `window.aiProviderRegistry`（Rendererグローバル）
+  2. Nodeコンテキスト `require('../../services/ai/registry.js')`
+  3. Cursorプロバイダーをプリロード（存在しなくてもエラーを握りつぶす）
+- プロバイダー選択ロジック
+  - 引数 `providerId` を優先
+  - 未登録の場合は `pendingActiveProviderId` に保持し、登録完了後に自動昇格
+  - 不在時は `DEFAULT_PROVIDER_ID ('cursor')` → 最初の登録プロバイダーの順
+- トークン使用記録
+  - `helpers.recordUsage()` or `result.usage` から `registry.recordTokenUsage()` を呼び出し Settings 画面で集計
+
+### 3.6 IPC連携
+```
+Renderer (tasks.js)                  Preload                  Main Process
+--------------------                --------                 -------------
+window.tasks.readJson()    →  ipcRenderer.invoke('tasks:readJson')    → tasksファイル読込
+window.tasks.writeJson()   →  ipcRenderer.invoke('tasks:writeJson')   → tasksファイル保存
+window.tasks.appendMdc()   →  ipcRenderer.invoke('mdc:append')        → ドキュメント追記
+window.tasks.recordRecommendationSelection()
+                          →  ipcRenderer.invoke('tasks:recordRecommendationSelection')
+window.prompts.readJson()  →  ipcRenderer.invoke('prompts:readJson')  → prompts.jsonロード
+```
+
+---
+
+## 4. エラーハンドリング規約
+- UIステータスは `setTreeStatus()` / `setStatus()` で `info|success|warn|error` を明示
+- IPC失敗時は Envelope の `success` フラグと `error` メッセージをそのまま表示
+- Quality Gatesイベント購読時に例外が発生した場合はコンソールWARNに留め、UIは最後の正常イベントを保持
+
+## 5. 関連ドキュメント
+- [QualityGatesパイプライン詳細設計.mdc](../QA/QualityGatesパイプライン詳細設計.mdc)
+- [AIプロバイダー拡張ガイド.mdc](AIプロバイダー拡張ガイド.mdc)
+- [セキュリティ設計.mdc](../ARCH/セキュリティ設計.mdc)

@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
+import type {
+  RulesWatcherEvent,
+  RulesWatcherEventEnvelope,
+  RulesWatcherLogList
+} from '../types/rules-watcher.js';
 
 contextBridge.exposeInMainWorld('docs', {
   read: (relPath: string): Promise<string> => ipcRenderer.invoke('docs:read', relPath),
@@ -37,16 +42,26 @@ contextBridge.exposeInMainWorld('dialog', {
 });
 
 contextBridge.exposeInMainWorld('rulesWatcher', {
-  onEvent: (callback: (payload: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, payload: unknown) => callback(payload);
+  onEvent: (callback: (payload: RulesWatcherEvent) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: RulesWatcherEvent) => callback(payload);
     ipcRenderer.on('rules:watcher:event', handler);
     return () => ipcRenderer.removeListener('rules:watcher:event', handler);
   },
-  getState: () => ipcRenderer.invoke('rules:getLatestState'),
-  revalidate: (mode: 'manual' | 'bulk') => ipcRenderer.invoke('rules:revalidate', { mode }),
-  scan: () => ipcRenderer.invoke('rules:scanImpacts'),
-  listLogs: () => ipcRenderer.invoke('rules:listLogs'),
-  setContextPath: (contextPath: string | null) => ipcRenderer.invoke('rules:setContext', { contextPath })
+  async getState(): Promise<RulesWatcherEventEnvelope> {
+    return ipcRenderer.invoke('rules:getLatestState');
+  },
+  async revalidate(mode: 'manual' | 'bulk'): Promise<RulesWatcherEventEnvelope> {
+    return ipcRenderer.invoke('rules:revalidate', { mode });
+  },
+  async scan(): Promise<RulesWatcherEventEnvelope> {
+    return ipcRenderer.invoke('rules:scanImpacts');
+  },
+  async listLogs(): Promise<{ success: boolean; logs?: RulesWatcherLogList; error?: string }> {
+    return ipcRenderer.invoke('rules:listLogs');
+  },
+  async setContextPath(contextPath: string | null): Promise<RulesWatcherEventEnvelope> {
+    return ipcRenderer.invoke('rules:setContext', { contextPath });
+  }
 });
 
 

@@ -5,191 +5,113 @@
 > Upstream: docs/ARCH/index.mdc
 > Downstream: docs/ARCH/IPC設計.mdc
 
-## 目次
-
-- [セキュリティ設計](#セキュリティ設計)
-  - [目次](#目次)
-  - [1. セキュリティポリシー](#1-セキュリティポリシー)
-    - [1.1 contextIsolation](#11-contextisolation)
-    - [1.2 nodeIntegration](#12-nodeintegration)
-    - [1.3 webSecurity](#13-websecurity)
-  - [2. IPC通信の安全性](#2-ipc通信の安全性)
-    - [2.1 contextBridgeによるAPI公開](#21-contextbridgeによるapi公開)
-    - [2.2 IPCハンドラーの実装](#22-ipcハンドラーの実装)
-  - [3. ファイルアクセス制御](#3-ファイルアクセス制御)
-    - [3.1 パス検証](#31-パス検証)
-    - [3.2 書き込み制御](#32-書き込み制御)
-  - [付録: Electronセキュリティチェックリスト](#付録-electronセキュリティチェックリスト)
-
----
+## 目的
+ElectronベースのNexusにおけるMain/Renderer間の境界管理、ファイルアクセス検証、プロジェクトルート切替時の安全設計を最新実装 (`src/main/handlers/security.ts`, `src/preload/preload.ts`) に合わせて整理します。
 
 ## 1. セキュリティポリシー
+- `contextIsolation: true` / `nodeIntegration: false`
+- Rendererは `contextBridge` が公開するAPIのみ利用可能
+- IPCレスポンスは `{ success: boolean, data?, error? }` フォーマットに統一
+- すべてのファイル操作は `validatePath()` を経由し、リポジトリ外アクセスを遮断
 
-Electron標準のセキュリティベストプラクティスを採用しています。
+## 2. プロジェクトルート解決
+`src/main/handlers/security.ts` では以下の優先度でプロジェクトルートを決定します。
+1. `process.env.NEXUS_PROJECT_ROOT`
+2. Settings画面から設定されたカスタムルート (`setCustomProjectRoot`)
+3. Mainプロセス起動時に検出した `context.mdc` のルート (`setGlobalProjectRoot`)
+4. フォールバック: `__dirname` から最大4階層上を探索
 
-### 1.1 contextIsolation
-
-Main/Renderer間の通信をcontextBridge経由に制限します。
-
-```typescript
-// main.ts
-webPreferences: {
-  contextIsolation: true,
-  nodeIntegration: false
+```ts
+export function getRepoRoot(): string {
+  if (process.env.NEXUS_PROJECT_ROOT) return process.env.NEXUS_PROJECT_ROOT;
+  if (customProjectRoot && fs.existsSync(customProjectRoot)) return customProjectRoot;
+  if (globalProjectRoot) return globalProjectRoot;
+  const fallback = path.resolve(__dirname, '../../../../../..');
+  logger.error('Project root not set, using fallback', { fallback });
+  return fallback;
 }
 ```
 
-理由:
-- Rendererが直接Node.jsにアクセスできない
-- IPC通信のみを許可
-- XSS攻撃からの保護
+## 3. パス検証 (`validatePath`)
+### 3.1 処理手順
+1. `getRepoRoot()` でリポジトリルート取得
+2. 入力が絶対パスの場合
+   - そのまま正規化し `target` として使用
+3. 入力が相対パスの場合
+   - `path.normalize` → `path.resolve(repoRoot, normalized)` で絶対パス化
+   - `..` を含む場合は即座に拒否
+4. `path.relative(repoRoot, target)` が `..` で始まる場合はリポジトリ外とみなす
+5. 例外的ホワイトリスト
+   - `context.mdc` / `context.md` の絶対パスのみ許可 (`allowedByWhitelist = true`)
+6. `fs.existsSync(target)` で存在確認
 
-### 1.2 nodeIntegration
-
-Node.js APIへの直接アクセスを禁止します。
-
-```typescript
-nodeIntegration: false
-```
-
-理由:
-- セキュリティ脆弱性の回避
-- サンドボックス環境での実行
-- セキュリティアップデートの影響範囲を最小化
-
-### 1.3 webSecurity
-
-Webセキュリティ機能を有効化します。
-
-```typescript
-webSecurity: true
-```
-
-理由:
-- XSS対策
-- CORS制御
-- mixed content blocking
-
-## 2. IPC通信の安全性
-
-### 2.1 contextBridgeによるAPI公開
-
-Preload経由でのみAPI公開を許可します。
-
-```typescript
-// preload.ts
-contextBridge.exposeInMainWorld('docs', {
-  read: (relPath: string): Promise<string> => ipcRenderer.invoke('docs:read', relPath),
-  open: (relPath: string): Promise<void> => ipcRenderer.invoke('docs:open', relPath)
-});
-```
-
-利点:
-- 明示的なAPI定義
-- 型安全性の確保
-- 直接的なIPCアクセス禁止
-
-### 2.2 IPCハンドラーの実装
-
-Main ProcessでIPCハンドラーを定義し、入力検証を実施します。
-
-```typescript
-// main.ts
-ipcMain.handle('docs:read', async (event, relPath: string) => {
-  try {
-    // リポジトリルートの解決
-    const repoRoot = path.resolve(__dirname, '../../..');
-    // 相対パスの正規化
-    const normalized = path.normalize(relPath);
-    const target = path.resolve(repoRoot, normalized);
-    
-    // リポジトリ外アクセスの防止
-    if (!target.startsWith(repoRoot)) {
-      throw new Error('パスがリポジトリ外');
-    }
-    
-    // ファイル読み込み
-    const content = fs.readFileSync(target, 'utf8');
-    return { success: true, content };
-  } catch (e) {
-    return { success: false, error: (e as Error).message };
-  }
-});
-```
-
-実装している検証項目:
-- 相対パスの正規化（`path.normalize()`）
-- リポジトリ外アクセス検出（`target.startsWith(repoRoot)`）
-- ファイル読み込み（`fs.readFileSync()`）
-- エラーハンドリング（try-catch）
-
-## 3. ファイルアクセス制御
-
-### 3.1 パス検証
-
-リポジトリ外へのアクセスを禁止します。
-
-```typescript
-// main.ts
-const repoRoot = path.resolve(__dirname, '../../..');
-const target = path.resolve(repoRoot, normalized);
-
-if (!target.startsWith(repoRoot)) {
-  throw new Error('パスがリポジトリ外');
+### 3.2 戻り値
+```ts
+interface PathValidationResult {
+  valid: boolean;
+  repoRoot: string;
+  normalized: string;
+  target: string;
+  error?: string;
+  isInsideRepo?: boolean;
+  allowedByWhitelist?: boolean;
 }
 ```
+- 検証失敗時は `valid=false` と `error` を含める
+- 検証成功時は `target` にアクセス可能な絶対パスを格納
 
-検証ロジック:
-1. 正規化: path.normalize()で相対パスを解決
-2. 検証: targetがrepoRoot配下かチェック
-3. アクセス: ファイルシステムからの読み込み
+### 3.3 ログ戦略
+- 失敗時: `logger.warn('パスがリポジトリ外', {...})`
+- ホワイトリスト許可時: `logger.info('Absolute path allowed by whitelist', {...})`
+- 存在しないファイル: `logger.warn('File does not exist', {...})`
+- 例外発生時: `logger.error('パス検証中にエラーが発生', {...})`
 
-### 3.2 書き込み制御
+## 4. IPCハンドラーラップ (`withPathValidation`)
+`withPathValidation` は IPCハンドラーにパス検証を付与します。
 
-特定ファイルのみ書き込みを許可します。
+```ts
+ipcMain.handle('docs:read', withPathValidation(async (_event, validation) => {
+  const text = await fs.promises.readFile(validation.target, 'utf8');
+  return { success: true, content: text };
+}));
+```
 
-現在の実装では以下のファイルに書き込みを行います:
+- `validation.valid === false` の場合 `createSecurityError()` をスロー
+- 呼び出し元は try/catch で `{ success: false, error }` を返却
+- 監査用に `PathValidationResult` 全体をエラーログへ出力
 
-許可リスト:
-- `tasks.json`: `tasks.json`のみ
-- `mdc:append`: 任意の.mdcファイル（main.tsの165-177行目を参照）
+## 5. Settings連携
+- `ipcMain.handle('settings:setProjectRoot')`
+  - Rendererから渡されたパスを `setCustomProjectRoot` へ渡す
+  - 成功時は `window.rulesWatcher.setContextPath()` を利用しQuality Gatesに反映
+- `ipcMain.handle('settings:getProjectRoot')`
+  - カスタム設定があれば優先して返却
+  - 返却値 `{ root: string }`
+- AIプロバイダー選択 (`settings:setAiProvider`) もMainで永続化し、セキュアにRendererへ戻す
 
-実装上の注意:
-- リポジトリ外ファイルへのアクセスは禁止（パス検証で実装済み）
-- システムファイル（`/etc/`, `C:\Windows\`など）へのアクセスは自動的に拒否される
-- 実行可能ファイル（`.exe`, `.bat`など）への書き込みは行っていない
+## 6. 例外許容ポリシー
+| ケース | 条件 | 理由 |
+|--------|------|------|
+| `context.mdc`/`context.md` の絶対パス | ファイル名が一致・実際に存在 | ドキュメント閲覧用にリポジトリ外のContextを許容 |
+| それ以外の絶対パス | 常に拒否 | 任意ファイル読み込みを防止 |
 
-### 3.3 コンテキストファイル例外
+- ホワイトリスト許可時も `allowedByWhitelist=true` を設定し監査可能にする
 
-`context.mdc`（および`context.md`）はDocs Navigatorの基盤データであり、ユーザーがSettingsタブからリポジトリ外のファイルを選択するユースケースが存在します。そのため、`security.ts`の`validatePath`では以下の条件を満たす場合に限り絶対パスをホワイトリストで許可します。
+## 7. Renderer防御策
+- Preloadで公開するAPIのみ利用可能 (`window.docs`, `window.tasks`, `window.rulesWatcher`, `window.settings`)
+- Rendererは直接ファイルパスを扱わず、常に相対パスをIPCへ渡す
+- `window.dialog.selectContextFile()` で取得した絶対パスは `rules:setContext` へ渡す前に `setContextPath()` が再度検証
 
-- 対象ファイル名が`context.mdc`または`context.md`
-- ユーザー入力が絶対パスである
-- ファイルが実際に存在する
+## 8. 監査・テレメトリ
+- `logger` はすべて構造化オブジェクトを出力 (JSONとして集計可能)
+- 重要イベント
+  - `Global project root set`
+  - `Custom project root set`
+  - `Absolute path allowed by whitelist`
+  - `Path validation failed`
+- 監査ログの保存先は標準出力（プロセスマネージャ側で集約）
 
-許可された場合でも`PathValidationResult`に`allowedByWhitelist`フラグを付与し、`main.ts`側の`docs:read`/`docs:open`ハンドラーはログ出力時にフラグを添えて監査証跡を残します。これにより、例外運用の根拠（Docs Navigatorのコンテキスト読み込み）と、想定外の利用を検知するためのログ方針（フラグ付きのinfoログ）が明確になります。
-
----
-
-関連文書:
-- docs/ARCH/index.mdc: アーキテクチャ設計書一覧
-- docs/ARCH/システム構成.mdc: システム構成
-- docs/ARCH/IPC設計.mdc: IPC設計（未作成）
-
----
-
-## 付録: Electronセキュリティチェックリスト
-
-実装済み:
-- [x] contextIsolation: true
-- [x] nodeIntegration: false
-- [x] webSecurity: true（デフォルト）
-- [x] パス検証（リポジトリ外アクセス防止）
-- [x] contextBridge経由のAPI公開
-- [x] IPCハンドラーの入力検証
-
-将来追加を検討:
-- [ ] CSP（Content Security Policy）設定
-- [ ] 自動アップデート機能
-- [ ] デジタル署名
-- [ ] サンドボックス有効化
+## 9. 関連文書
+- [IPC設計.mdc](IPC設計.mdc)
+- [QualityGatesパイプライン詳細設計.mdc](../QA/QualityGatesパイプライン詳細設計.mdc)
+- [Rendererドメインサービス設計.mdc](../DEVELOPMENT/Rendererドメインサービス設計.mdc)
