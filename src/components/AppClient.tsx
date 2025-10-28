@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+
 import DocsNavigator from '@/components/docs/DocsNavigator';
 import TasksWorkspace from '@/components/tasks/TasksWorkspace';
 import SettingsPanel from '@/components/settings/SettingsPanel';
-import ConsoleDownloadButton from '@/components/ConsoleDownloadButton';
 import '@/lib/ai/providers/cursor';
 
 const TAB_ORDER = ['docs', 'tasks', 'settings'] as const;
 
 type TabKey = (typeof TAB_ORDER)[number];
+
+const TAB_KEYS = new Set<TabKey>(TAB_ORDER);
 
 function readStoredTheme(): boolean {
   if (typeof window === 'undefined') return false;
@@ -41,6 +43,24 @@ export default function AppClient() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const syncTabWithHash = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (TAB_KEYS.has(hash as TabKey)) {
+        setActiveTab(hash as TabKey);
+      }
+    };
+
+    syncTabWithHash();
+    window.addEventListener('hashchange', syncTabWithHash);
+
+    return () => {
+      window.removeEventListener('hashchange', syncTabWithHash);
+    };
+  }, []);
+
+  useEffect(() => {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('dark', darkMode);
     persistTheme(darkMode);
@@ -51,47 +71,72 @@ export default function AppClient() {
     [],
   );
 
-  return (
-    <div className="container" data-testid="app-shell__container">
-      <header className="app-header" data-testid="app-shell__header">
-        <div className="app-header__main">
-          <div className="app-brand" data-testid="app-shell__brand">
-            <h1 data-testid="app-shell__title">Nexus</h1>
-            <p className="app-subtitle" data-testid="app-shell__subtitle">
-              Docs / Tasks workspace
-            </p>
-          </div>
-          <div className="app-header__actions">
-            <ConsoleDownloadButton />
-          </div>
-        </div>
-      </header>
+  const handleSelectTab = (tab: TabKey) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      const hash = `#${tab}`;
+      if (window.location.hash !== hash) {
+        window.history.replaceState(null, '', hash);
+      }
+    }
+  };
 
-      <nav className="tabs" data-testid="app-shell__tabs">
+  return (
+    <div className="app-shell" data-testid="app-shell__container">
+      <nav
+        className="tabs app-shell__tabs"
+        data-testid="app-shell__tabs"
+        role="tablist"
+        aria-label="ワークスペースのビュー"
+      >
         {TAB_ORDER.map(tab => (
           <button
             key={tab}
             type="button"
             className={`tab-btn${activeTab === tab ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => handleSelectTab(tab)}
             data-testid={`app-shell__tab-${tab}`}
+            id={`app-shell__tab-${tab}`}
+            aria-controls={tab}
+            aria-selected={activeTab === tab}
+            role="tab"
           >
             {tabLabels[tab]}
           </button>
         ))}
       </nav>
 
-      <main data-testid="app-shell__main">
-        <section className={`tab-content${activeTab === 'docs' ? ' active' : ''}`} data-testid="docs-navigator__panel">
+      <div className="app-shell__content" data-testid="app-shell__main">
+        <section
+          id="docs"
+          className={`tab-content${activeTab === 'docs' ? ' active' : ''}`}
+          data-testid="docs-navigator__panel"
+          role="tabpanel"
+          aria-labelledby="app-shell__tab-docs"
+        >
           {activeTab === 'docs' && <DocsNavigator />}
         </section>
-        <section className={`tab-content${activeTab === 'tasks' ? ' active' : ''}`} data-testid="tasks__panel">
-          {activeTab === 'tasks' && <TasksWorkspace onSwitchToDocs={() => setActiveTab('docs')} />}
+        <section
+          id="tasks"
+          className={`tab-content${activeTab === 'tasks' ? ' active' : ''}`}
+          data-testid="tasks__panel"
+          role="tabpanel"
+          aria-labelledby="app-shell__tab-tasks"
+        >
+          {activeTab === 'tasks' && <TasksWorkspace onSwitchToDocs={() => handleSelectTab('docs')} />}
         </section>
-        <section className={`tab-content${activeTab === 'settings' ? ' active' : ''}`} data-testid="settings__panel">
-          {activeTab === 'settings' && <SettingsPanel darkMode={darkMode} onToggleTheme={() => setDarkMode(prev => !prev)} />}
+        <section
+          id="settings"
+          className={`tab-content${activeTab === 'settings' ? ' active' : ''}`}
+          data-testid="settings__panel"
+          role="tabpanel"
+          aria-labelledby="app-shell__tab-settings"
+        >
+          {activeTab === 'settings' && (
+            <SettingsPanel darkMode={darkMode} onToggleTheme={() => setDarkMode(prev => !prev)} />
+          )}
         </section>
-      </main>
+      </div>
     </div>
   );
 }
