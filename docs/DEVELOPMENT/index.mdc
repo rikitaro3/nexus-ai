@@ -17,95 +17,86 @@ tags: []
 > Downstream: docs/DEVELOPMENT/Rendererドメインサービス設計.mdc
 
 ## 目的
-Nexusの実装構成・開発規約・ビルド/テスト手順をTypeScript版コードベースに合わせて最新化します。
+Next.js 版 Nexus の実装構成・開発規約・ビルド/テスト手順を最新化し、フロントエンドと Node.js スクリプトの役割を整理します。
 
 ## 1. ディレクトリ構成
 ```
 src/
-├── main/                # Electron Main Process (TypeScript)
-│   ├── handlers/        # セキュリティ/設定などのIPCロジック
-│   ├── utils/           # Quality Gates, impact解析, ロガー
-│   └── watchers/        # Quality Gatesパイプライン監視 (rules-watcher)
-├── preload/             # contextBridge公開API（TypeScript）
-├── renderer/            # ブラウザサイド実装（Vanilla JS + DOM）
-│   ├── features/        # docs-navigator / tasks / settings モジュール
-│   ├── services/        # AIプロバイダー登録・永続化ラッパー
-│   └── shared/          # UIユーティリティ・定数
-└── types/               # Main/Renderer共通で参照する型定義
+├── app/                     # Next.js App Router（ページ・レイアウト）
+│   ├── (routes)/            # ルートとセクションレイアウト
+│   ├── api/                 # Route Handler (API Routes)
+│   └── globals.css          # グローバルスタイル
+├── components/              # UI/ドメイン別コンポーネント
+│   ├── layout/              # Header / Footer / MainLayout
+│   ├── docs/                # ドキュメントナビゲーター
+│   ├── tasks/               # タスクワークスペース
+│   └── ui/                  # ボタンなど汎用 UI
+├── lib/                     # ドメインロジック（ファイル読み書き、品質ゲート連携等）
+├── config/                  # 設定値、リポジトリパス、Feature Flags
+├── styles/                  # 共有スタイル資産
+└── types/                   # TypeScript 型定義
 ```
 補助ファイル:
-- `context.mdc` / `prompts.json` … 初期データ
-- `logs/quality-gates` … Quality Gates実行ログ
-- `scripts/` … ビルド・検証コマンド
+- `public/context.mdc` / `prompts.json` … 初期データ
+- `docs/` … 仕様ドキュメント
+- `scripts/` … 品質ゲートやテンプレート生成などの CLI
 
-## 2. メインプロセス実装方針
-- `src/main/main.ts`
-  - アプリ起動・BrowserWindow生成
-  - `rules-watcher`初期化結果をRendererへブロードキャスト
-  - Settings IPC（プロジェクトルート、AIプロバイダー）を管理
-- `src/main/watchers/rules-watcher.ts`
-  - chokidarで`docs/**`を監視し、差分 → Quality Gates再実行
-  - パイプライン状態（auto/semiAuto/manual）と最新ログをイベント化
-  - 詳細: [QualityGatesパイプライン詳細設計.mdc](../QA/QualityGatesパイプライン詳細設計.mdc)
-- `src/main/handlers/security.ts`
-  - パス検証とホワイトリスト判定を共通化
-  - Settingsからのプロジェクトルート変更を受け付け
-  - 詳細: [セキュリティ設計.mdc](../ARCH/セキュリティ設計.mdc)
+## 2. Next.js レイヤー別ガイド
 
-## 3. Preload/APIレイヤー
-- `src/preload/preload.ts`
-  - `contextBridge.exposeInMainWorld`でMain APIを公開
-  - `rulesWatcher` APIは `RulesWatcherEventEnvelope` を返却（共通型: `src/types/rules-watcher.ts`）
-  - 例外はすべて `{ success: false, error }` 形式に統一
-- IPC命名規約: `<ドメイン>:<動詞>`（例: `tasks:writeJson`, `rules:scanImpacts`）
+### App Router (`src/app/(routes)`)
+- `layout.tsx`: HTML スケルトンと共通メタ情報を定義。
+- `page.tsx`: Docs Navigator + Tasks Workspace を読み込み、サーバーコンポーネントから初期データをフェッチ。
+- ページ間で共有するステートは React Context で管理する。
 
-## 4. Renderer実装概要
-- 詳細仕様は [Rendererドメインサービス設計.mdc](Rendererドメインサービス設計.mdc)
-- `features/docs-navigator/`
-  - Docs/FEAT/Treeモード切替
-  - Quality Gatesパネル描画（rulesWatcherイベント連携）
-  - `localStorage`キー: `nexus.docs.mode`
-- `features/tasks/`
-  - タスクCRUD + 推奨タスクスコアリング + Breakdownプロンプト生成
-  - `localStorage`キー: `nexus.tasks.filter`, `nexus.tasks.category`
-  - AIプロバイダーは `services/ai/registry.js` で取得
-- `services/ai/`
-  - `registry.js` … AIプロバイダーの登録・選択・トークン使用記録
-  - `providers/` … 既定プロバイダー（Cursorなど）
-  - 拡張手順: [AIプロバイダー拡張ガイド.mdc](AIプロバイダー拡張ガイド.mdc)
+### Route Handler (`src/app/api/**/route.ts`)
+- 例: `api/health/route.ts` はヘルスチェックエンドポイントを提供。
+- Response は `NextResponse.json()` を使用し、Zod で入力／出力を検証。
+- ファイルシステム操作は `src/lib/` のユーティリティへ委譲。
 
-## 5. コーディング規約
-### TypeScript (Main/Preload)
-- `strict`モード有効 (`tsconfig.json`)
-- importはESModule形式（拡張子なし）
-- IPCレスポンスは `{ success, data?, error? }`
-- 例外ログは `logger.error` で構造化出力
+### クライアントコンポーネント (`src/components/**`)
+- `"use client"` ディレクティブを必要箇所に明示。
+- DocsNavigator / TasksWorkspace / SettingsPanel など状態管理を伴う UI を担当。
+- Zustand などの外部ステート管理は未導入。React hook (useState/useReducer) を基本とする。
 
-### Renderer (Vanilla JS)
-- 即時関数でスコープ封じ込め (IIFE)
-- `console`ログは`[モジュール名]`プレフィックス
-- DOM取得は`document.getElementById/querySelector`
-- 状態はモジュールローカル変数と`localStorage`に保持
-- AI連携時は `registry.recordTokenUsage()` で消費量を記録
+## 3. コーディング規約
 
-## 6. ビルド & 実行
+### TypeScript
+- `tsconfig.json` の strict 設定を維持し、可能な限り型を明示。
+- Server Components では Node.js API へのアクセスが可能。ブラウザ API を使用する場合はクライアントコンポーネントへ分離。
+- `lib/` では純粋関数を心掛け、I/O を伴う場合は分離されたヘルパーを用意。
+
+### React / Next.js
+- クライアントコンポーネントでは副作用を `useEffect` に限定し、サーバー側でフェッチ可能なデータはサーバーコンポーネントに寄せる。
+- UI コンポーネントは `src/components/ui/` に配置し、Figma のデザインシステムに合わせた props を定義。
+- 共有レイアウトは `src/components/layout/MainLayout.tsx` を経由して提供。
+
+### スタイル
+- グローバルスタイルは `src/app/globals.css` で定義。
+- コンポーネント固有のスタイルは CSS Modules (`*.module.css`) もしくは内製ユーティリティを使用。
+
+## 4. ビルド & 実行
 | コマンド | 目的 |
 |----------|------|
-| `npm run build` | TypeScriptコンパイル (dist出力) |
-| `npm start` | 開発モードでElectron起動（ts-node/register） |
-| `npm run lint` | ESLintチェック |
-| `npm test` | Jest + Integrationテスト |
-| `npm run test:e2e` | Playwright E2E |
+| `npm run dev` | Next.js 開発サーバーを起動 |
+| `npm run build` | 本番ビルド (`.next/`) を生成 |
+| `npm start` | `npm run build` 後のサーバー起動 |
+| `npm run lint` | ESLint (Next.js 推奨設定) |
+| `npm test` | Jest によるユニットテスト |
+| `npm run test:watch` | Jest ウォッチモード |
+| `npm run test:coverage` | カバレッジレポート生成 |
 
-## 7. テスト指針
-- Quality Gates監視の統合テスト: `test/integration/rules-watcher.integration.spec.ts`
-- セキュリティ検証: `test/integration/security.integration.spec.ts`
-- RendererロジックはJestモックで主要ユーティリティを検証
-- QA観点は [docs/QA/index.mdc](../QA/index.mdc) を参照
+## 5. テスト指針
+- **ユニットテスト**: `src/lib/` の純粋ロジックを中心に Jest でカバー。Zod スキーマやタスク計算ロジックの境界テストを追加。
+- **コンポーネントテスト**: React Testing Library を導入予定。優先度は DocsNavigator と TasksWorkspace。
+- **E2E テスト**: Playwright で Next.js サーバーに接続し、主要画面の動作確認を自動化予定。詳細は [docs/QA/index.mdc](../QA/index.mdc) を参照。
+- **品質ゲート**: `node scripts/validate-docs-gates.js` を用いた文書整合性チェックを CI に組み込む。
 
-## 8. 関連詳細設計
-- [QualityGatesパイプライン詳細設計.mdc](../QA/QualityGatesパイプライン詳細設計.mdc)
-- [Rendererドメインサービス設計.mdc](Rendererドメインサービス設計.mdc)
-- [AIプロバイダー拡張ガイド.mdc](AIプロバイダー拡張ガイド.mdc)
-- [セキュリティ設計.mdc](../ARCH/セキュリティ設計.mdc)
-- [IPC設計.mdc](../ARCH/IPC設計.mdc)
+## 6. デプロイと運用
+- Next.js アプリはスタンドアロンモード（`next build` → `next start`）でデプロイ可能。
+- ドキュメント資産は Git 管理されるため、`git pull` 後に品質ゲートを実行して差分を検証。
+- サブモジュールとして取り込む場合は README の手順を参照。
+
+## 7. 関連詳細設計
+- [docs/ARCH/システム構成.mdc](../ARCH/システム構成.mdc)
+- [docs/ARCH/共通コンポーネント設計.mdc](../ARCH/共通コンポーネント設計.mdc)
+- [docs/QA/index.mdc](../QA/index.mdc)
