@@ -5,6 +5,7 @@ package-lock.json
 # Build outputs
 dist/
 build/
+.next/
 *.tsbuildinfo
 
 # Coverage reports
