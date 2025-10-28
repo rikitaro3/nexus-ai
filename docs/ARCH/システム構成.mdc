@@ -146,7 +146,7 @@ NexusはElectron + TypeScriptの標準的な構造を採用します。
 ├── test/                     # テストコード
 │   ├── e2e/                  # Playwright E2Eテスト
 │   │   ├── fixtures/
-│   │   └── smoke.spec.ts
+│   │   └── 01_smoke.spec.ts
 │   └── unit/                 # ユニットテスト（将来拡張用）
 ├── legacy/                   # 旧構成（main.js, renderer/ 等）
 │   └── tests/                # レガシーE2Eスクリプト
@@ -172,7 +172,7 @@ NexusはElectron + TypeScriptの標準的な構造を採用します。
 - **dist/**: ビルド成果物（gitignore対象）
 - **docs/**: ドキュメント（ARCH/PRD/DEVELOPMENT等）
 - **test/**: テストコード
-  - e2e/: Playwright E2Eテスト（smoke.spec.ts）
+  - e2e/: Playwright E2Eテスト（01_smoke.spec.ts）
   - unit/: ユニットテストの配置場所（`.gitkeep`のみ）
 - **legacy/**: 旧Electron構成（`main.js`や`renderer/`など）。参照のみで更新禁止
 - **scripts/**: CLIユーティリティ（Quality Gates検証など）

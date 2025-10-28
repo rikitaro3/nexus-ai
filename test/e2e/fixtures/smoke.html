@@ -10,24 +10,27 @@
   </style>
 </head>
 <body>
-  <h1>Docs Navigator</h1>
-  <div class="docs-mode-bar">
-    <button data-mode="docs">Docs</button>
-    <button data-mode="tree">Tree</button>
+  <h1 data-testid="docs-navigator__heading">Docs Navigator</h1>
+  <div class="docs-mode-bar" data-testid="docs-navigator__mode-toolbar">
+    <button data-mode="docs" data-testid="docs-navigator__mode-docs-button">Docs</button>
+    <button data-mode="tree" data-testid="docs-navigator__mode-tree-button">Tree</button>
   </div>
-  <div id="tree-mode" hidden>
-    <p id="tree-status" class="status">Tree view is hidden</p>
-    <div id="tree-view"></div>
+  <div id="tree-mode" hidden data-testid="docs-navigator__mode-tree">
+    <p id="tree-status" class="status" data-testid="docs-navigator__tree-status">Tree view is hidden</p>
+    <div id="tree-view" data-testid="docs-navigator__tree-view"></div>
   </div>
   <script>
-    document.querySelector('button[data-mode="tree"]').addEventListener('click', () => {
-      document.getElementById('tree-mode').hidden = false;
-      document.getElementById('tree-status').textContent = 'Tree view ready';
+    document.querySelector('[data-testid="docs-navigator__mode-tree-button"]').addEventListener('click', () => {
+      const treeMode = document.getElementById('tree-mode');
+      treeMode.hidden = false;
+      const treeStatus = document.getElementById('tree-status');
+      treeStatus.textContent = 'Tree view ready';
       const treeView = document.getElementById('tree-view');
       treeView.innerHTML = '';
       const node = document.createElement('div');
       node.className = 'tree-node';
       node.textContent = 'Root Node';
+      node.setAttribute('data-testid', 'docs-navigator__tree-node');
       treeView.appendChild(node);
     });
   </script>

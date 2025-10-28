@@ -1295,6 +1295,7 @@
     console.log('renderTreeNode called with entriesMap:', entriesMap?.length);
     const div = document.createElement('div');
     div.className = 'tree-node';
+    div.setAttribute('data-testid', 'docs-navigator__tree-node');
     const hasChildren = node.children.length > 0;
     const indent = '  '.repeat(depth);
     const toggle = hasChildren ? (node.expanded ? '▼' : '▶') : '';
