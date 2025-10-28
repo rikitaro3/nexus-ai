@@ -11,6 +11,21 @@ Document navigator and tasks management tool for multi-repository development pr
 - **Tasks Management**: Import, edit, save, and export tasks
 - **Breakdown Generation**: Generate prompts for AI task breakdown
 
+## 使い方
+
+1. `npm install` を実行して依存関係をインストールします。
+2. ドキュメント品質ゲートを CLI で確認したい場合は `npm run validate:docs` または `npm run validate:docs -- --json` を利用します。
+3. GUI でアプリを利用する場合は `npm run start:dev` でビルドと起動をまとめて行うか、`npm run build` の後に `npm start` で Electron アプリを起動します。
+4. ドキュメントやタスクの編集結果を確認したい場合は、アプリ上でカテゴリやリンクを辿って目的のファイルを開き、必要に応じてエクスポート機能を使用します。
+5. E2E テストで動作を検証する場合は `npm run test:e2e:playwright` を実行します。
+
+## ユースケース
+
+- **大規模ドキュメントの横断的な可視化**: PRD、UX、API、データ仕様など複数の文書を横断して関連性を確認し、抜け漏れを防ぎたい場合に有効です。
+- **タスク分解の効率化**: 既存ドキュメントを参照しながら、タスクをインポート・編集・エクスポートして開発計画を整備するシーンで活用できます。
+- **品質ゲートの自動チェック**: CI などで `npm run validate:docs` を用いれば、文書間のリンク切れや不足を自動で検出できます。
+- **サブモジュールとしての組み込み**: 親プロジェクトに組み込んで、複数リポジトリを横断したドキュメント管理のハブとして運用できます。
+
 ## Development
 
 ### Setup
