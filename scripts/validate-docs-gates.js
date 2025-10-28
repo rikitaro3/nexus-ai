@@ -2,6 +2,13 @@
 
 const fs = require('fs/promises');
 const path = require('path');
+const matter = require('gray-matter');
+const { unified } = require('unified');
+const remarkParse = require('remark-parse');
+const remarkFrontmatter = require('remark-frontmatter');
+const remarkGfm = require('remark-gfm');
+const { visit } = require('unist-util-visit');
+const toString = require('mdast-util-to-string');
 
 const VALID_LAYERS = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
 const TEST_CASE_CATEGORIES = ['docs-navigator', 'tree-view', 'tasks', 'integration'];
@@ -40,9 +47,9 @@ async function main(argv = process.argv.slice(2)) {
     process.exit(2);
   }
 
-  const { nodes, docStatus, docContents } = await parseAllBreadcrumbs(entries, projectRoot);
+  const { nodes, docStatus, docRecords } = await parseAllBreadcrumbs(entries, projectRoot);
   const results = createEmptyGateResults();
-  validateDocumentGates(nodes, docStatus, docContents, results);
+  validateDocumentGates(nodes, docStatus, docRecords, results);
   await validateTestCaseGates(projectRoot, results, { testRoots: args.testRoots });
 
   outputResults({
@@ -170,49 +177,62 @@ function parseContextEntries(text) {
 async function parseAllBreadcrumbs(entries, projectRoot) {
   const nodes = new Map();
   const docStatus = new Map();
-  const docContents = new Map();
+  const docRecords = new Map();
 
   for (const entry of entries) {
     const relPath = entry.path;
     const target = path.resolve(projectRoot, relPath);
 
-    let content;
+    let raw;
     try {
-      content = await fs.readFile(target, 'utf8');
+      raw = await fs.readFile(target, 'utf8');
     } catch (error) {
       docStatus.set(relPath, { status: 'read-error', message: error.message });
       continue;
     }
 
-    docContents.set(relPath, content);
-
-    const breadcrumbs = extractBreadcrumbs(content);
-    if (!breadcrumbs) {
-      docStatus.set(relPath, { status: 'missing-breadcrumbs' });
+    let parsed;
+    try {
+      parsed = matter(raw);
+    } catch (error) {
+      docStatus.set(relPath, { status: 'invalid-frontmatter', message: error.message });
       continue;
     }
 
-    const layer = extractField(breadcrumbs, 'Layer');
-    const upstreamRaw = extractField(breadcrumbs, 'Upstream');
-    const downstreamRaw = extractField(breadcrumbs, 'Downstream');
-    const upstream = splitLinks(upstreamRaw);
-    const downstream = splitLinks(downstreamRaw);
+    const frontMatter = normalizeFrontMatter(parsed.data || {});
+    const ast = buildMarkdownAst(parsed.content);
+    const title = extractDocumentTitle(ast);
+
+    docRecords.set(relPath, {
+      content: parsed.content,
+      frontMatter,
+      ast,
+      title
+    });
+
+    if (!frontMatter || Object.keys(frontMatter).length === 0) {
+      docStatus.set(relPath, { status: 'missing-frontmatter' });
+      continue;
+    }
+
+    const { layer, upstream, downstream } = frontMatter;
 
     nodes.set(relPath, {
       path: relPath,
       layer,
       upstream,
-      downstream
+      downstream,
+      frontMatter
     });
 
     if (!layer && upstream.length === 0 && downstream.length === 0) {
-      docStatus.set(relPath, { status: 'missing-breadcrumbs' });
+      docStatus.set(relPath, { status: 'incomplete-frontmatter' });
     } else if (!docStatus.has(relPath)) {
       docStatus.set(relPath, { status: 'ok' });
     }
   }
 
-  return { nodes, docStatus, docContents };
+  return { nodes, docStatus, docRecords };
 }
 
 function createEmptyGateResults() {
@@ -222,21 +242,27 @@ function createEmptyGateResults() {
   }, {});
 }
 
-function validateDocumentGates(nodes, docStatus, docContents, results) {
+function validateDocumentGates(nodes, docStatus, docRecords, results) {
   if (!results || typeof results !== 'object') {
     throw new Error('validateDocumentGates requires a results object');
   }
 
   for (const [pathKey, status] of docStatus.entries()) {
-    if (status.status === 'missing-breadcrumbs') {
-      results['DOC-01'].push({ path: pathKey, message: 'Breadcrumbsブロックが見つかりません', severity: 'error' });
+    if (status.status === 'missing-frontmatter') {
+      results['DOC-01'].push({ path: pathKey, message: 'YAMLフロントマターが見つかりません', severity: 'error' });
+    } else if (status.status === 'invalid-frontmatter') {
+      results['DOC-01'].push({ path: pathKey, message: `YAMLフロントマターを解析できません: ${status.message}`, severity: 'error' });
+    } else if (status.status === 'incomplete-frontmatter') {
+      results['DOC-01'].push({ path: pathKey, message: 'フロントマターにLayer/Upstream/Downstreamが設定されていません', severity: 'error' });
     } else if (status.status === 'read-error') {
       results['DOC-01'].push({ path: pathKey, message: `ドキュメントを読み込めません: ${status.message}`, severity: 'error' });
     }
   }
 
   for (const [pathKey, node] of nodes.entries()) {
-    if (node.layer && !VALID_LAYERS.includes(node.layer.toUpperCase())) {
+    if (!node.layer) {
+      results['DOC-02'].push({ path: pathKey, message: 'layerが未設定です', severity: 'error' });
+    } else if (!VALID_LAYERS.includes(node.layer.toUpperCase())) {
       results['DOC-02'].push({ path: pathKey, layer: node.layer, message: `無効なLayer: ${node.layer}`, severity: 'error' });
     }
 
@@ -246,26 +272,38 @@ function validateDocumentGates(nodes, docStatus, docContents, results) {
       }
     }
 
-    for (const downPath of node.downstream) {
-      if (!nodes.has(downPath)) {
-        results['DOC-03'].push({ path: pathKey, link: downPath, message: `Downstreamパスが存在しません: ${downPath}`, severity: 'error' });
+      for (const downPath of node.downstream) {
+        if (!nodes.has(downPath)) {
+          results['DOC-03'].push({ path: pathKey, link: downPath, message: `Downstreamパスが存在しません: ${downPath}`, severity: 'error' });
+        }
+      }
+
+      const record = docRecords.get(pathKey);
+      if (record) {
+        const frontTitle = typeof record.frontMatter.title === 'string' ? record.frontMatter.title.trim() : '';
+        if (frontTitle && record.title && frontTitle !== record.title) {
+          results['DOC-01'].push({
+            path: pathKey,
+            message: `フロントマターのtitleと本文のH1が一致しません (title: "${frontTitle}", H1: "${record.title}")`,
+            severity: 'error'
+          });
+        }
       }
     }
-  }
 
   const cycles = detectCycles(nodes);
   results['DOC-04'] = cycles.map(cycle => ({ ...cycle, severity: 'warn' }));
 
-  const headingViolations = validateHeadings(docContents);
+  const headingViolations = validateHeadings(docRecords);
   results['DOC-05'].push(...headingViolations);
 
-  const tocViolations = validateTableOfContents(docContents);
+  const tocViolations = validateTableOfContents(docRecords);
   results['DOC-06'].push(...tocViolations);
 
-  const namingViolations = validateNamingRules(docContents, docStatus, nodes);
+  const namingViolations = validateNamingRules(docRecords, docStatus, nodes);
   results['DOC-07'].push(...namingViolations);
 
-  const scopeViolations = validateScopeSections(docContents);
+  const scopeViolations = validateScopeSections(docRecords);
   results['DOC-08'].push(...scopeViolations.map(v => ({ ...v, severity: 'warn' })));
 }
 
@@ -541,15 +579,14 @@ function detectCycles(nodes) {
   return cycles;
 }
 
-function validateHeadings(docContents) {
+function validateHeadings(docRecords) {
   const violations = [];
 
-  for (const [pathKey, content] of docContents.entries()) {
-    const headings = extractHeadings(content);
+  for (const [pathKey, record] of docRecords.entries()) {
     const numberingState = [];
+    const headings = collectHeadings(record.ast).filter(h => h.depth >= 2 && h.depth <= 3);
 
     for (const heading of headings) {
-      if (heading.level < 2 || heading.level > 3) continue;
       const text = heading.text.trim();
       if (/^目次$/i.test(text)) continue;
 
@@ -565,7 +602,7 @@ function validateHeadings(docContents) {
       }
 
       const numbers = match[1].split('.').map(num => parseInt(num, 10));
-      const depth = heading.level - 2;
+      const depth = heading.depth - 2;
 
       if (numbers.length !== depth + 1 || numbers.some(Number.isNaN)) {
         violations.push({
@@ -579,11 +616,7 @@ function validateHeadings(docContents) {
 
       let prefixMismatch = false;
       for (let i = 0; i < depth; i++) {
-        if (typeof numberingState[i] === 'undefined') {
-          prefixMismatch = true;
-          break;
-        }
-        if (numberingState[i] !== numbers[i]) {
+        if (typeof numberingState[i] === 'undefined' || numberingState[i] !== numbers[i]) {
           prefixMismatch = true;
           break;
         }
@@ -622,31 +655,30 @@ function validateHeadings(docContents) {
   return violations;
 }
 
-function validateTableOfContents(docContents) {
+function validateTableOfContents(docRecords) {
   const violations = [];
 
-  for (const [pathKey, content] of docContents.entries()) {
-    const tocSection = extractSectionByTitle(content, [/^目次$/i]);
+  for (const [pathKey, record] of docRecords.entries()) {
+    const tocSection = findSectionByHeading(record.ast, [/^目次$/i]);
     if (!tocSection) {
       violations.push({ path: pathKey, message: '## 目次 セクションが見つかりません', severity: 'error' });
       continue;
     }
 
-    const links = Array.from(tocSection.content.matchAll(/\[(.+?)\]\(#(.+?)\)/g));
+    const links = collectLinksFromSection(tocSection).filter(link => link.url.startsWith('#'));
     if (links.length === 0) {
       violations.push({ path: pathKey, message: '目次に有効なリンクが存在しません', severity: 'error' });
       continue;
     }
 
-    const headings = extractHeadings(content);
-    const headingSlugs = new Set(headings.map(h => slugifyHeading(h.text)).filter(Boolean));
-    for (const [, , anchor] of links) {
-      const normalized = anchor.trim().toLowerCase();
+    const headingSlugs = new Set(collectHeadings(record.ast).map(h => slugifyHeading(h.text)).filter(Boolean));
+    for (const link of links) {
+      const normalized = link.url.replace(/^#+/, '').trim().toLowerCase();
       if (!headingSlugs.has(normalized)) {
         violations.push({
           path: pathKey,
-          link: anchor,
-          message: `目次リンクのアンカーが本文に存在しません: #${anchor}`,
+          link: link.url,
+          message: `目次リンクのアンカーが本文に存在しません: ${link.url}`,
           severity: 'error'
         });
       }
@@ -656,9 +688,9 @@ function validateTableOfContents(docContents) {
   return violations;
 }
 
-function validateNamingRules(docContents, docStatus, nodes) {
+function validateNamingRules(docRecords, docStatus, nodes) {
   const violations = [];
-  const allPaths = new Set([...docContents.keys(), ...docStatus.keys()]);
+  const allPaths = new Set([...docRecords.keys(), ...docStatus.keys()]);
 
   for (const pathKey of allPaths) {
     if (!pathKey) continue;
@@ -690,30 +722,30 @@ function validateNamingRules(docContents, docStatus, nodes) {
   return violations;
 }
 
-function validateScopeSections(docContents) {
+function validateScopeSections(docRecords) {
   const violations = [];
 
-  for (const [pathKey, content] of docContents.entries()) {
+  for (const [pathKey, record] of docRecords.entries()) {
     let hasInclude = false;
     let hasExclude = false;
 
-    const includeSection = extractSectionByTitle(content, [/^(?:\d+(?:\.\d+)*\.\s*)?(扱う内容|in\s*scope)$/i]);
+    const includeSection = findSectionByHeading(record.ast, [/^(?:\d+(?:\.\d+)*\.\s*)?(扱う内容|in\s*scope)$/i]);
     if (includeSection) {
-      hasInclude = hasListWithContent(includeSection.content);
+      hasInclude = sectionHasListWithContent(includeSection);
     }
 
-    const excludeSection = extractSectionByTitle(content, [/^(?:\d+(?:\.\d+)*\.\s*)?(扱わない内容|out\s*of\s*scope|非スコープ)$/i]);
+    const excludeSection = findSectionByHeading(record.ast, [/^(?:\d+(?:\.\d+)*\.\s*)?(扱わない内容|out\s*of\s*scope|非スコープ)$/i]);
     if (excludeSection) {
-      hasExclude = hasListWithContent(excludeSection.content);
+      hasExclude = sectionHasListWithContent(excludeSection);
     }
 
     if (!hasInclude || !hasExclude) {
-      const scopeSection = extractSectionByTitle(content, [/^(?:\d+(?:\.\d+)*\.\s*)?scope$/i]);
+      const scopeSection = findSectionByHeading(record.ast, [/^(?:\d+(?:\.\d+)*\.\s*)?scope$/i]);
       if (scopeSection) {
-        const bullets = extractListLines(scopeSection.content);
-        const includeKeywords = bullets.some(line => /(含まれる|in\s*scope|対象)/i.test(line));
-        const excludeKeywords = bullets.some(line => /(含まれない|out\s*of\s*scope|除外|非対象)/i.test(line));
-        if (bullets.length > 0 && includeKeywords && excludeKeywords) {
+        const items = collectListItemTexts(scopeSection);
+        const includeKeywords = items.some(text => /(含まれる|in\s*scope|対象)/i.test(text));
+        const excludeKeywords = items.some(text => /(含まれない|out\s*of\s*scope|除外|非対象)/i.test(text));
+        if (items.length > 0 && includeKeywords && excludeKeywords) {
           hasInclude = true;
           hasExclude = true;
         }
@@ -732,58 +764,120 @@ function validateScopeSections(docContents) {
   return violations;
 }
 
-function extractHeadings(content) {
+function collectHeadings(ast) {
   const headings = [];
-  const lines = content.split('\n');
-  let inCodeBlock = false;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd();
-    if (line.trim().startsWith('```')) {
-      inCodeBlock = !inCodeBlock;
-      continue;
-    }
-    if (inCodeBlock) continue;
-
-    const match = line.match(/^(#{1,6})\s+(.*)$/);
-    if (match) {
-      headings.push({ level: match[1].length, text: match[2].trim() });
-    }
-  }
-
+  if (!ast) return headings;
+  visit(ast, 'heading', node => {
+    headings.push({ depth: node.depth || 0, text: toString(node) || '' });
+  });
   return headings;
 }
 
-function extractSectionByTitle(content, titlePatterns) {
-  const lines = content.split('\n');
-  let startIndex = -1;
-  let startLevel = null;
+function findSectionByHeading(ast, titlePatterns = []) {
+  if (!ast || !Array.isArray(ast.children)) return null;
+  const children = ast.children;
+  for (let i = 0; i < children.length; i++) {
+    const node = children[i];
+    if (node.type !== 'heading') continue;
+    const text = toString(node).trim();
+    if (!titlePatterns.some(pattern => pattern.test(text))) continue;
+    const depth = node.depth || 0;
+    const content = [];
+    for (let j = i + 1; j < children.length; j++) {
+      const next = children[j];
+      if (next.type === 'heading' && (next.depth || 0) <= depth) {
+        break;
+      }
+      content.push(next);
+    }
+    return { heading: node, depth, content };
+  }
+  return null;
+}
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    const match = line.match(/^(#{2,6})\s+(.*)$/);
-    if (!match) continue;
+function collectLinksFromSection(section) {
+  if (!section) return [];
+  const links = [];
+  const root = { type: 'root', children: section.content || [] };
+  visit(root, 'link', node => {
+    links.push({ url: node.url || '', text: toString(node) || '' });
+  });
+  return links;
+}
 
-    const headingText = match[2].trim();
-    if (titlePatterns.some(pattern => pattern.test(headingText))) {
-      startIndex = i;
-      startLevel = match[1].length;
-      break;
+function sectionHasListWithContent(section) {
+  if (!section) return false;
+  let hasContent = false;
+  const root = { type: 'root', children: section.content || [] };
+  visit(root, 'listItem', node => {
+    if (!hasContent && toString(node).trim().length > 0) {
+      hasContent = true;
+    }
+  });
+  return hasContent;
+}
+
+function collectListItemTexts(section) {
+  if (!section) return [];
+  const items = [];
+  const root = { type: 'root', children: section.content || [] };
+  visit(root, 'listItem', node => {
+    const text = toString(node).trim();
+    if (text) items.push(text);
+  });
+  return items;
+}
+
+function buildMarkdownAst(content) {
+  return unified()
+    .use(remarkParse)
+    .use(remarkFrontmatter, ['yaml'])
+    .use(remarkGfm)
+    .parse(content || '');
+}
+
+function extractDocumentTitle(ast) {
+  if (!ast || !Array.isArray(ast.children)) return '';
+  for (const node of ast.children) {
+    if (node.type === 'heading' && node.depth === 1) {
+      return toString(node).trim();
     }
   }
+  return '';
+}
 
-  if (startIndex === -1) return null;
+function normalizeFrontMatter(data) {
+  if (!data || typeof data !== 'object') return {};
+  const normalized = { ...data };
 
-  const sectionLines = [];
-  for (let j = startIndex + 1; j < lines.length; j++) {
-    const line = lines[j];
-    const trimmed = line.trim();
-    const match = trimmed.match(/^(#{1,6})\s+/);
-    if (match && match[1].length <= startLevel) break;
-    sectionLines.push(line);
+  if (typeof normalized.title === 'string') {
+    normalized.title = normalized.title.trim();
+    if (!normalized.title) delete normalized.title;
   }
 
-  return { level: startLevel, content: sectionLines.join('\n') };
+  if (typeof normalized.layer === 'string') {
+    normalized.layer = normalized.layer.trim();
+  } else {
+    normalized.layer = '';
+  }
+
+  normalized.upstream = normalizeLinkArray(normalized.upstream);
+  normalized.downstream = normalizeLinkArray(normalized.downstream);
+
+  return normalized;
+}
+
+function normalizeLinkArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map(item => (typeof item === 'string' ? item.trim() : ''))
+      .filter(item => item && item.toUpperCase() !== 'N/A');
+  }
+  if (typeof value === 'string') {
+    return splitLinks(value);
+  }
+  return [];
 }
 
 function slugifyHeading(text) {
@@ -830,43 +924,6 @@ function selectNamingPattern(layer) {
     default:
       return /^[A-Z0-9][A-Za-z0-9_-]*\.mdc$/;
   }
-}
-
-function hasListWithContent(sectionText) {
-  const bullets = extractListLines(sectionText);
-  return bullets.some(line => line.trim().length > 2);
-}
-
-function extractListLines(sectionText) {
-  const lines = sectionText.split('\n');
-  return lines.filter(line => line.trim().match(/^[-*\d]+[.)]?\s+.+/));
-}
-
-function extractSection(text, startHeader, stopHeaderPrefix = '## ') {
-  const startIdx = text.indexOf(startHeader);
-  if (startIdx === -1) return '';
-
-  const after = text.slice(startIdx);
-  const rest = after.slice(startHeader.length);
-  if (!stopHeaderPrefix) return after.trim();
-
-  const escaped = stopHeaderPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`\n${escaped}`);
-  const match = regex.exec(rest);
-  if (!match) return after.trim();
-
-  return after.slice(0, startHeader.length + match.index).trim();
-}
-
-function extractBreadcrumbs(text) {
-  const match = text.match(/>\s*Breadcrumbs[\s\S]*?(?=\n#|\n##|$)/);
-  return match ? match[0] : '';
-}
-
-function extractField(breadcrumbs, field) {
-  const regex = new RegExp(`>\\s*${field}:\\s*(.*)`);
-  const match = regex.exec(breadcrumbs);
-  return match ? match[1].trim() : '';
 }
 
 function splitLinks(value) {
@@ -926,11 +983,15 @@ const exported = {
   validateTableOfContents,
   validateNamingRules,
   validateScopeSections,
-  extractHeadings,
-  extractSectionByTitle,
-  extractSection,
-  extractBreadcrumbs,
-  extractField,
+  collectHeadings,
+  findSectionByHeading,
+  collectLinksFromSection,
+  sectionHasListWithContent,
+  collectListItemTexts,
+  buildMarkdownAst,
+  extractDocumentTitle,
+  normalizeFrontMatter,
+  normalizeLinkArray,
   splitLinks,
   walkTestDirectory,
   outputResults,

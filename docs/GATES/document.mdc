@@ -1,3 +1,13 @@
+---
+title: "Nexus Quality Gates（ドキュメント記法）"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/PRD/PRD_DocumentTemplate.mdc"
+downstream: []
+tags: []
+---
+
 # Nexus Quality Gates（ドキュメント記法）
 
 > Breadcrumbs

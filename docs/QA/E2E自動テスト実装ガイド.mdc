@@ -1,3 +1,14 @@
+---
+title: "E2E自動テスト実装ガイド"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/QA/index.mdc"
+downstream:
+  - "実装（legacy/tests/test-nexus-e2e.js）"
+tags: []
+---
+
 # E2E自動テスト実装ガイド
 
 > Breadcrumbs

@@ -1,3 +1,13 @@
+---
+title: "Test Case Quality Gates"
+layer: "GATES"
+template: "legacy-import"
+upstream:
+  - "docs/GATES/index.mdc"
+downstream: []
+tags: []
+---
+
 # Test Case Quality Gates
 
 > Breadcrumbs

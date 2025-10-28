@@ -1,3 +1,16 @@
+---
+title: "Nexus PRD index"
+layer: "PRD"
+template: "legacy-import"
+upstream:
+  - "docs/index.mdc"
+downstream:
+  - "docs/PRD/PRD_Nexus_2.mdc"
+  - "docs/PRD/PRD_DocumentTemplate.mdc"
+  - "docs/PRD/PRD_Strategy.mdc"
+tags: []
+---
+
 # Nexus PRD index
 
 > Breadcrumbs

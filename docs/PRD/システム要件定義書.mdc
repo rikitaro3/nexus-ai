@@ -1,3 +1,17 @@
+---
+title: "システム要件定義書"
+layer: "PRD"
+template: "prd-system-requirements"
+status: "active"
+upstream:
+  - "docs/PRD/index.mdc"
+downstream:
+  - "docs/ARCH/index.mdc"
+tags:
+  - "system-requirements"
+  - "docs-governance"
+---
+
 # システム要件定義書
 
 > Breadcrumbs
@@ -12,7 +26,7 @@
    1. [FR-01: Docs Navigator](#11-fr-01-docs-navigator)
    2. [FR-02: Tasks](#12-fr-02-tasks)
    3. [FR-03: Quality Gates](#13-fr-03-quality-gates)
-      1. [DOC-01: Breadcrumbsブロック必須](#131-doc-01-breadcrumbsブロック必須)
+      1. [DOC-01: YAMLフロントマターとBreadcrumbs整合](#131-doc-01-yamlフロントマターとbreadcrumbs整合)
       2. [DOC-02: Layer定義準拠](#132-doc-02-layer定義準拠)
       3. [DOC-03: リンクパス存在確認](#133-doc-03-リンクパス存在確認)
       4. [DOC-04: 循環参照検出](#134-doc-04-循環参照検出)
@@ -30,6 +44,7 @@
    7. [FR-06: ドキュメントベースBI基盤（将来）](#16-fr-06-ドキュメントベースbi基盤将来)
    8. [FR-07: ルール変更の自動反映](#17-fr-07-ルール変更の自動反映)
    9. [FR-08: 次のアクション自動提案](#18-fr-08-次のアクション自動提案)
+   10. [FR-10: ドキュメント生成テンプレート](#110-fr-10-ドキュメント生成テンプレート)
 2. [非機能要件の技術的実現方針](#2-非機能要件の技術的実現方針)
    1. [NFR-01: ローカル運用](#21-nfr-01-ローカル運用)
    2. [NFR-02: 軽量性](#22-nfr-02-軽量性)
@@ -134,56 +149,64 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 
 - 検証タイミング: Tree表示時 + Validateボタンクリック
 - 検証項目: DOC-01〜08（ドキュメントQuality Gates）、TC-01〜04（テストケースQuality Gates）
+- メタデータ: YAMLフロントマター（title/layer/upstream/downstream/template/status/tags）
+- 解析方式: remark AST（unified + remark-parse + remark-frontmatter + remark-gfm）
 - 結果表示: UIにアイコン + 詳細パネル
 
 #### 実装方針
 
-- validateGates(): 検証ロジック
+- gray-matterでフロントマターを抽出し、normalizeFrontMatterでLayer/リンク情報を正規化
+- unifiedパイプライン（remark-parse/remark-frontmatter/remark-gfm）でMarkdown ASTを構築
+- DocRecord(Map)としてfrontMatter・本文・AST・タイトルを保持し、全Quality Gateから参照
 - detectCycles(): 循環参照検出
 - renderGateResults(): 結果UI表示
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: Breadcrumbs解析精度に依存
+- 依存パッケージ: gray-matter, unified, remark-parse, remark-frontmatter, remark-gfm, mdast-util-to-string, unist-util-visit
+- フォーマット: すべてのドキュメントは`.mdc`拡張子 + YAMLフロントマター必須
 
-### 1.3.1 DOC-01: Breadcrumbsブロック必須
+### 1.3.1 DOC-01: YAMLフロントマターとBreadcrumbs整合
 
 #### 技術要件
 
 - 検証タイミング: Tree表示時 + Validateボタンクリック
-- 検証項目: Breadcrumbsブロックの存在
+- 検証項目: YAMLフロントマターの存在と必須キー、H1タイトルとの整合
 - 結果表示: UIにアイコン + 詳細パネル
 
 #### 実装方針
 
-- Breadcrumbsブロック検出: `/^>\s+Breadcrumbs/`
-- 必須フィールドチェック: `> Layer:`, `> Upstream:`, `> Downstream:`
-- フォーマット検証: 正しいMarkdown形式確認
+- gray-matterでフロントマターを読み込み、title/layer/upstream/downstream/templateを必須チェック
+- normalizeFrontMatter()でN/Aや空文字を排除し、配列フィールドを正規化
+- extractDocumentTitle()で本文のH1を抽出し、frontMatter.titleと一致確認
+- legacy Breadcrumbs表記は表示維持だが、検証ソースはYAMLフロントマターに一本化
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: Markdown解析精度に依存
+- 依存: gray-matter, normalizeFrontMatter, extractDocumentTitle
+- ユーザー編集: すべてのドキュメントにフロントマターを追加する運用に変更
 
 ### 1.3.2 DOC-02: Layer定義準拠
 
 #### 技術要件
 
 - 検証タイミング: Tree表示時 + Validateボタンクリック
-- 検証項目: Layer値が定義済み8種のいずれかである
+- 検証項目: フロントマター layer が定義済み8種のいずれかである
 - 結果表示: UIにアイコン + 詳細パネル
 
 #### 実装方針
 
-- Layer値抽出: `> Layer:\s*(\w+)`
-- 有効値チェック: `['STRATEGY','PRD','UX','API','DATA','ARCH','DEVELOPMENT','QA']`
-- 無効値検出: 定義外の値を持つファイルの特定
+- normalizeFrontMatter()でlayerを取得し、空文字の場合はDOC-02エラー
+- layer値を大文字化してVALID_LAYERS配列と比較
+- frontMatter由来のlayerが欠落する場合はinferLayerFromPath()で補完を試み、最終的に厳密チェック
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: Markdown解析精度に依存
+- 依存: normalizeFrontMatter, VALID_LAYERS, inferLayerFromPath
+- ドキュメント命名規則とLayer補完の整合性に依存
 
 ### 1.3.3 DOC-03: リンクパス存在確認
 
@@ -195,14 +218,14 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 
 #### 実装方針
 
-- パス抽出: `> Upstream:\s*(.+?)` および `> Downstream:\s*(.+?)`
-- N/Aチェック: `N/A` は有効な値
-- ファイル存在確認: パスが実ファイルかを確認
+- frontMatter.upstream/downstreamは正規化済みの配列として取得
+- 各リンクをnodes Mapと突き合わせ、不明なパスはDOC-03エラー
+- fs.accessとコンテキストマップを併用し、未登録ファイルを特定
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: ファイルシステムアクセス精度に依存
+- 精度: frontMatter配列の正規化に依存
 
 ### 1.3.4 DOC-04: 循環参照検出
 
@@ -233,14 +256,14 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 
 #### 実装方針
 
-- 章見出しパターン検出: `/^#{1,6}\s+\d+\./`
-- 章番号連続性チェック: 1, 2, 3...の順序確認
-- 欠番検出: 番号の飛びを検出
+- collectHeadings()でAST上のheadingノードを抽出
+- レベル2/3見出しに対して章番号を分解し、親子整合と連番を検証
+- 想定外の章番号・欠番・不整合は即座にDOC-05エラー
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: Markdown解析精度に依存
+- 精度: remark AST（mdast-util-to-string, unist-util-visit）による見出し抽出に依存
 
 ### 1.3.6 DOC-06: 目次必須
 
@@ -252,14 +275,14 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 
 #### 実装方針
 
-- 目次ブロック検出: `## 目次` の存在確認
-- リンク形式チェック: `[Text](#anchor)` パターン
-- アンカー存在確認: リンク先の実際の見出し存在確認
+- findSectionByHeading()で`## 目次`セクションを特定
+- collectLinksFromSection()でAnchorリンクを抽出し、`#`始まりのみ許可
+- collectHeadings()から生成したスラッグと比較し、未定義アンカーを検出
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: Markdown解析精度に依存
+- 精度: remark ASTベースのリンク抽出に依存
 
 ### 1.3.7 DOC-07: 命名規則必須
 
@@ -271,18 +294,15 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 
 #### 実装方針
 
-- ファイル名パターンチェック: `/[A-Z][a-zA-Z0-9_-]+\.mdc$/`
-- 命名規則チェック:
-  - PRD層: `PRD_\w+\.mdc`
-  - ARCH層: `\w+\.mdc` または `\w+\.md`
-  - QA層: `\w+\.mdc`
-  - その他層: 層名に応じた規則
-- 除外ファイルチェック: `index.mdc` は除外
+- normalizeFrontMatter()/inferLayerFromPath()で層を特定し、selectNamingPattern()を選択
+- `.mdc`拡張子を標準とし、例外はARCHレイヤーの既存`.md`のみ（段階的廃止）
+- index.mdcは除外しつつ、その他ファイルに命名パターン違反があればDOC-07エラー
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: ファイル名パターン解析精度に依存
+- 精度: frontMatterのlayer値と命名規則の同期に依存
+- `.md`許容は既存資産のみを対象とし、新規作成は`.mdc`に統一
 
 ### 1.3.8 DOC-08: 内容範囲の明示必須
 
@@ -294,14 +314,14 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 
 #### 実装方針
 
-- 内容ブロック検出: `##\s+(扱う内容|扱わない内容|Scope)` の存在確認
-- 内容記述チェック: 空でない内容が記載されているか確認
-- 構造チェック: 箇条書き（`-` または `*`）での記述確認
+- findSectionByHeading()で「扱う内容」「扱わない内容」「Scope」セクションを取得
+- sectionHasListWithContent()で各セクションに実質的な箇条書きがあるかを検証
+- collectListItemTexts()でScopeセクション内のキーワード（対象/除外）を確認
 
 #### 制約
 
 - パフォーマンス: 全ドキュメントスキャン（1000件想定）
-- 精度: Markdown解析精度に依存
+- 精度: ASTベースのセクション抽出に依存
 
 ### 1.3.9 TC-01: テストケース命名規則準拠
 
@@ -522,6 +542,28 @@ PRD (要求) → システム要件定義書 → ARCH (設計) → 実装
 - 実装済み: なし
 - 優先度: 高（Phase 2）
 - 計算処理: リアルタイムで計算（<1秒）
+
+### 1.10 FR-10: ドキュメント生成テンプレート
+
+#### 技術要件
+
+- 生成方式: Node CLI `scripts/generate-doc-from-template.js`
+- テンプレート形式: `docs/templates/*.yaml`（frontMatter defaults + Markdown本文）
+- 出力形式: `.mdc` + YAMLフロントマター + Breadcrumbs表示ブロック
+
+#### 実装方針
+
+- CLI引数でテンプレートID/出力先/title/layer/upstream/downstream/tagsを指定可能
+- js-yamlでテンプレートを読み込み、defaultsとCLI上書きをマージしてfrontMatterを生成
+- mergeLists()/dedupeList()で配列値を正規化し、空値・重複を排除
+- テンプレート本文は`{{title}}`等のプレースホルダをfrontMatter値で展開
+- 既存文書は一括移行済み（frontMatterを付与し`.mdc`へ統一）。新規作成はCLI利用を必須化
+
+#### 制約
+
+- 依存: js-yaml, Node.js（同梱）
+- 上書き防止: 既存ファイルは`--force`指定時のみ上書き
+- テンプレート保守: ルール改訂時は`docs/templates/`配下を更新し、バージョン管理で追跡
 
 ---
 

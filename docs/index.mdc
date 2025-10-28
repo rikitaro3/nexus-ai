@@ -1,3 +1,13 @@
+---
+title: "Nexus Documentation Index"
+layer: "PRD"
+template: "legacy-import"
+upstream: []
+downstream:
+  - "docs/PRD/index.mdc"
+tags: []
+---
+
 # Nexus Documentation Index
 
 > Breadcrumbs

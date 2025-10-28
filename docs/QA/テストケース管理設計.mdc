@@ -1,3 +1,14 @@
+---
+title: "テストケース管理設計"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/QA/index.mdc"
+downstream:
+  - "実装（test/）"
+tags: []
+---
+
 # テストケース管理設計
 
 > Breadcrumbs

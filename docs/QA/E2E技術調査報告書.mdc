@@ -1,3 +1,13 @@
+---
+title: "E2E技術調査報告書"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/QA/index.mdc"
+downstream: []
+tags: []
+---
+
 # E2E技術調査報告書
 
 > Breadcrumbs

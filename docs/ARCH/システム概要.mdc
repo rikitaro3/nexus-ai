@@ -1,3 +1,14 @@
+---
+title: "システム概要"
+layer: "ARCH"
+template: "legacy-import"
+upstream:
+  - "docs/ARCH/index.mdc"
+downstream:
+  - "docs/ARCH/システム構成.mdc"
+tags: []
+---
+
 # システム概要
 
 > Breadcrumbs

@@ -1,3 +1,13 @@
+---
+title: "Nexus Context Map"
+layer: "STRATEGY"
+template: "legacy-import"
+upstream: []
+downstream:
+  - "docs/index.mdc"
+tags: []
+---
+
 # Nexus Context Map
 
 Nexus自身の開発コンテキスト（資格アプリとは独立）。
@@ -26,7 +36,7 @@ Nexusは「ドキュメントトレーサビリティとタスク生成・分解
 - docs/ARCH/システム構成.mdc … システム構成
 - docs/ARCH/セキュリティ設計.mdc … セキュリティ設計
 - docs/ARCH/共通コンポーネント設計.mdc … 共通コンポーネント方針
-- docs/ARCH/技術選定.md … 技術選定（Electron + TypeScript）
+- docs/ARCH/技術選定.mdc … 技術選定（Electron + TypeScript）
 - docs/ARCH/IPC設計.mdc … IPCインターフェース
 
 ### DEVELOPMENT
