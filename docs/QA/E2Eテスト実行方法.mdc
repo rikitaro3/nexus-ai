@@ -1,3 +1,13 @@
+---
+title: "Nexus E2Eテスト実行方法"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/QA/index.mdc"
+downstream: []
+tags: []
+---
+
 # Nexus E2Eテスト実行方法
 
 > Breadcrumbs

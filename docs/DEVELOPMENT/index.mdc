@@ -1,3 +1,14 @@
+---
+title: "Nexus Development Guide"
+layer: "DEVELOPMENT"
+template: "legacy-import"
+upstream:
+  - "docs/ARCH/index.mdc"
+downstream:
+  - "docs/DEVELOPMENT/Rendererドメインサービス設計.mdc"
+tags: []
+---
+
 # Nexus Development Guide
 
 > Breadcrumbs

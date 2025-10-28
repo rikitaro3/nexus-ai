@@ -1,3 +1,13 @@
+---
+title: "共通コンポーネント設計"
+layer: "ARCH"
+template: "legacy-import"
+upstream:
+  - "docs/ARCH/index.mdc"
+downstream: []
+tags: []
+---
+
 # 共通コンポーネント設計
 
 > Breadcrumbs

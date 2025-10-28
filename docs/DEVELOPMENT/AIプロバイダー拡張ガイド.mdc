@@ -1,3 +1,14 @@
+---
+title: "AIプロバイダー拡張ガイド"
+layer: "DEVELOPMENT"
+template: "legacy-import"
+upstream:
+  - "docs/DEVELOPMENT/index.mdc"
+downstream:
+  - "docs/QA/index.mdc"
+tags: []
+---
+
 # AIプロバイダー拡張ガイド
 
 > Breadcrumbs

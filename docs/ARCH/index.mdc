@@ -1,3 +1,15 @@
+---
+title: "ARCH: Nexus - システムアーキテクチャ設計書"
+layer: "ARCH"
+template: "legacy-import"
+upstream:
+  - "docs/PRD/システム要件定義書.mdc"
+downstream:
+  - "docs/DEVELOPMENT/index.mdc"
+  - "docs/QA/index.mdc"
+tags: []
+---
+
 # ARCH: Nexus - システムアーキテクチャ設計書
 
 > Breadcrumbs

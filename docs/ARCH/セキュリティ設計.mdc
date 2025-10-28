@@ -1,3 +1,14 @@
+---
+title: "セキュリティ設計"
+layer: "ARCH"
+template: "legacy-import"
+upstream:
+  - "docs/ARCH/index.mdc"
+downstream:
+  - "docs/ARCH/IPC設計.mdc"
+tags: []
+---
+
 # セキュリティ設計
 
 > Breadcrumbs

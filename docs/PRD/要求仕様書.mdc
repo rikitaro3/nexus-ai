@@ -1,3 +1,16 @@
+---
+title: "PRD: Nexus - 要求定義書"
+layer: "PRD"
+template: "legacy-import"
+upstream:
+  - "docs/PRD/index.mdc"
+downstream:
+  - "docs/ARCH/index.mdc"
+  - "docs/DEVELOPMENT/index.mdc"
+  - "docs/QA/index.mdc"
+tags: []
+---
+
 # PRD: Nexus - 要求定義書
 
 > Breadcrumbs

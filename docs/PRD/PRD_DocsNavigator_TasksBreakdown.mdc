@@ -1,3 +1,12 @@
+---
+title: "PRD: Docs Navigator＋Tasks ブレークダウン支援（Cursor auto）"
+layer: "PRD"
+template: "legacy-import"
+upstream: []
+downstream: []
+tags: []
+---
+
 # PRD: Docs Navigator＋Tasks ブレークダウン支援（Cursor auto）
 
 > 目的: TasksのTODOから、Cursor autoのみを用いて安全・低コストにブレークダウン提案→プロンプト生成→実作業へ導く標準フローと要件を定義する。

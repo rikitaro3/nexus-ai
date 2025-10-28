@@ -18,7 +18,14 @@ export interface ContextEntry {
 export interface BreadcrumbParseResult {
   nodes: Map<string, any>;
   docStatus: Map<string, any>;
-  docContents: Map<string, string>;
+  docRecords: Map<string, DocRecord>;
+}
+
+export interface DocRecord {
+  content: string;
+  frontMatter: Record<string, unknown>;
+  ast: any;
+  title: string;
 }
 
 export interface ValidateTestCaseOptions {
@@ -35,6 +42,6 @@ export function parseArgs(argv?: string[]): {
 export function parseContextEntries(text: string): ContextEntry[];
 export function parseAllBreadcrumbs(entries: ContextEntry[], projectRoot: string): Promise<BreadcrumbParseResult>;
 export function createEmptyGateResults(): QualityGateResults;
-export function validateDocumentGates(nodes: Map<string, any>, docStatus: Map<string, any>, docContents: Map<string, string>, results: QualityGateResults): void;
+export function validateDocumentGates(nodes: Map<string, any>, docStatus: Map<string, any>, docRecords: Map<string, DocRecord>, results: QualityGateResults): void;
 export function validateTestCaseGates(projectRoot: string, results: QualityGateResults, options?: ValidateTestCaseOptions): Promise<QualityGateResults>;
 export const constants: Record<string, unknown>;

@@ -1,3 +1,13 @@
+---
+title: "技術選定"
+layer: "ARCH"
+template: "legacy-import"
+upstream:
+  - "docs/ARCH/index.mdc"
+downstream: []
+tags: []
+---
+
 # 技術選定
 
 > Breadcrumbs

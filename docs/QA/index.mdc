@@ -1,3 +1,13 @@
+---
+title: "Nexus QA"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/PRD/要求仕様書.mdc"
+downstream: []
+tags: []
+---
+
 # Nexus QA
 
 > Breadcrumbs

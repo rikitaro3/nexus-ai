@@ -1,3 +1,14 @@
+---
+title: "PRD: Nexus ドキュメントテンプレート（記法定義）"
+layer: "PRD"
+template: "legacy-import"
+upstream:
+  - "docs/index.mdc"
+downstream:
+  - "docs/GATES/document.mdc"
+tags: []
+---
+
 # PRD: Nexus ドキュメントテンプレート（記法定義）
 
 > Breadcrumbs

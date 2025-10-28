@@ -1,3 +1,14 @@
+---
+title: "Quality Gatesパイプライン詳細設計"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/QA/index.mdc"
+downstream:
+  - "docs/DEVELOPMENT/Rendererドメインサービス設計.mdc"
+tags: []
+---
+
 # Quality Gatesパイプライン詳細設計
 
 > Breadcrumbs

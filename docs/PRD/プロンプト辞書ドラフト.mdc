@@ -1,3 +1,13 @@
+---
+title: "プロンプト辞書ドラフト"
+layer: "PRD"
+template: "legacy-import"
+upstream:
+  - "docs/PRD/システム要件定義書.mdc"
+downstream: []
+tags: []
+---
+
 # プロンプト辞書ドラフト
 
 > Breadcrumbs
