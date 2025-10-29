@@ -4,7 +4,8 @@ layer: "QA"
 template: "legacy-import"
 upstream:
   - "docs/PRD/要求仕様書.mdc"
-downstream: []
+downstream:
+  - "docs/QA/テスト仕様書.mdc"
 tags: []
 ---
 
@@ -16,121 +17,20 @@ tags: []
 > Downstream: N/A
 
 ## 目的
-Nexusのテスト方針、品質基準、受入基準。
 
-## テスト方針
-- **完全自動化E2Eテスト**: Playwright Electron launch APIを使用
-- 整合性チェック（仕様準拠）
-- 動作確認（機能別）
+Nexusのテスト方針、品質基準、受入基準を定義し、QA関連ドキュメントを提供します。
 
-**重要**: 完全自動化されたE2Eテストにより、手動テストができない環境でも動作確認が可能です。
+## QAドキュメント
 
-## テストシナリオ
-
-### Docs Navigator
-- ✅ Context Mapパース → カテゴリ一覧表示
-- ✅ ドキュメント一覧表示
-- ✅ 詳細表示（Breadcrumbs, Traceability, Waypoints, MECE）
-- ✅ Openボタンで外部エディタ起動
-- ✅ Orphan検出（Breadcrumbs空のindex.mdc）
-
-### FEAT横断
-- ✅ Features Registryパース → FEAT一覧
-- ✅ カバレッジ計算（PRD/UX/API/DATA/QA）
-- ✅ 不足リンク警告
-- ✅ Openボタンでドキュメント起動
-
-### Tasks管理
-- ✅ 一括インポート（【カテゴリ】タイトル）
-- ✅ 個別追加
-- ✅ 編集（全フィールド）
-- ✅ 保存（tasks.json）
-- ✅ エクスポート（human_todo.mdc）
-
-### Breakdown生成
-- ✅ FEAT連携で自動入力
-- ✅ 定型プロンプト生成
-- ✅ クリップボードコピー
-
-### コンテキスト切替
-- ✅ デバッグ時のみセレクト表示
-- ✅ Repo/Nexus切替
-- ✅ localStorage記憶
-
-## 品質基準
-
-### Gate-NX-01: Context Map解析
-- パス: context.mdcからContext Mapセクションを抽出
-- 条件: カテゴリ×ドキュメント一覧が正しく表示
-- 結果: カテゴリ数 > 0
-
-### Gate-NX-02: FEAT Registry解析
-- パス: docs/PRD/index.mdcからFeatures Registryを抽出
-- 条件: FEAT-ID/タイトル/リンクが正しく表示
-- 結果: FEAT数 > 0
-
-### Gate-NX-03: Orphan検出
-- パス: docs/*/index.mdcのBreadcrumbsを解析
-- 条件: Upstream/Downstreamが両方空のindex.mdcを検出
-- 結果: Orphan数 >= 0（警告のみ）
-
-### Gate-NX-04: Tasks永続化
-- パス: tasks.json読み書き
-- 条件: 保存後、再起動で復元
-- 結果: タスク数一致
-
-### Gate-NX-05: Breakdown生成
-- パス: 定型プロンプト生成
-- 条件: タスクメタ＋FEATリンクを含む
-- 結果: プロンプト > 0文字
-
-## 受入基準
-- ✅ Docs Navigatorでドキュメント一覧/詳細/Openが動作
-- ✅ FEAT横断でカバレッジ表示が動作
-- ✅ Tasksでインポート/編集/保存/エクスポートが動作
-- ✅ Breakdown生成でクリップボードコピーが動作
-- ✅ コンテキスト切替がデバッグ時のみ表示
-
-## 動作確認手順
-1. 起動: `cd nexus-ai && npm start`
-2. Docs: カテゴリ選択 → ドキュメント表示 → 詳細確認 → Open
-3. FEATs: FEAT一覧 → カバレッジ確認 → Open
-4. Orphans: Orphan一覧を確認
-5. Tasks: インポート → 編集 → 保存 → エクスポート
-6. Breakdown: Generate → Copy
-
-## E2Eテスト実行方法
-詳細は [E2Eテスト実行方法.mdc](E2Eテスト実行方法.mdc) を参照。
-
-## E2E技術調査結果
-詳細は [E2E技術調査報告書.mdc](E2E技術調査報告書.mdc) を参照。
-
-## E2E自動テスト実装ガイド
-**完全自動化されたE2Eテストの実装方法**については [E2E自動テスト実装ガイド.mdc](E2E自動テスト実装ガイド.mdc) を参照。
-
-**検証済み**: `e2e-proof/test-working.js` で完全自動化が確認されています。
-
-- `data-testid` を主要UIへ付与する運用
-- `01_smoke.spec.ts` → `10_create.spec.ts` → `20_search.spec.ts` の命名テンプレート
-
-## 自動テスト基盤ロードマップ
-段階的なテスト整備の進め方と実行コマンドは [自動テスト基盤ロードマップ.mdc](自動テスト基盤ロードマップ.mdc) を参照。
-
-## 既知の問題
-- なし（初期リリース）
-
-## 詳細設計リファレンス
-- [QualityGatesパイプライン詳細設計.mdc](QualityGatesパイプライン詳細設計.mdc)
-
-## TypeScript化
-- **実装**: main.js → main.ts にコンバート
-- **目的**: 実行前に型エラーを検出、ポップアップを抑制
-- **設定**: tsconfig.json（strict mode）
-- **ビルド**: `npm run build`（コンパイル）
-- **実行**: `npm run start:dev`（コンパイル + 起動）
-- **エラーハンドリング**: グローバルエラーハンドラーでポップアップを抑制
-  - `window.onerror`: エラーをコンソールに出力
-  - `window.onunhandledrejection`: Promise rejectionをコンソールに出力
+- **テスト仕様書.mdc** … テスト方針・テストシナリオ・品質基準・受入基準・動作確認手順・TypeScript化詳細
+- **E2Eテスト実行方法.mdc** … E2Eテスト実行手順
+- **E2E技術調査報告書.mdc** … E2E技術調査結果
+- **E2E自動テスト実装ガイド.mdc** … 完全自動化されたE2Eテスト実装方法
+- **自動テスト基盤ロードマップ.mdc** … 段階的なテスト整備の進め方
+- **QualityGatesパイプライン詳細設計.mdc** … Quality Gates監視の詳細設計
+- **テストケース管理設計.mdc** … テストケース管理の設計
+- **結合テストシナリオ.mdc** … 結合テストシナリオ
+- **E2Eテスト基盤設計.mdc** … E2Eテスト基盤設計
 
 alwaysApply: true
 ---

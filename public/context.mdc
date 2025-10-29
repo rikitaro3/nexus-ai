@@ -7,22 +7,22 @@ contextMap:
   - category: PRD
     entries:
       - path: docs/PRD/index.mdc
-        description: Features Registry（NEX-ID管理）
+        description: PRDドキュメント索引
+      - path: docs/PRD/機能レジストリ.mdc
+        description: Nexus全機能（FEAT-ID）の一元管理
       - path: docs/PRD/要求仕様書.mdc
         description: 要求仕様（FEAT-0001〜0008）
       - path: docs/PRD/システム要件定義書.mdc
         description: システム要件定義
       - path: docs/PRD/プロンプト辞書ドラフト.mdc
         description: プロンプト辞書
-      - path: docs/PRD/PRD_Nexus_2.mdc
-        description: Nexus要求仕様
-      - path: docs/PRD/PRD_Strategy.mdc
+      - path: docs/PRD/戦略とビジョン.mdc
         description: プロダクト戦略
-      - path: docs/PRD/PRD_DocumentTemplate.mdc
+      - path: docs/PRD/ドキュメントテンプレート仕様.mdc
         description: ドキュメントテンプレート
-      - path: docs/PRD/PRD_TreeView.mdc
+      - path: docs/PRD/ツリービュー機能PRD.mdc
         description: TreeView機能（FEAT-0010〜0013）
-      - path: docs/PRD/PRD_DocumentEditor.mdc
+      - path: docs/PRD/ドキュメント編集機能PRD.mdc
         description: ドキュメント編集・閲覧（FEAT-0021〜0023）
       - path: docs/PRD/画面仕様書_Nexus.mdc
         description: 画面仕様書（FEAT-0009含む）
@@ -45,16 +45,22 @@ contextMap:
   - category: DEVELOPMENT
     entries:
       - path: docs/DEVELOPMENT/index.mdc
-        description: 開発ガイド
+        description: Developmentドキュメント索引
+      - path: docs/DEVELOPMENT/開発ガイド.mdc
+        description: ディレクトリ構成・コーディング規約・ビルド&実行・テスト指針
       - path: docs/DEVELOPMENT/ドキュメント編集機能設計.mdc
         description: ドキュメント編集機能（FEAT-0021〜0023実装詳細）
   - category: QA
     entries:
       - path: docs/QA/index.mdc
-        description: QA方針・シナリオ
+        description: QAドキュメント索引
+      - path: docs/QA/テスト仕様書.mdc
+        description: テスト方針・テストシナリオ・品質基準・受入基準
   - category: GATES
     entries:
-      - path: docs/GATES/document.mdc
-        description: Quality Gates（DOC-01〜DOC-08）
       - path: docs/GATES/index.mdc
         description: Quality Gates索引
+      - path: docs/GATES/品質ゲート運用ガイド.mdc
+        description: Quality Gates一覧・適用範囲・検証方法・非準拠時の対処
+      - path: docs/GATES/ドキュメント品質ゲート.mdc
+        description: ドキュメント品質ゲート（DOC-01〜DOC-09）詳細

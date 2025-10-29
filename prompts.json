@@ -1,8 +1,14 @@
 {
-  "version": 1,
+  "version": 2,
   "metadata": {
-    "description": "Nexus prompt dictionary sample for task breakdown, docs, and QA flows",
-    "updatedAt": "2024-12-01T00:00:00.000Z"
+    "description": "Nexus prompt dictionary with unified ID system (PRM-[QG_OR_TASK_ID]-[CATEGORY]-[NN])",
+    "updatedAt": "2025-10-29T00:00:00.000Z",
+    "idFormat": "PRM-[QG_OR_TASK_ID]-[CATEGORY]-[NN]",
+    "references": {
+      "terminology": "docs/ARCH/用語定義と階層構造.mdc",
+      "idRules": "docs/GATES/ID採番ルール.mdc",
+      "scriptsRegistry": "docs/GATES/スクリプトレジストリ.mdc"
+    }
   },
   "categories": [
     {
@@ -11,24 +17,36 @@
       "description": "Breakdown prompts used when drafting Cursor auto requests",
       "items": [
         {
-          "id": "TASK-BD-01",
+          "id": "PRM-TASK-BD-01",
+          "oldId": "TASK-BD-01",
           "title": "MECE分解の指示",
           "description": "要求をMECEに整理させるための共通フレーズ",
           "body": "要求をMECE（重複なく漏れなく）に分解してください。",
+          "purpose": "breakdown",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["breakdown", "mece"]
         },
         {
-          "id": "TASK-BD-02",
+          "id": "PRM-TASK-BD-02",
+          "oldId": "TASK-BD-02",
           "title": "完了基準の定義要求",
           "description": "各サブタスクに受入基準を付与するよう求める",
           "body": "完了基準を定義してください。",
+          "purpose": "breakdown",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["acceptance", "criteria"]
         },
         {
-          "id": "TASK-BD-03",
+          "id": "PRM-TASK-BD-03",
+          "oldId": "TASK-BD-03",
           "title": "サブタスク生成テンプレート",
           "description": "タスク概要を渡してサブタスクと完了基準を生成させる雛形",
           "body": "以下の要求をサブタスクに分解してください：\n[TASK]\n\n出力形式：\n- サブタスク1: [内容], 完了基準: [基準]\n- サブタスク2: [内容], 完了基準: [基準]",
+          "purpose": "breakdown",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["template", "subtasks"]
         }
       ]
@@ -39,24 +57,36 @@
       "description": "docs/PRD配下で使う整備・チェック系プロンプト",
       "items": [
         {
-          "id": "DOC-RD-01",
+          "id": "PRM-TASK-RD-01",
+          "oldId": "DOC-RD-01",
           "title": "章番号整備",
           "description": "Markdownセクションに章番号を付与する依頼",
           "body": "このドキュメントに章番号を追加してください。\nルール：## 1. タイトル のように番号を付与",
+          "purpose": "review",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["docs", "format"]
         },
         {
-          "id": "DOC-RD-02",
+          "id": "PRM-TASK-RD-02",
+          "oldId": "DOC-RD-02",
           "title": "目次追加",
           "description": "リンク付き目次の生成を依頼",
           "body": "リンク付きの目次を追加してください。\n形式：[テキスト](#アンカー)",
+          "purpose": "review",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["docs", "toc"]
         },
         {
-          "id": "DOC-CK-01",
+          "id": "PRM-TASK-CHK-01",
+          "oldId": "DOC-CK-01",
           "title": "システム要件定義書との比較",
           "description": "不足項目がないか確認する質問系プロンプト",
           "body": "一般的なシステム要件定義書と比較して、抜けている項目などはないですか？",
+          "purpose": "check",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["review", "consistency"]
         }
       ]
@@ -67,24 +97,36 @@
       "description": "コードレビューやE2Eテストに関する共通プロンプト",
       "items": [
         {
-          "id": "CODE-QC-01",
+          "id": "PRM-TASK-RD-03",
+          "oldId": "CODE-QC-01",
           "title": "コードレビュー依頼",
           "description": "コードの改善点を列挙してもらう",
           "body": "以下のコードをレビューしてください。指摘事項を列挙してください。",
+          "purpose": "review",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["code", "review"]
         },
         {
-          "id": "CODE-QC-02",
+          "id": "PRM-TASK-CHK-02",
+          "oldId": "CODE-QC-02",
           "title": "型安全性チェック",
           "description": "TypeScriptの型エラー洗い出し",
           "body": "TypeScriptの型エラーを確認し、修正してください。",
+          "purpose": "check",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["typescript", "quality"]
         },
         {
-          "id": "TEST-E2E-01",
+          "id": "PRM-TASK-CHK-03",
+          "oldId": "TEST-E2E-01",
           "title": "E2Eテスト実行依頼",
           "description": "テストの実行と結果報告を依頼する定型文",
           "body": "E2Eテストを実行し、結果を報告してください。",
+          "purpose": "check",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["e2e", "testing"]
         }
       ]
@@ -95,60 +137,160 @@
       "description": "Quality Gates違反を修正するためのプロンプト",
       "items": [
         {
-          "id": "DOC-FIX-01",
+          "id": "PRM-DOC-01-FIX-01",
+          "oldId": "DOC-FIX-01",
           "title": "Breadcrumbsブロック追加",
           "description": "ドキュメントに欠損しているBreadcrumbsブロックを追加する修正プロンプト",
           "body": "このドキュメントにBreadcrumbsブロックを追加してください。\n\n[正しい記述例]\n> Breadcrumbs\n> Layer: PRD\n> Upstream: docs/PRD/index.mdc\n> Downstream: docs/ARCH/index.mdc\n\n[注意事項]\n- Layerは以下のいずれか: STRATEGY, PRD, UX, API, DATA, ARCH, DEVELOPMENT, QA\n- Upstream/Downstreamは実在するファイルパスまたはN/A\n- パスはプロジェクトルートからの相対パス",
+          "purpose": "fix",
+          "relatedGates": ["DOC-01"],
+          "relatedScripts": ["SCR-DOC-01-VAL-01"],
           "tags": ["validation", "doc-01", "breadcrumbs"]
         },
         {
-          "id": "DOC-FIX-02",
+          "id": "PRM-DOC-02-FIX-01",
+          "oldId": "DOC-FIX-02",
           "title": "Layer定義修正",
           "description": "無効または不適切なLayer定義を修正する",
           "body": "このドキュメントのLayer定義を正しい値に修正してください。\n\n[有効なLayer]\n- STRATEGY: 戦略・ビジョン\n- PRD: プロダクト要求定義\n- UX: ユーザー体験・画面仕様\n- API: APIインターフェース仕様\n- DATA: データ構造・スキーマ\n- ARCH: アーキテクチャ設計\n- DEVELOPMENT: 開発ガイド\n- QA: 品質保証・テスト\n\n現在のLayer: {current_layer}\n推奨Layer: {suggested_layer}",
+          "purpose": "fix",
+          "relatedGates": ["DOC-02"],
+          "relatedScripts": ["SCR-DOC-02-VAL-01"],
           "tags": ["validation", "doc-02", "layer"]
         },
         {
-          "id": "DOC-FIX-03",
+          "id": "PRM-DOC-03-FIX-01",
+          "oldId": "DOC-FIX-03",
           "title": "リンクパス修正",
           "description": "実在しないUpstream/Downstreamパスを修正する",
           "body": "Upstream/Downstreamに記載されているパスが実在しません。\n以下のパスを確認し、正しいパスに修正してください。\n\n[不正なパス]\n{invalid_paths}\n\n[修正方法]\n1. ファイルが存在するか確認\n2. パスがプロジェクトルートからの相対パスか確認\n3. 存在しない場合は「N/A」に変更",
+          "purpose": "fix",
+          "relatedGates": ["DOC-03"],
+          "relatedScripts": ["SCR-DOC-03-VAL-01"],
           "tags": ["validation", "doc-03", "links"]
         },
         {
-          "id": "DOC-FIX-04",
+          "id": "PRM-DOC-04-FIX-01",
+          "oldId": "DOC-FIX-04",
           "title": "循環参照解消",
           "description": "ドキュメント間の循環参照を解消する",
           "body": "ドキュメント間に循環参照が検出されました。\n以下の依存関係を見直し、循環を解消してください。\n\n[循環参照パス]\n{circular_path}\n\n[解消方法]\n- 上位・下位の関係を明確化\n- 不要なリンクを削除\n- 必要に応じてドキュメント構造を再設計",
+          "purpose": "fix",
+          "relatedGates": ["DOC-04"],
+          "relatedScripts": ["SCR-DOC-04-VAL-01"],
           "tags": ["validation", "doc-04", "circular"]
         },
         {
-          "id": "DOC-FIX-05",
+          "id": "PRM-DOC-05-FIX-01",
+          "oldId": "DOC-FIX-05",
           "title": "章番号追加・修正",
           "description": "見出しに章番号を追加または修正する",
           "body": "このドキュメントの見出しに章番号を追加してください。\n\n[ルール]\n- ## 1. タイトル のように番号を付与\n- 番号は連続する（1, 2, 3...）\n- サブセクションは 1.1, 1.2 のように階層化\n\n[現在の見出し]\n{current_headings}",
+          "purpose": "fix",
+          "relatedGates": ["DOC-05"],
+          "relatedScripts": ["SCR-DOC-05-VAL-01"],
           "tags": ["validation", "doc-05", "numbering"]
         },
         {
-          "id": "DOC-FIX-06",
+          "id": "PRM-DOC-06-FIX-01",
+          "oldId": "DOC-FIX-06",
           "title": "目次生成",
           "description": "リンク付きの目次を生成する",
           "body": "リンク付きの目次を追加してください。\n\n[形式]\n- [セクション名](#アンカー)\n- アンカーは見出しを小文字化し、スペースをハイフンに変換\n\n[目次の位置]\nBreadcrumbsの直後、最初のセクションの前",
+          "purpose": "fix",
+          "relatedGates": ["DOC-06"],
+          "relatedScripts": ["SCR-DOC-06-VAL-01"],
           "tags": ["validation", "doc-06", "toc"]
         },
         {
-          "id": "DOC-FIX-07",
+          "id": "PRM-DOC-07-FIX-01",
+          "oldId": "DOC-FIX-07",
           "title": "命名規則修正",
           "description": "ファイル名を命名規則に準拠させる",
           "body": "ファイル名を命名規則に準拠させてください。\n\n[命名規則]\n- PRD層: PRD_機能名.mdc\n- その他: 機能名.mdc または 目的.mdc\n- 英数字、アンダースコア、ハイフンのみ使用\n- スペースは使わない\n\n現在のファイル名: {current_filename}\n推奨ファイル名: {suggested_filename}",
+          "purpose": "fix",
+          "relatedGates": ["DOC-07"],
+          "relatedScripts": ["SCR-DOC-07-VAL-01"],
           "tags": ["validation", "doc-07", "naming"]
         },
         {
-          "id": "DOC-FIX-08",
+          "id": "PRM-DOC-08-FIX-01",
+          "oldId": "DOC-FIX-08",
           "title": "内容範囲の明示追加",
           "description": "扱う内容と扱わない内容を明示する",
           "body": "このドキュメントに「扱う内容」と「扱わない内容」のセクションを追加してください。\n\n[記述例]\n## スコープ\n\n### 扱う内容\n- 項目1\n- 項目2\n\n### 扱わない内容（非スコープ）\n- 項目1\n- 項目2\n\n[注意]\n- 箇条書き形式で明確に記述\n- 曖昧な表現を避ける",
+          "purpose": "fix",
+          "relatedGates": ["DOC-08"],
+          "relatedScripts": ["SCR-DOC-08-VAL-01"],
           "tags": ["validation", "doc-08", "scope"]
+        },
+        {
+          "id": "PRM-DOC-09-FIX-01",
+          "oldId": "DOC-FIX-09",
+          "title": "ドキュメントテンプレート項目チェック",
+          "description": "ドキュメントに「はじめに」「目次」「スコープ」が存在するか確認",
+          "body": "このドキュメントがテンプレート要件を満たしているか確認してください。\n\n[チェック項目]\n1. はじめに（Introduction）\n   - ドキュメントの位置づけと目的\n   - 想定読者と前提知識\n   - 参照すべき関連ドキュメント\n\n2. 目次（Table of Contents）\n   - リンク付き目次が存在すること\n   - 形式: [セクション名](#アンカー)\n   - 配置: Breadcrumbsの直後、最初のセクションの前\n\n3. スコープ（Scope）\n   - 扱う内容のセクション\n   - 扱わない内容のセクション\n   - 明確な箇条書き形式\n\n[確認結果の報告形式]\n## ドキュメントテンプレート検証結果\n\n### チェック項目\n- [ ] はじめに: 存在する / 不足 / 不完全\n- [ ] 目次: 存在する / 不足 / 不完全\n- [ ] スコープ: 存在する / 不足 / 不完全\n\n### 不足している項目\n[不足項目がある場合、具体的に列挙]\n\n### 推奨アクション\n[修正が必要な場合、具体的な追加・修正内容を提案]",
+          "purpose": "fix",
+          "relatedGates": ["DOC-09"],
+          "relatedScripts": [],
+          "tags": ["validation", "doc-09", "template", "checklist"]
+        }
+      ]
+    },
+    {
+      "id": "BREADCRUMBS_MAINTENANCE",
+      "label": "Breadcrumbs保守",
+      "description": "パンくずリスト全体の一括チェック・修正プロンプト",
+      "items": [
+        {
+          "id": "PRM-DOC-10-CHK-001",
+          "title": "全ドキュメントBreadcrumbs一括診断",
+          "description": "すべてのドキュメントをスキャンし、Breadcrumbs関連の問題点を包括的に診断",
+          "body": "tools/nexus/docs/配下のすべての.mdcファイルのBreadcrumbsを診断してください。\n\n[診断対象]\n- すべての.mdcファイル（index.mdcを含む）\n\n[チェック観点]\n1. **Breadcrumbsブロックの存在**\n   - > Breadcrumbs ブロックが存在するか\n   - 必須要素: Layer, Upstream, Downstream\n\n2. **Layer定義の妥当性**\n   - Layerが以下のいずれかであるか:\n     - STRATEGY: 事業戦略・競合分析\n     - PRD: プロダクト要件定義\n     - UX: ユーザー体験設計\n     - API: API仕様\n     - DATA: データ構造・スキーマ\n     - ARCH: アーキテクチャ・技術選定\n     - DEVELOPMENT: 実装ガイド・規約\n     - QA: テスト・品質基準\n   - ファイルの配置場所とLayer定義が一致しているか\n\n3. **Upstream/Downstreamパスの存在確認**\n   - 記載されたパスが実在するファイルか\n   - N/A の場合は問題なし\n   - パスはプロジェクトルートからの相対パスか\n\n4. **循環参照の検出**\n   - Upstream/Downstream関係で循環が発生していないか\n   - DAG（有向非巡環グラフ）構造が保たれているか\n\n5. **ドキュメント構造の整合性**\n   - 親子関係が論理的に正しいか\n   - index.mdcが適切にUpstreamとして参照されているか\n\n[出力形式]\n## Breadcrumbs診断レポート\n\n### サマリー\n- 診断対象ドキュメント数: XX件\n- 問題なし: XX件\n- 要修正: XX件\n\n### 優先度：高（critical）\n| ファイルパス | 問題種別 | 詳細 | 推奨アクション |\n|------------|---------|------|---------------|\n| [パス] | Breadcrumbsブロック欠落 | ブロックが存在しない | PRM-DOC-10-FIX-001を実行 |\n| [パス] | Layer不正 | Layer値が不正: \"XXX\" | PRM-DOC-10-FIX-002を実行 |\n\n### 優先度：中（warning）\n| ファイルパス | 問題種別 | 詳細 | 推奨アクション |\n|------------|---------|------|---------------|\n| [パス] | パス不正 | Upstream \"XXX\" が存在しない | PRM-DOC-10-FIX-003を実行 |\n\n### 優先度：低（info）\n| ファイルパス | 問題種別 | 詳細 | 推奨アクション |\n|------------|---------|------|---------------|\n| [パス] | 構造改善提案 | より適切なUpstream候補: \"XXX\" | 必要に応じて手動修正 |\n\n### 循環参照の検出\n[循環が検出された場合]\n```\n循環パス: A → B → C → A\n- A: docs/PRD/xxx.mdc\n- B: docs/ARCH/yyy.mdc\n- C: docs/DEVELOPMENT/zzz.mdc\n```\n推奨アクション: PRM-DOC-10-FIX-004を実行\n\n### 次のアクション\n1. 優先度:高の問題から順に修正\n2. 各問題種別に対応するFIXプロンプトを実行\n3. 修正後、再度このプロンプトで検証\n\n[注意事項]\n- ファイルパスは tools/nexus/ からの相対パスで記載\n- 問題の重複がある場合は統合して報告\n- 自動修正が困難な場合は手動修正の指示を含める",
+          "purpose": "check",
+          "relatedGates": ["DOC-10"],
+          "relatedScripts": [],
+          "tags": ["breadcrumbs", "maintenance", "batch", "診断"]
+        },
+        {
+          "id": "PRM-DOC-10-FIX-001",
+          "title": "Breadcrumbsブロック追加",
+          "description": "欠落しているBreadcrumbsブロックを適切な内容で追加",
+          "body": "指定されたドキュメントにBreadcrumbsブロックを追加してください。\n\n[対象ドキュメント]\n{target_file}\n\n[追加するBreadcrumbsブロックの構造]\n```markdown\n> Breadcrumbs\n> Layer: [推定されたLayer]\n> Upstream: [推定されたUpstream]\n> Downstream: [推定されたDownstream]\n```\n\n[Layer推定ルール]\n1. ファイルパスから判断:\n   - docs/STRATEGY/ → STRATEGY\n   - docs/PRD/ → PRD\n   - docs/UX/ → UX\n   - docs/API/ → API\n   - docs/DATA/ → DATA\n   - docs/ARCH/ → ARCH\n   - docs/DEVELOPMENT/ → DEVELOPMENT\n   - docs/QA/ → QA\n   - docs/GATES/ → QA\n\n2. ファイル名から判断:\n   - index.mdc: その階層の代表Layer\n   - PRD_*.mdc: PRD\n   - その他: ディレクトリから推定\n\n[Upstream推定ルール]\n1. index.mdcの場合:\n   - 親ディレクトリのindex.mdc\n   - ルートの場合はN/A\n\n2. 個別ドキュメントの場合:\n   - 同じディレクトリのindex.mdc\n   - index.mdcがない場合は親ディレクトリのindex.mdc\n\n3. 特殊ケース:\n   - 要求仕様書、システム要件定義書などはPRD/index.mdc\n\n[Downstream推定ルール]\n1. index.mdcの場合:\n   - 同じディレクトリ内の主要ドキュメント\n   - または N/A（後で追加）\n\n2. 個別ドキュメントの場合:\n   - 原則 N/A\n   - 明確な下位ドキュメントがある場合のみ記載\n\n[追加位置]\n- ドキュメントタイトル（# で始まる見出し）の直後\n- 既存コンテンツの前\n\n[実行手順]\n1. ドキュメントの内容を読み込む\n2. ファイルパスと内容からLayerを推定\n3. ドキュメント構造からUpstream/Downstreamを推定\n4. Breadcrumbsブロックを生成\n5. タイトル直後に挿入\n\n[出力]\n修正後のドキュメント全体を出力してください。",
+          "purpose": "fix",
+          "relatedGates": ["DOC-10"],
+          "relatedScripts": [],
+          "tags": ["breadcrumbs", "fix", "追加"]
+        },
+        {
+          "id": "PRM-DOC-10-FIX-002",
+          "title": "Layer定義修正",
+          "description": "不正または不適切なLayer値を正しい値に修正",
+          "body": "指定されたドキュメントのLayer定義を修正してください。\n\n[対象ドキュメント]\n{target_file}\n\n[現在のLayer]\n{current_layer}\n\n[有効なLayer一覧]\n- **STRATEGY**: 事業戦略・競合分析\n  - 対象: 事業戦略、競合分析、ビジョン\n  - 例: 競合戦略.mdc\n\n- **PRD**: プロダクト要件定義\n  - 対象: 機能要件、PRD、要求仕様\n  - 例: PRD_*.mdc, 要求仕様書.mdc, システム要件定義書.mdc\n\n- **UX**: ユーザー体験設計\n  - 対象: ワイヤーフレーム、ユーザーフロー、画面仕様\n  - 例: ワイヤーフレーム.mdc, ユーザーフロー.mdc\n\n- **API**: API仕様\n  - 対象: APIインターフェース、エンドポイント定義\n  - 例: openapi.yaml, API仕様.mdc\n\n- **DATA**: データ構造・スキーマ\n  - 対象: データベーススキーマ、データモデル\n  - 例: schema_v2.sql, データ設計.mdc\n\n- **ARCH**: アーキテクチャ・技術選定\n  - 対象: システム構成、技術選定、セキュリティ、パフォーマンス\n  - 例: システム概要.mdc, セキュリティ要件.mdc, パフォーマンス要件.mdc\n\n- **DEVELOPMENT**: 実装ガイド・規約\n  - 対象: 実装ガイドライン、コーディング規約、詳細設計\n  - 例: 開発ガイドライン.md, ドキュメント編集機能設計.mdc\n\n- **QA**: テスト・品質基準\n  - 対象: テスト戦略、品質ゲート、テストシナリオ\n  - 例: テスト戦略.mdc, ドキュメント品質ゲート.mdc, 用語定義とID採番ルール.mdc\n\n[Layer判定基準]\n1. ファイルパス: docs/[LAYER]/配下の場合はそのLAYERが基本\n2. ファイル名: PRD_で始まる場合はPRD\n3. 内容: ドキュメントの主題から判断\n   - 「要件」「仕様」「PRD」→ PRD\n   - 「設計」「実装」→ DEVELOPMENT\n   - 「テスト」「品質」「QA」→ QA\n   - 「アーキテクチャ」「構成」→ ARCH\n\n[修正手順]\n1. ドキュメントの内容を分析\n2. ファイルパスとディレクトリ構造を確認\n3. 上記基準から最適なLayerを判定\n4. Layer行を修正\n\n[出力]\n修正後のBreadcrumbsブロックのみを出力してください。\n\n例:\n```markdown\n> Breadcrumbs\n> Layer: QA\n> Upstream: docs/GATES/index.mdc\n> Downstream: docs/GATES/スクリプトレジストリ.mdc\n```",
+          "purpose": "fix",
+          "relatedGates": ["DOC-10"],
+          "relatedScripts": [],
+          "tags": ["breadcrumbs", "fix", "layer"]
+        },
+        {
+          "id": "PRM-DOC-10-FIX-003",
+          "title": "Upstream/Downstreamパス修正",
+          "description": "存在しないパスや不適切なパスを修正",
+          "body": "指定されたドキュメントのUpstream/Downstreamパスを修正してください。\n\n[対象ドキュメント]\n{target_file}\n\n[問題のあるパス]\n{invalid_paths}\n\n[パス修正ルール]\n\n### Upstreamパスの修正\n\n1. **基本原則**:\n   - このドキュメントの「元となる」ドキュメント\n   - より上位の意思決定や要件を定義しているドキュメント\n\n2. **推定ロジック**:\n   - 同じディレクトリのindex.mdcが存在する場合 → そのindex.mdc\n   - index.mdc自身の場合 → 親ディレクトリのindex.mdc\n   - ルートのindex.mdcの場合 → N/A\n   - 明確な親ドキュメントが特定できない場合 → N/A\n\n3. **特殊ケース**:\n   - 要求仕様書、システム要件定義書 → docs/PRD/index.mdc\n   - 品質ゲート関連 → docs/GATES/index.mdc\n   - 詳細設計書 → 対応するPRDまたはindex.mdc\n\n### Downstreamパスの修正\n\n1. **基本原則**:\n   - このドキュメントから「導かれる」ドキュメント\n   - このドキュメントを詳細化・具体化したドキュメント\n\n2. **推定ロジック**:\n   - index.mdcの場合 → 同じディレクトリ内の主要ドキュメント\n   - 個別ドキュメントの場合 → 原則 N/A（明確な下位ドキュメントがある場合のみ）\n   - 不明な場合 → N/A（後で手動で追加）\n\n3. **注意事項**:\n   - 循環参照を避ける\n   - 確信が持てない場合はN/Aにする\n\n### パス形式\n\n- プロジェクトルート（tools/nexus/）からの相対パス\n- 例: docs/PRD/index.mdc\n- 複数の場合はカンマ区切り: docs/PRD/index.mdc, docs/ARCH/index.mdc\n\n[修正手順]\n1. 不正なパスを特定\n2. ドキュメント構造を分析\n3. 上記ルールに基づいて適切なパスを推定\n4. パスが存在することを確認\n5. Upstream/Downstream行を修正\n\n[出力]\n修正後のBreadcrumbsブロック全体を出力してください。\n\n例:\n```markdown\n> Breadcrumbs\n> Layer: PRD\n> Upstream: docs/PRD/index.mdc\n> Downstream: docs/ARCH/index.mdc, docs/DEVELOPMENT/index.mdc\n```",
+          "purpose": "fix",
+          "relatedGates": ["DOC-10"],
+          "relatedScripts": [],
+          "tags": ["breadcrumbs", "fix", "paths"]
+        },
+        {
+          "id": "PRM-DOC-10-FIX-004",
+          "title": "循環参照解消",
+          "description": "検出された循環参照を解消してDAG構造を回復",
+          "body": "ドキュメント間の循環参照を解消してください。\n\n[検出された循環参照]\n{circular_path}\n\n[循環参照とは]\nUpstream/Downstream関係で循環が発生している状態。\n例: A → B → C → A\n\nこれはDAG（有向非巡環グラフ）構造に反するため解消が必要です。\n\n[解消原則]\n\n1. **階層構造の明確化**:\n   - STRATEGY → PRD → UX/API/DATA/ARCH/DEVELOPMENT/QA の階層を尊重\n   - 上位層から下位層への依存のみ許可\n   - 下位層から上位層への逆参照は禁止\n\n2. **Layer間の依存ルール**:\n   ```\n   STRATEGY (最上位)\n      ↓\n   PRD\n      ↓\n   ┌─────┬─────┬─────┬─────┬─────┐\n   UX   API  DATA  ARCH  DEVELOPMENT  QA\n   (同レベル - 相互参照は慎重に)\n   ```\n\n3. **同一Layer内の循環**:\n   - 同じLayer内での循環は、より一般的なドキュメント（index.mdc）を上位とする\n   - 具体的なドキュメントから一般的なドキュメントへの参照は避ける\n\n[解消手順]\n\n1. **循環パスの分析**:\n   - 各ドキュメントのLayerを確認\n   - 各ドキュメントの抽象度・一般性を評価\n\n2. **階層の決定**:\n   - Layer定義から正しい階層を判断\n   - 同一Layer内では抽象度で判断\n\n3. **リンクの修正**:\n   - 逆向きのリンクを削除（Downstreamを削除またはUpstreamをN/Aに）\n   - または適切な中間ドキュメント（index.mdcなど）を経由\n\n4. **代替構造の提案**:\n   - 循環を解消する最小限の変更を提案\n   - 複数の解決策がある場合は選択肢を提示\n\n[出力形式]\n\n## 循環参照解消案\n\n### 循環パスの詳細\n- A: {ファイルA} (Layer: XXX)\n- B: {ファイルB} (Layer: YYY)\n- C: {ファイルC} (Layer: ZZZ)\n- 循環: A → B → C → A\n\n### 解消案\n\n**推奨案（案1）**:\n- {ファイルA}のDownstreamから{ファイルC}を削除\n  - 理由: Layer階層的にAがCの上位であるべきではない\n\n**代替案（案2）**:\n- {ファイルC}のUpstreamを{ファイルA}から{中間ドキュメント}に変更\n  - 理由: より適切な階層構造\n\n### 修正内容\n\n修正対象: {ファイルパス}\n\n修正前:\n```markdown\n> Breadcrumbs\n> Layer: XXX\n> Upstream: ...\n> Downstream: ..., {循環の原因となるパス}, ...\n```\n\n修正後:\n```markdown\n> Breadcrumbs\n> Layer: XXX\n> Upstream: ...\n> Downstream: ... (修正後のパス)\n```\n\n[注意事項]\n- 循環解消後、再度 PRM-DOC-10-CHK-001 で検証すること\n- 論理的な依存関係が失われないよう注意すること",
+          "purpose": "fix",
+          "relatedGates": ["DOC-10"],
+          "relatedScripts": [],
+          "tags": ["breadcrumbs", "fix", "circular", "dag"]
         }
       ]
     },
@@ -158,31 +300,47 @@
       "description": "仕様ドキュメントと実装状況を比較して未実装箇所を特定するプロンプト",
       "items": [
         {
-          "id": "IMPL-CHECK-01",
+          "id": "PRM-TASK-CHK-04",
+          "oldId": "IMPL-CHECK-01",
           "title": "全体未実装箇所チェック",
           "description": "プロジェクト全体の未実装機能・要件を洗い出す",
           "body": "プロジェクト全体の仕様ドキュメントと実装状況を比較し、未実装箇所を特定してください。\n\n[対象ドキュメント]\n- docs/PRD/ 配下のすべてのドキュメント\n- docs/ARCH/ 配下のすべてのドキュメント\n- docs/DEVELOPMENT/ 配下のすべてのドキュメント\n\n[確認観点]\n1. 機能要件（PRD）\n   - 定義されている機能が実装されているか\n   - ユーザーシナリオが実現できているか\n   - 画面・UI要素が実装されているか\n\n2. アーキテクチャ要件（ARCH）\n   - セキュリティ要件が実装されているか\n   - パフォーマンス要件が満たされているか\n   - 非機能要件が実装されているか\n\n3. 開発仕様（DEVELOPMENT）\n   - 設計ドキュメントに記載された仕様が実装されているか\n   - データベーススキーマが実装されているか\n   - 統合仕様が実装されているか\n\n[出力形式]\n## 未実装箇所一覧\n\n### 優先度：高\n| 機能/要件 | 定義箇所 | 実装予定箇所 | 影響範囲 | 備考 |\n|----------|---------|-------------|---------|------|\n| [機能名] | [ファイルパス:セクション] | [ファイルパス] | [影響を受ける機能] | [補足] |\n\n### 優先度：中\n...\n\n### 優先度：低\n...\n\n## 実装済み確認\n- [実装済みの主要機能リスト]\n\n## 推奨アクション\n1. [優先度順の実装推奨事項]\n2. ...",
+          "purpose": "check",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["implementation", "check", "全体"]
         },
         {
-          "id": "IMPL-RPT-01",
+          "id": "PRM-TASK-GEN-01",
+          "oldId": "IMPL-RPT-01",
           "title": "定期実装状況レポート",
           "description": "実装完了率、未着手項目、進行中項目を整理",
           "body": "プロジェクトの実装状況を定期レポート形式で整理してください。\n\n[対象範囲]\n- docs/PRD/ で定義されているすべての機能要件\n- docs/ARCH/ で定義されている非機能要件\n- docs/DEVELOPMENT/ で定義されている技術仕様\n\n[分析軸]\n1. ステータス分類\n   - 実装完了：テスト済みで本番利用可能\n   - 実装中：コードは存在するが未完成\n   - 未着手：仕様のみで実装なし\n\n2. カテゴリ別分類\n   - 画面・UI機能\n   - データ処理・ビジネスロジック\n   - インフラ・非機能要件\n   - テスト・品質保証\n\n[出力形式]\n# 実装状況レポート - [日付]\n\n## サマリー\n- 全体進捗率: XX%\n- 実装完了: XX件\n- 実装中: XX件\n- 未着手: XX件\n\n## ステータス別詳細\n\n### 実装完了 (XX件)\n- [機能名] - [定義箇所] - [実装箇所]\n\n### 実装中 (XX件)\n- [機能名] - [定義箇所] - [実装箇所] - [残作業]\n\n### 未着手 (XX件)\n- [機能名] - [定義箇所] - [優先度] - [依存関係]\n\n## カテゴリ別進捗\n| カテゴリ | 完了 | 実装中 | 未着手 | 進捗率 |\n|---------|-----|-------|-------|-------|\n| 画面・UI | X | X | X | XX% |\n\n## ブロッカー・課題\n- [実装を阻害している要因]\n\n## 次期アクション\n1. [優先的に着手すべき項目]\n2. ...",
+          "purpose": "generate",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["implementation", "report", "定期確認"]
         },
         {
-          "id": "IMPL-PREP-01",
+          "id": "PRM-TASK-CHK-05",
+          "oldId": "IMPL-PREP-01",
           "title": "新機能開発前の現状分析",
           "description": "新機能開発に入る前の依存関係・前提条件チェック",
           "body": "新機能開発を始める前に、必要な前提条件と依存関係を分析してください。\n\n[入力]\n- 開発予定の機能名: [機能名を記入]\n- 関連PRD: [PRDファイルパスを記入]\n\n[分析観点]\n1. 依存する既存機能の実装状況\n   - この機能が依存する他の機能は何か\n   - それらは実装済みか\n\n2. 必要なアーキテクチャ要件\n   - データベーススキーマの変更が必要か\n   - 新しいサービス・コンポーネントが必要か\n   - セキュリティ・パフォーマンス要件は何か\n\n3. 技術的前提条件\n   - 必要なライブラリ・SDKは導入済みか\n   - 開発環境の準備は整っているか\n\n4. 影響範囲の特定\n   - この機能の実装により影響を受ける既存コードは何か\n   - テストの追加・修正が必要な箇所は何か\n\n[出力形式]\n# [機能名] 開発前分析\n\n## 前提条件チェックリスト\n- [ ] 依存機能A：実装済み / 未実装\n- [ ] 依存機能B：実装済み / 未実装\n- [ ] データベーススキーマ：対応済み / 要変更\n- [ ] 必要ライブラリ：導入済み / 要導入\n\n## 実装前に必要な作業\n### 優先度：高（ブロッカー）\n1. [作業内容] - [対応ファイル] - [定義箇所]\n\n### 優先度：中（推奨）\n...\n\n## 依存関係マップ\n```\n[この機能]\n  ├─ 依存 → [機能A] (実装済み)\n  ├─ 依存 → [機能B] (未実装) ← ブロッカー\n  └─ 影響 → [機能C] (要修正)\n```\n\n## リスク・懸念事項\n- [技術的リスク]\n- [スケジュールリスク]\n\n## 推奨開発順序\n1. [最初に実装すべきもの]\n2. [次に実装すべきもの]\n3. ...",
+          "purpose": "check",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["implementation", "preparation", "依存関係"]
         },
         {
-          "id": "IMPL-AI-01",
+          "id": "PRM-TASK-GEN-02",
+          "oldId": "IMPL-AI-01",
           "title": "AI実装タスク依頼プロンプト生成",
           "description": "未実装箇所をAIに実装依頼する際のプロンプト生成",
           "body": "特定の未実装機能をAIに実装依頼するためのプロンプトを生成してください。\n\n[入力]\n- 実装したい機能: [機能名を記入]\n- 関連PRD: [PRDファイルパスを記入]\n- 関連ARCH/DEV: [該当ファイルパスを記入]\n\n[生成するプロンプトの構成要素]\n1. 実装目的と背景\n   - 何のための機能か\n   - ユーザー価値は何か\n\n2. 要件定義の引用\n   - PRDからの該当セクション引用\n   - 機能要件の明確な記述\n\n3. 技術仕様の引用\n   - ARCHまたはDEVELOPMENTからの該当セクション引用\n   - データ構造、API仕様など\n\n4. 実装対象ファイル\n   - 新規作成が必要なファイル\n   - 修正が必要な既存ファイル\n\n5. 実装制約・ガイドライン\n   - プロジェクトの実装ルール\n   - 使用すべきライブラリ・パターン\n\n6. 完了基準\n   - 何ができれば完了とみなすか\n   - 必要なテストは何か\n\n[出力形式]\n---AI実装依頼プロンプト---\n\n# [機能名]の実装\n\n## 実装目的\n[PRDから引用した機能の目的・背景]\n\n## 要件定義\n### 機能要件\n```\n[PRDからの引用]\n- 要件1: ...\n- 要件2: ...\n```\n参照: docs/PRD/[ファイル名].mdc - [セクション名]\n\n### 技術仕様\n```\n[ARCH/DEVELOPMENTからの引用]\n- データ構造: ...\n- API仕様: ...\n```\n参照: docs/DEVELOPMENT/[ファイル名].md - [セクション名]\n\n## 実装対象\n### 新規作成ファイル\n- [ファイルパス] - [目的]\n\n### 修正対象ファイル\n- [ファイルパス] - [修正内容の概要]\n\n## 実装制約\n- [プロジェクトの実装ルール]\n- [使用技術・ライブラリ制約]\n- [既存コードとの整合性要件]\n\n## 完了基準\n- [ ] [具体的な完了条件1]\n- [ ] [具体的な完了条件2]\n- [ ] ユニットテストの追加\n- [ ] 既存テストが通ること\n\n## 参考情報\n- 類似実装: [既存の類似コードの場所]\n- 関連ドキュメント: [その他参考ドキュメント]\n\n---以上、このプロンプトをAIに渡して実装を依頼できます---",
+          "purpose": "generate",
+          "relatedGates": [],
+          "relatedScripts": [],
           "tags": ["implementation", "ai", "prompt-generation"]
         }
       ]

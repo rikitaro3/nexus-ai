@@ -607,5 +607,5 @@ body.dark .document-modal__content textarea {
 
 - Electronアプリ実装: `tools/nexus/tools/nexus/src/renderer/features/docs-navigator/docs-navigator.js`
 - 詳細カード共通コンポーネント: FEAT-0009
-- ドキュメントテンプレート: `docs/PRD/PRD_DocumentTemplate.mdc`
-- Quality Gates: `docs/GATES/document.mdc`
+- ドキュメントテンプレート: `docs/PRD/ドキュメントテンプレート仕様.mdc`
+- Quality Gates: `docs/GATES/ドキュメント品質ゲート.mdc`

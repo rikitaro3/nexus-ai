@@ -2,7 +2,7 @@
 title: "DEVELOPMENT: ドキュメント編集機能設計"
 layer: "DEVELOPMENT"
 upstream:
-  - "docs/PRD/PRD_DocumentEditor.mdc"
+  - "docs/PRD/ドキュメント編集機能PRD.mdc"
 downstream: []
 tags:
   - "document-editor"
@@ -13,7 +13,7 @@ tags:
 
 > Breadcrumbs
 > Layer: DEVELOPMENT
-> Upstream: docs/PRD/PRD_DocumentEditor.mdc
+> Upstream: docs/PRD/ドキュメント編集機能PRD.mdc
 > Downstream: N/A
 
 ## 目次

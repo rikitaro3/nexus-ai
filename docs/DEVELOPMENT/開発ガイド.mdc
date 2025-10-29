@@ -1,0 +1,121 @@
+---
+title: "Nexus 開発ガイド"
+layer: "DEVELOPMENT"
+template: "legacy-import"
+upstream:
+  - "docs/DEVELOPMENT/index.mdc"
+downstream:
+  - "docs/DEVELOPMENT/Rendererドメインサービス設計.mdc"
+  - "docs/DEVELOPMENT/ドキュメント編集機能設計.mdc"
+  - "docs/QA/index.mdc"
+tags: []
+---
+
+# Nexus 開発ガイド
+
+> Breadcrumbs
+> Layer: DEVELOPMENT
+> Upstream: docs/DEVELOPMENT/index.mdc
+> Downstream: docs/DEVELOPMENT/Rendererドメインサービス設計.mdc, docs/DEVELOPMENT/ドキュメント編集機能設計.mdc, docs/QA/index.mdc
+
+## 1. 目的
+
+Next.js 版 Nexus の実装構成・開発規約・ビルド/テスト手順を最新化し、フロントエンドと Node.js スクリプトの役割を整理します。
+
+## 2. ディレクトリ構成
+
+```
+src/
+├── app/                     # Next.js App Router（ページ・レイアウト）
+│   ├── (routes)/            # ルートとセクションレイアウト
+│   ├── api/                 # Route Handler (API Routes)
+│   └── globals.css          # グローバルスタイル
+├── components/              # UI/ドメイン別コンポーネント
+│   ├── layout/              # Header / Footer / MainLayout
+│   ├── docs/                # ドキュメントナビゲーター
+│   ├── tasks/               # タスクワークスペース
+│   └── ui/                  # ボタンなど汎用 UI
+├── lib/                     # ドメインロジック（ファイル読み書き、品質ゲート連携等）
+├── config/                  # 設定値、リポジトリパス、Feature Flags
+├── styles/                  # 共有スタイル資産
+└── types/                   # TypeScript 型定義
+```
+
+補助ファイル:
+- `public/context.mdc` / `prompts.json` … 初期データ
+- `docs/` … 仕様ドキュメント
+- `scripts/` … 品質ゲートやテンプレート生成などの CLI
+
+## 3. Next.js レイヤー別ガイド
+
+### 3.1 App Router (`src/app/(routes)`)
+
+- `layout.tsx`: HTML スケルトンと共通メタ情報を定義。
+- `page.tsx`: Docs Navigator + Tasks Workspace を読み込み、サーバーコンポーネントから初期データをフェッチ。
+- ページ間で共有するステートは React Context で管理する。
+
+### 3.2 Route Handler (`src/app/api/**/route.ts`)
+
+- 例: `api/health/route.ts` はヘルスチェックエンドポイントを提供。
+- Response は `NextResponse.json()` を使用し、Zod で入力／出力を検証。
+- ファイルシステム操作は `src/lib/` のユーティリティへ委譲。
+
+### 3.3 クライアントコンポーネント (`src/components/**`)
+
+- `"use client"` ディレクティブを必要箇所に明示。
+- DocsNavigator / TasksWorkspace / SettingsPanel など状態管理を伴う UI を担当。
+- Zustand などの外部ステート管理は未導入。React hook (useState/useReducer) を基本とする。
+
+## 4. コーディング規約
+
+### 4.1 TypeScript
+
+- `tsconfig.json` の strict 設定を維持し、可能な限り型を明示。
+- Server Components では Node.js API へのアクセスが可能。ブラウザ API を使用する場合はクライアントコンポーネントへ分離。
+- `lib/` では純粋関数を心掛け、I/O を伴う場合は分離されたヘルパーを用意。
+
+### 4.2 React / Next.js
+
+- クライアントコンポーネントでは副作用を `useEffect` に限定し、サーバー側でフェッチ可能なデータはサーバーコンポーネントに寄せる。
+- UI コンポーネントは `src/components/ui/` に配置し、Figma のデザインシステムに合わせた props を定義。
+- 共有レイアウトは `src/components/layout/MainLayout.tsx` を経由して提供。
+
+### 4.3 スタイル
+
+- グローバルスタイルは `src/app/globals.css` で定義。
+- コンポーネント固有のスタイルは CSS Modules (`*.module.css`) もしくは内製ユーティリティを使用。
+
+## 5. ビルド & 実行
+
+| コマンド | 目的 |
+|----------|------|
+| `npm run dev` | Next.js 開発サーバーを起動 |
+| `npm run build` | 本番ビルド (`.next/`) を生成 |
+| `npm start` | `npm run build` 後のサーバー起動 |
+| `npm run lint` | ESLint (Next.js 推奨設定) |
+| `npm test` | Jest によるユニットテスト |
+| `npm run test:watch` | Jest ウォッチモード |
+| `npm run test:coverage` | カバレッジレポート生成 |
+
+## 6. テスト指針
+
+- **ユニットテスト**: `src/lib/` の純粋ロジックを中心に Jest でカバー。Zod スキーマやタスク計算ロジックの境界テストを追加。
+- **コンポーネントテスト**: React Testing Library を導入予定。優先度は DocsNavigator と TasksWorkspace。
+- **E2E テスト**: Playwright で Next.js サーバーに接続し、主要画面の動作確認を自動化予定。詳細は [docs/QA/index.mdc](../QA/index.mdc) を参照。
+- **品質ゲート**: `node scripts/validate-docs-gates.js` を用いた文書整合性チェックを CI に組み込む。
+
+## 7. デプロイと運用
+
+- Next.js アプリはスタンドアロンモード（`next build` → `next start`）でデプロイ可能。
+- ドキュメント資産は Git 管理されるため、`git pull` 後に品質ゲートを実行して差分を検証。
+- サブモジュールとして取り込む場合は README の手順を参照。
+
+## 8. 関連詳細設計
+
+- [docs/ARCH/システム構成.mdc](../ARCH/システム構成.mdc)
+- [docs/ARCH/共通コンポーネント設計.mdc](../ARCH/共通コンポーネント設計.mdc) - FEAT-0009
+- [docs/DEVELOPMENT/ドキュメント編集機能設計.mdc](ドキュメント編集機能設計.mdc) - FEAT-0021〜0023
+- [docs/QA/index.mdc](../QA/index.mdc)
+
+alwaysApply: true
+---

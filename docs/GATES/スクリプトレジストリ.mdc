@@ -1,0 +1,314 @@
+---
+title: "スクリプトレジストリ"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/GATES/index.mdc"
+  - "docs/GATES/用語定義とID採番ルール.mdc"
+downstream: []
+tags: ["scripts", "validation", "registry"]
+---
+
+# スクリプトレジストリ
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/GATES/index.mdc, docs/GATES/用語定義とID採番ルール.mdc
+> Downstream: N/A
+
+## 0. はじめに
+
+### 0.1 位置づけと目的
+
+本ドキュメントは、Nexusプロジェクトで使用される全てのScript（確定的な自動処理）を一元管理するレジストリです。各ScriptにScript IDを割り当て、実装場所、関連QG、関連Promptを明記することで、以下を実現します：
+
+- Scriptの一覧化と検索性の向上
+- QG-Script-Promptの関係性の可視化
+- 実装場所の明確化
+- 保守性の向上
+
+### 0.2 参照すべき関連ドキュメント
+
+- `docs/GATES/用語定義とID採番ルール.mdc`: Script/Promptの定義とID採番ルール
+- `docs/GATES/ドキュメント品質ゲート.mdc`: Quality Gates定義
+
+## 目次
+
+- [1. レジストリ概要](#1-レジストリ概要)
+- [2. ドキュメント品質スクリプト](#2-ドキュメント品質スクリプト)
+- [3. テストケース品質スクリプト](#3-テストケース品質スクリプト)
+- [4. タスク実行スクリプト](#4-タスク実行スクリプト)
+- [5. Script-QG-Prompt対応表](#5-script-qg-prompt対応表)
+
+## 1. レジストリ概要
+
+### 1.1 Scriptとは
+
+Scriptは、プログラムによる確定的な処理を行う実行可能な最小単位です。
+
+**特徴**:
+- アウトプットが一意で確定的
+- 高速で再現性が高い
+- 自動化に適している
+- Quality Gateの検証や自動修正を実行
+
+**ScriptとPromptの使い分け**:
+- 形式的にチェック可能 → Script
+- 意味的な理解が必要 → Prompt
+- 単純な文字列操作 → Script
+- 複雑な構造生成 → Prompt
+
+### 1.2 Script ID形式
+
+**形式**: `SCR-[QG_OR_TASK_ID]-[CATEGORY]-[NN]`
+
+**例**:
+- `SCR-DOC-01-VAL-01`: DOC-01の検証スクリプト1番目
+- `SCR-DOC-05-FIX-01`: DOC-05の自動修正スクリプト1番目
+
+詳細は`docs/GATES/用語定義とID採番ルール.mdc`を参照。
+
+### 1.3 レジストリエントリ形式
+
+各Scriptは以下の情報を含みます：
+
+- **Script ID**: 一意の識別子
+- **名称**: Scriptの名前
+- **関連QG**: 紐づくQuality Gate ID
+- **実装場所**: ファイルパスと関数名
+- **関連Prompt**: 対応するPrompt ID
+- **処理内容**: Scriptの機能説明
+- **入力**: 関数の入力パラメータ
+- **出力**: 関数の出力形式
+- **備考**: 追加情報
+
+## 2. ドキュメント品質スクリプト
+
+### SCR-DOC-01-VAL-01
+
+- **名称**: Breadcrumbs存在チェック
+- **関連QG**: DOC-01 (Breadcrumbsブロック必須)
+- **実装場所**: 
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateDocumentGates()` 内の検証ロジック
+  - 行: 248-259
+- **関連Prompt**: PRM-DOC-01-FIX-01
+- **処理内容**: ドキュメント内に`> Breadcrumbs`ブロックが存在するかチェック
+- **入力**: ドキュメント内容（文字列）
+- **出力**: 
+  ```javascript
+  {
+    valid: boolean,
+    error?: string
+  }
+  ```
+- **備考**: 最も基本的な検証の一つ
+
+### SCR-DOC-02-VAL-01
+
+- **名称**: Layer定義準拠チェック
+- **関連QG**: DOC-02 (Layer定義準拠)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateDocumentGates()` 内の検証ロジック
+  - 行: 262-267
+- **関連Prompt**: PRM-DOC-02-FIX-01
+- **処理内容**: Layerが定義済み8種（STRATEGY, PRD, UX, API, DATA, ARCH, DEVELOPMENT, QA）のいずれかであるかチェック
+- **入力**: Layer文字列
+- **出力**:
+  ```javascript
+  {
+    valid: boolean,
+    layer?: string,
+    error?: string
+  }
+  ```
+- **備考**: VALID_LAYERS定数を参照
+
+### SCR-DOC-03-VAL-01
+
+- **名称**: リンクパス存在確認
+- **関連QG**: DOC-03 (リンクパス存在確認)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateDocumentGates()` 内の検証ロジック
+  - 行: 269-280
+- **関連Prompt**: PRM-DOC-03-FIX-01
+- **処理内容**: Upstream/Downstreamパスが実在ファイルまたはN/Aであるかチェック
+- **入力**: パス文字列
+- **出力**:
+  ```javascript
+  {
+    valid: boolean,
+    link?: string,
+    error?: string
+  }
+  ```
+- **備考**: ファイルシステムとの整合性をチェック
+
+### SCR-DOC-04-VAL-01
+
+- **名称**: 循環参照検出
+- **関連QG**: DOC-04 (循環参照検出)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `detectCycles()`
+  - 行: 279-294
+- **関連Prompt**: PRM-DOC-04-FIX-01
+- **処理内容**: Upstream/Downstream関係で循環参照がないかDFSでチェック
+- **入力**: ドキュメントノードマップ
+- **出力**:
+  ```javascript
+  {
+    hasCycle: boolean,
+    cycle?: string[] // 循環パス
+  }
+  ```
+- **備考**: DAG構造の保証に重要
+
+### SCR-DOC-05-VAL-01
+
+- **名称**: 章番号検証
+- **関連QG**: DOC-05 (章番号必須)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateHeadings()`
+  - 行: 282-283
+- **関連Prompt**: PRM-DOC-05-FIX-01
+- **処理内容**: 全ての見出しに章番号が付与されているかチェック
+- **入力**: ドキュメント内容
+- **出力**:
+  ```javascript
+  {
+    valid: boolean,
+    violations: Array<{
+      path: string,
+      heading: string,
+      error: string
+    }>
+  }
+  ```
+- **備考**: 見出しの構造化に寄与
+
+### SCR-DOC-06-VAL-01
+
+- **名称**: 目次検証
+- **関連QG**: DOC-06 (目次必須)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateTableOfContents()`
+  - 行: 285-286
+- **関連Prompt**: PRM-DOC-06-FIX-01
+- **処理内容**: 目次ブロックが存在し、リンクが有効であるかチェック
+- **入力**: ドキュメント内容
+- **出力**:
+  ```javascript
+  {
+    valid: boolean,
+    violations: Array<{
+      path: string,
+      error: string
+    }>
+  }
+  ```
+- **備考**: ナビゲーション性向上に寄与
+
+### SCR-DOC-07-VAL-01
+
+- **名称**: 命名規則検証
+- **関連QG**: DOC-07 (命名規則必須)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateNamingRules()`
+  - 行: 288-289
+- **関連Prompt**: PRM-DOC-07-FIX-01
+- **処理内容**: ファイル名が命名規則に準拠しているかチェック
+- **入力**: ファイル名
+- **出力**:
+  ```javascript
+  {
+    valid: boolean,
+    violations: Array<{
+      path: string,
+      error: string,
+      suggestion?: string
+    }>
+  }
+  ```
+- **備考**: PRD層は`PRD_*.mdc`形式を推奨
+
+### SCR-DOC-08-VAL-01
+
+- **名称**: スコープセクション検証
+- **関連QG**: DOC-08 (内容範囲の明示必須)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateScopeSections()`
+  - 行: 291-292
+- **関連Prompt**: PRM-DOC-08-FIX-01
+- **処理内容**: 「扱う内容」と「扱わない内容」セクションが存在するかチェック
+- **入力**: ドキュメント内容
+- **出力**:
+  ```javascript
+  {
+    valid: boolean,
+    violations: Array<{
+      path: string,
+      error: string
+    }>
+  }
+  ```
+- **備考**: ドキュメントのスコープ明確化に寄与
+
+## 3. テストケース品質スクリプト
+
+### SCR-TC-01-VAL-01
+
+- **名称**: テストケース命名規則検証
+- **関連QG**: TC-01 (テストケース命名規則準拠)
+- **実装場所**:
+  - ファイル: `scripts/validate-docs-gates.js`
+  - 関数: `validateTestCaseGates()` → `validateTestCaseName()`
+  - 行: 47以降
+- **関連Prompt**: PRM-TC-01-FIX-01
+- **処理内容**: テストケースファイル名が`[分類]-[機能]-[シナリオ].spec.ts`形式に準拠しているかチェック
+- **入力**: ファイル名
+- **出力**:
+  ```javascript
+  {
+    valid: boolean,
+    error?: string
+  }
+  ```
+- **備考**: 分類は`docs-navigator`, `tree-view`, `tasks`, `integration`
+
+## 4. タスク実行スクリプト
+
+### SCR-TASK-GEN-01
+
+- **名称**: ドキュメントテンプレート生成
+- **関連QG**: なし（タスク実行系）
+- **実装場所**:
+  - ファイル: 未実装（将来追加予定）
+- **関連Prompt**: PRM-TASK-GEN-01
+- **処理内容**: ドキュメントテンプレートからの自動生成
+- **入力**: テンプレート名、パラメータ
+- **出力**: 生成されたドキュメント内容
+- **備考**: 将来実装予定
+
+## 5. Script-QG-Prompt対応表
+
+| Script ID | 関連QG | QG名称 | 関連Prompt | 処理内容 |
+|-----------|--------|--------|-----------|---------|
+| SCR-DOC-01-VAL-01 | DOC-01 | Breadcrumbsブロック必須 | PRM-DOC-01-FIX-01 | Breadcrumbs存在チェック |
+| SCR-DOC-02-VAL-01 | DOC-02 | Layer定義準拠 | PRM-DOC-02-FIX-01 | Layer定義チェック |
+| SCR-DOC-03-VAL-01 | DOC-03 | リンクパス存在確認 | PRM-DOC-03-FIX-01 | パス存在チェック |
+| SCR-DOC-04-VAL-01 | DOC-04 | 循環参照検出 | PRM-DOC-04-FIX-01 | 循環参照検出 |
+| SCR-DOC-05-VAL-01 | DOC-05 | 章番号必須 | PRM-DOC-05-FIX-01 | 章番号検証 |
+| SCR-DOC-06-VAL-01 | DOC-06 | 目次必須 | PRM-DOC-06-FIX-01 | 目次検証 |
+| SCR-DOC-07-VAL-01 | DOC-07 | 命名規則必須 | PRM-DOC-07-FIX-01 | 命名規則検証 |
+| SCR-DOC-08-VAL-01 | DOC-08 | 内容範囲の明示必須 | PRM-DOC-08-FIX-01 | スコープ検証 |
+| SCR-TC-01-VAL-01 | TC-01 | テストケース命名規則準拠 | PRM-TC-01-FIX-01 | テストケース名検証 |
+
+alwaysApply: true
+---

@@ -3,7 +3,7 @@ title: "Nexus Quality Gates（ドキュメント記法）"
 layer: "QA"
 template: "legacy-import"
 upstream:
-  - "docs/PRD/PRD_DocumentTemplate.mdc"
+  - "docs/PRD/ドキュメントテンプレート仕様.mdc"
 downstream: []
 tags: []
 ---
@@ -12,11 +12,13 @@ tags: []
 
 > Breadcrumbs
 > Layer: QA
-> Upstream: docs/PRD/PRD_DocumentTemplate.mdc
+> Upstream: docs/PRD/ドキュメントテンプレート仕様.mdc
 > Downstream: N/A
 
 ## Purpose
 Nexusドキュメントテンプレート準拠の検証ルールを定義（機械可読形式）。
+
+各Quality GateにはScript（確定的な自動検証）とPrompt（柔軟なAI支援修正）が対応します。
 
 ## Gates
 
@@ -85,6 +87,22 @@ gates:
     threshold: 100%
     severity: warn
     description: "ドキュメントに「扱う内容」と「扱わない内容」が明示されている"
+    
+  - id: DOC-09
+    name: "はじめに必須"
+    target: "*.mdc"
+    metric: "Introduction section exists"
+    threshold: 100%
+    severity: warn
+    description: "ドキュメントに「はじめに」または「0. はじめに」セクションが存在し、位置づけ・想定読者・参照ドキュメントが記載されている"
+    
+  - id: DOC-10
+    name: "Breadcrumbs保守"
+    target: "*.mdc"
+    metric: "Breadcrumbs consistency across all documents"
+    threshold: 100%
+    severity: error
+    description: "パンくずリスト全体の整合性を保証（DOC-01～DOC-04を包括）。すべてのドキュメントで適切なBreadcrumbsブロック、Layer定義、Upstream/Downstreamパス、循環参照の不在を確認"
 ```
 
 ## 検証方法
@@ -147,6 +165,69 @@ const validLayers = ['STRATEGY','PRD','UX','API','DATA','ARCH','DEVELOPMENT','QA
 // 内容記述チェック: 空でない内容が記載されているか確認
 // 構造チェック: 箇条書き（/^[\s]*[-*]\s/）での記述確認
 ```
+
+### Gate-DOC-09
+```js
+// はじめにブロック検出（/^##\s+(0\.\s*)?はじめに/）
+// 必須要素チェック:
+//   - 位置づけと目的の記載
+//   - 想定読者と前提知識の記載
+//   - 参照ドキュメントや更新方針の記載
+// 構造チェック: 箇条書き（/^[\s]*[-*]\s/）での記述確認
+```
+
+### Gate-DOC-10
+```js
+// DOC-01～DOC-04を統合的に実行
+// 1. 全ドキュメントをスキャン
+// 2. Breadcrumbsブロック存在チェック（DOC-01）
+// 3. Layer定義チェック（DOC-02）
+// 4. Upstream/Downstreamパス存在チェック（DOC-03）
+// 5. 循環参照検出（DOC-04）
+// 6. 包括的なレポート生成
+// 注: 通常はPrompt PRM-DOC-10-CHK-001で実行
+```
+
+## QG-Script-Prompt対応表
+
+各Quality Gateに対応するScriptとPromptの一覧です。
+
+| QG ID | QG名称 | Script ID | Script処理 | Prompt ID | Prompt処理 |
+|-------|--------|-----------|-----------|-----------|-----------|
+| DOC-01 | Breadcrumbsブロック必須 | SCR-DOC-01-VAL-01 | 存在チェック | PRM-DOC-01-FIX-01 | Breadcrumbs追加 |
+| DOC-02 | Layer定義準拠 | SCR-DOC-02-VAL-01 | Layer値チェック | PRM-DOC-02-FIX-01 | Layer修正 |
+| DOC-03 | リンクパス存在確認 | SCR-DOC-03-VAL-01 | パス存在チェック | PRM-DOC-03-FIX-01 | リンクパス修正 |
+| DOC-04 | 循環参照検出 | SCR-DOC-04-VAL-01 | 循環参照検出 | PRM-DOC-04-FIX-01 | 循環参照解消 |
+| DOC-05 | 章番号必須 | SCR-DOC-05-VAL-01 | 章番号検証 | PRM-DOC-05-FIX-01 | 章番号追加・修正 |
+| DOC-06 | 目次必須 | SCR-DOC-06-VAL-01 | 目次検証 | PRM-DOC-06-FIX-01 | 目次生成 |
+| DOC-07 | 命名規則必須 | SCR-DOC-07-VAL-01 | 命名規則検証 | PRM-DOC-07-FIX-01 | 命名規則修正 |
+| DOC-08 | 内容範囲の明示必須 | SCR-DOC-08-VAL-01 | スコープ検証 | PRM-DOC-08-FIX-01 | スコープ追加 |
+| DOC-09 | はじめに必須 | - | （未実装） | PRM-DOC-09-FIX-01 | はじめにセクション追加 |
+| DOC-10 | Breadcrumbs保守 | - | （Prompt実行） | PRM-DOC-10-CHK-001 | 一括診断 |
+| | | | | PRM-DOC-10-FIX-001 | Breadcrumbs追加 |
+| | | | | PRM-DOC-10-FIX-002 | Layer修正 |
+| | | | | PRM-DOC-10-FIX-003 | パス修正 |
+| | | | | PRM-DOC-10-FIX-004 | 循環参照解消 |
+
+### ScriptとPromptの役割分担
+
+**Script（確定的処理）**:
+- 形式的な検証（存在チェック、形式チェック）
+- 高速実行（ミリ秒オーダー）
+- アウトプットが一意
+- CI/CDパイプラインでの自動実行に適している
+
+**Prompt（柔軟な処理）**:
+- 文脈を考慮した修正提案
+- 複雑な構造の生成
+- 人間的な判断を伴う処理
+- 対話的な修正に適している
+
+### 実装場所
+
+- **Script実装**: `scripts/validate-docs-gates.js`
+- **Prompt実装**: `prompts.json` (VALIDATION_FIXカテゴリ)
+- **詳細**: `docs/GATES/スクリプトレジストリ.mdc`参照
 
 alwaysApply: true
 ---

@@ -5,9 +5,13 @@ template: "legacy-import"
 upstream:
   - "docs/index.mdc"
 downstream:
-  - "docs/GATES/document.mdc"
-  - "docs/GATES/test-case.mdc"
-  - "docs/GATES/ID採番ルール.mdc"
+  - "docs/GATES/品質ゲート運用ガイド.mdc"
+  - "docs/GATES/ドキュメント品質ゲート.mdc"
+  - "docs/GATES/テストケース品質ゲート.mdc"
+  - "docs/GATES/用語定義とID採番ルール.mdc"
+  - "docs/GATES/Activity一覧.mdc"
+  - "docs/GATES/スクリプトレジストリ.mdc"
+  - "docs/GATES/タスクQG対応表.mdc"
 tags: []
 ---
 
@@ -22,62 +26,15 @@ tags: []
 
 Nexusの品質基準を定義し、すべての開発・テスト・リリースにおいて品質を保証する。
 
-## Quality Gates一覧
+## Quality Gatesドキュメント
 
-### Document Quality Gates
-
-- **DOC-01**: Breadcrumbs必須
-- **DOC-02**: Upstream/Downstreamリンク
-- **DOC-03**: 階層構造の一貫性
-- **DOC-04**: ファイル名規則準拠
-
-詳細: [document.mdc](document.mdc)
-
-### Test Case Quality Gates
-
-- **TC-01**: テストケース命名規則準拠
-- **TC-02**: テストケース独立性
-- **TC-03**: テストケースドキュメント化
-- **TC-04**: テストデータ管理
-
-詳細: [test-case.mdc](test-case.mdc)
-
-### ID Numbering Rules
-
-プロジェクト横断で適用可能なID採番ルール（識別子管理）を定義：
-
-- **ID-01**: ID形式準拠
-- **ID-02**: ID重複なし
-- **ID-03**: ID台帳登録
-
-詳細: [ID採番ルール.mdc](ID採番ルール.mdc)
-
-## 適用範囲
-
-- ドキュメント作成時（pre-commit hook）
-- テストケース作成時（pre-commit hook）
-- CI/CDパイプライン（自動実行）
-
-## 検証方法
-
-### ドキュメント検証
-
-```bash
-# 全ドキュメントのQuality Gates検証
-npm run validate:docs
-```
-
-### テストケース検証
-
-```bash
-# 全テストケースのQuality Gates検証
-npm run validate:tests
-```
-
-## 非準拠時の対処
-
-1. **エラー（Error）**: 即座に修正が必要
-2. **警告（Warning）**: 次回リリースまでに修正
+- **品質ゲート運用ガイド.mdc** … Quality Gates一覧・適用範囲・検証方法・非準拠時の対処
+- **document.mdc** … ドキュメント品質ゲート（DOC-01〜09）詳細
+- **test-case.mdc** … テストケース品質ゲート（TC-01〜04）詳細
+- **用語定義とID採番ルール.mdc** … Quality Gate、Script、Prompt、Activityの用語定義とID採番ルール
+- **Activity一覧.mdc** … 標準化された活動パターン（Activity Type）一覧とPrompt/Script紐付け
+- **scripts-registry.mdc** … 全Scriptの一覧と実装場所
+- **タスクQG対応表.mdc** … V字モデルでの開発タスクとQGの対応関係
 
 ## 関連文書
 

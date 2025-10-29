@@ -5,7 +5,7 @@ template: "legacy-import"
 upstream:
   - "docs/index.mdc"
 downstream:
-  - "docs/GATES/document.mdc"
+  - "docs/GATES/ドキュメント品質ゲート.mdc"
 tags: []
 ---
 
@@ -14,7 +14,7 @@ tags: []
 > Breadcrumbs
 > Layer: PRD
 > Upstream: docs/index.mdc
-> Downstream: docs/GATES/document.mdc
+> Downstream: docs/GATES/ドキュメント品質ゲート.mdc
 
 ## Purpose
 - Nexus配下およびRepo全体で統一されたドキュメント記法を定義
@@ -119,7 +119,7 @@ FEAT-ID関連ドキュメントの場合：
 ```
 
 ## 参考
-- Quality Gates定義: `docs/GATES/document.mdc`
+- Quality Gates定義: `docs/GATES/ドキュメント品質ゲート.mdc`
 - 検証方法: `docs/GATES/README.mdc`
 alwaysApply: true
 ---

@@ -125,11 +125,9 @@ contextMap:
         description: システム要件定義
       - path: docs/PRD/プロンプト辞書ドラフト.mdc
         description: プロンプト辞書
-      - path: docs/PRD/PRD_Nexus_2.mdc
-        description: Nexus要求仕様
-      - path: docs/PRD/PRD_Strategy.mdc
+      - path: docs/PRD/戦略とビジョン.mdc
         description: プロダクト戦略
-      - path: docs/PRD/PRD_DocumentTemplate.mdc
+      - path: docs/PRD/ドキュメントテンプレート仕様.mdc
         description: ドキュメントテンプレート
   - category: ARCH
     entries:
@@ -157,7 +155,7 @@ contextMap:
         description: QA方針・シナリオ
   - category: GATES
     entries:
-      - path: docs/GATES/document.mdc
+      - path: docs/GATES/ドキュメント品質ゲート.mdc
         description: Quality Gates（DOC-01〜DOC-08）
       - path: docs/GATES/index.mdc
         description: Quality Gates索引`;

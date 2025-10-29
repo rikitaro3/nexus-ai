@@ -26,9 +26,8 @@ Nexusは「ドキュメントトレーサビリティとタスク生成・分解
 - docs/PRD/要求仕様書.mdc … 要求仕様（FR-01〜FR-08）
 - docs/PRD/システム要件定義書.mdc … システム要件定義
 - docs/PRD/プロンプト辞書ドラフト.mdc … プロンプト辞書
-- docs/PRD/PRD_Nexus_2.mdc … Nexus要求仕様
-- docs/PRD/PRD_Strategy.mdc … プロダクト戦略
-- docs/PRD/PRD_DocumentTemplate.mdc … ドキュメントテンプレート
+- docs/PRD/戦略とビジョン.mdc … プロダクト戦略
+- docs/PRD/ドキュメントテンプレート仕様.mdc … ドキュメントテンプレート
 
 ### ARCH
 - docs/ARCH/index.mdc … アーキテクチャ索引
@@ -46,10 +45,12 @@ Nexusは「ドキュメントトレーサビリティとタスク生成・分解
 - docs/QA/index.mdc … QA方針・シナリオ
 
 ### GATES
-- docs/GATES/document.mdc … Quality Gates（DOC-01〜DOC-08）
-- docs/GATES/test-case.mdc … Test Case Quality Gates（TC-01〜TC-04）
-- docs/GATES/ID採番ルール.mdc … ID採番ルール（汎用的な識別子管理）
 - docs/GATES/index.mdc … Quality Gates索引
+- docs/GATES/ドキュメント品質ゲート.mdc … ドキュメント品質基準（DOC-01〜DOC-09）
+- docs/GATES/テストケース品質ゲート.mdc … テストケース品質基準（TC-01〜TC-04）
+- docs/GATES/スクリプトレジストリ.mdc … スクリプトレジストリ（全Scriptの一覧）
+- docs/GATES/タスクQG対応表.mdc … V字モデルでのタスク⟷QG対応関係
+- docs/GATES/用語定義とID採番ルール.mdc … Quality Gate、Script、Promptの用語定義とID採番ルール
 
 ## Layer Structure
 

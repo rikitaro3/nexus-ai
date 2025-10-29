@@ -125,7 +125,7 @@ FEAT: FEAT-0001
 
 **入力**:
 - 違反情報: gateId (DOC-01〜DOC-08, TC-01〜TC-04), 対象ファイル、違反詳細
-- Quality Gates定義: docs/GATES/document.mdc
+- Quality Gates定義: docs/GATES/ドキュメント品質ゲート.mdc
 - 対象ドキュメントの現在の状態
 
 **出力**:
@@ -408,7 +408,7 @@ export function buildValidationFixPrompt(violation: GateViolation): string {
   const header = 'あなたはQuality Gatesの違反を修正する専門家です。';
   const constraints = [
     '[制約]',
-    '- Quality Gates定義（docs/GATES/document.mdc）に厳密に準拠',
+    '- Quality Gates定義（docs/GATES/ドキュメント品質ゲート.mdc）に厳密に準拠',
     '- 既存の構造を尊重',
   ];
   const inputs = [
@@ -470,8 +470,8 @@ export function buildValidationFixPrompt(violation: GateViolation): string {
 - docs/PRD/index.mdc: PRD一覧
 - docs/PRD/要求仕様書.mdc: Nexus要求定義書（FEAT-0015の概要）
 - docs/PRD/プロンプト辞書ドラフト.mdc: プロンプトパーツの詳細
-- docs/PRD/PRD_DocsNavigator_TasksBreakdown.mdc: Tasks Breakdown支援の詳細
-- docs/GATES/document.mdc: Quality Gates定義
+- docs/PRD/ドキュメントナビゲータとタスク分解PRD.mdc: Tasks Breakdown支援の詳細
+- docs/GATES/ドキュメント品質ゲート.mdc: Quality Gates定義
 - tools/nexus/prompts.json: プロンプトテンプレート定義
 - tools/nexus/src/lib/ai/providers/cursor.ts: Cursorプロバイダー実装
 - tools/nexus/src/components/tasks/TasksWorkspace.tsx: TasksWorkspace UI実装

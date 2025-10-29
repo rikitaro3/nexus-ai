@@ -457,5 +457,5 @@ function findOrphans(documents: DocumentMetadata[], treeNodes: TreeNode[]): Docu
 ## 参考
 
 - Electronアプリ実装: `tools/nexus/tools/nexus/src/renderer/features/docs-navigator/docs-navigator.js`
-- ドキュメントテンプレート定義: `docs/PRD/PRD_DocumentTemplate.mdc`
-- Quality Gates定義: `docs/GATES/document.mdc`
+- ドキュメントテンプレート定義: `docs/PRD/ドキュメントテンプレート仕様.mdc`
+- Quality Gates定義: `docs/GATES/ドキュメント品質ゲート.mdc`

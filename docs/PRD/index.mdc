@@ -5,10 +5,10 @@ template: "legacy-import"
 upstream:
   - "docs/index.mdc"
 downstream:
-  - "docs/PRD/PRD_Nexus_2.mdc"
-  - "docs/PRD/PRD_DocumentTemplate.mdc"
-  - "docs/PRD/PRD_Strategy.mdc"
-  - "docs/PRD/PRD_プロンプト生成機能.mdc"
+  - "docs/PRD/機能レジストリ.mdc"
+  - "docs/PRD/ドキュメントテンプレート仕様.mdc"
+  - "docs/PRD/戦略とビジョン.mdc"
+  - "docs/PRD/プロンプト生成機能PRD.mdc"
   - "docs/PRD/要求仕様書.mdc"
   - "docs/PRD/プロンプト辞書ドラフト.mdc"
 tags: []
@@ -19,13 +19,14 @@ tags: []
 > Breadcrumbs
 > Layer: PRD
 > Upstream: docs/index.mdc
-> Downstream: docs/PRD/PRD_Nexus_2.mdc, docs/PRD/PRD_DocumentTemplate.mdc, docs/PRD/PRD_Strategy.mdc, docs/PRD/PRD_プロンプト生成機能.mdc, docs/PRD/要求仕様書.mdc, docs/PRD/プロンプト辞書ドラフト.mdc, docs/PRD/PRD_TreeView.mdc, docs/PRD/PRD_DocumentEditor.mdc, docs/PRD/画面仕様書_Nexus.mdc
+> Downstream: docs/PRD/ドキュメントテンプレート仕様.mdc, docs/PRD/戦略とビジョン.mdc, docs/PRD/プロンプト生成機能PRD.mdc, docs/PRD/要求仕様書.mdc, docs/PRD/プロンプト辞書ドラフト.mdc, docs/PRD/ツリービュー機能PRD.mdc, docs/PRD/ドキュメント編集機能PRD.mdc, docs/PRD/画面仕様書_Nexus.mdc
 
 ## PRD Documents
 
+- **機能レジストリ.mdc** … Nexus全機能（FEAT-ID）の一元管理
 - **システム要件定義書.mdc** … 要求を技術的実装要件に変換
 - **要求仕様書.mdc** … Nexus要求定義書（FEAT-0001〜0023の全機能）
-- **PRD_Nexus.mdc** … Nexus最小MVP要件
+- **PRD_Nexus_2.mdc** … Nexus最小MVP要件
 - **PRD_DocumentTemplate.mdc** … ドキュメントテンプレート定義
 - **PRD_DocsNavigator_TasksBreakdown.mdc** … Docs Navigator + Tasks Breakdown
 - **PRD_Strategy.mdc** … Nexus戦略・ビジョン（全体コンセプト、ドキュメント体系、UI、AIワークフロー、品質管理）
@@ -34,25 +35,6 @@ tags: []
 - **PRD_プロンプト生成機能.mdc** … プロンプト生成補助機能（FEAT-0015）の詳細仕様
 - **プロンプト辞書ドラフト.mdc** … プロンプトパーツ辞書（タスク分解、ドキュメント整備、品質検証、バリデーション違反修正）
 - **画面仕様書_Nexus.mdc** … 画面仕様書（UI詳細、FEAT-0009含む）
-
-## Features Registry（FEAT-ID）
-
-### FEAT-0024: Nexus最小MVP（Docs/FEATs/Orphans + Tasks/Breakdown UI）
-- PRD: docs/PRD/PRD_Nexus_2.mdc
-- ARCH: docs/ARCH/index.mdc
-- DEVELOPMENT: docs/DEVELOPMENT/index.mdc
-- QA: docs/QA/index.mdc
-- 注: 旧NEX-0001から移行
-
-### FEAT-0025: コンテキスト切替（デバッグ時のみ）
-- PRD: docs/PRD/PRD_Nexus_2.mdc
-- ARCH: docs/ARCH/index.mdc
-- 注: 旧NEX-0002から移行
-
-### FEAT-0026: 戦略・ビジョン実装（長期）
-- PRD: docs/PRD/PRD_Strategy.mdc
-- スコープ: フェーズ1（Foundation）、フェーズ2（Automation）、フェーズ3（Quality Gate）
-- 注: 旧NEX-0003から移行
 
 ## Notes
 - Nexusはデバッグ時のみコンテキスト選択で表示可能

@@ -13,7 +13,7 @@ Nexusの監視・品質ゲート機構は複数のモジュールが連携する
 
 ## RulesWatcherControllerの監視フロー
 - **目的**: Markdownルールの更新がファイルウォッチャー → 差分集計 → 品質ゲート再実行 → 通知 という一連の流れで正しく処理されるかを検証する。
-- **入力データ**: `test/fixtures/validate-docs-gates/project` をテンプレートとして一時ディレクトリに複製し、`docs/GATES/document.mdc` を実際に編集する。
+- **入力データ**: `test/fixtures/validate-docs-gates/project` をテンプレートとして一時ディレクトリに複製し、`docs/GATES/ドキュメント品質ゲート.mdc` を実際に編集する。
 - **手順**:
   1. `createRulesWatcher` で実際の `chokidar` ウォッチャーを立ち上げる。
   2. 監視対象のMarkdownに見出しを追加する変更を書き込み、ウォッチャーの自動実行を待つ。

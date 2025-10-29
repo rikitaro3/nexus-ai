@@ -51,7 +51,7 @@ test.describe('Docs Navigator', () => {
     const listItems = page.getByTestId('docs-navigator__list').locator('li');
     await expect(listItems).toHaveCount(1);
     await listItems.first().click();
-    await expect(page.getByTestId('docs-navigator__detail')).toContainText('PRD_DocumentTemplate');
+    await expect(page.getByTestId('docs-navigator__detail')).toContainText('ドキュメントテンプレート仕様');
 
     await searchInput.fill('');
     const prdCount = await page.getByTestId('docs-navigator__list').locator('li').count();

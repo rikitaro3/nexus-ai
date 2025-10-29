@@ -1,0 +1,82 @@
+---
+title: "品質ゲート運用ガイド"
+layer: "QA"
+template: "legacy-import"
+upstream:
+  - "docs/GATES/index.mdc"
+downstream:
+  - "docs/GATES/ドキュメント品質ゲート.mdc"
+  - "docs/GATES/用語定義とID採番ルール.mdc"
+  - "docs/GATES/スクリプトレジストリ.mdc"
+tags: []
+---
+
+# 品質ゲート運用ガイド
+
+> Breadcrumbs
+> Layer: QA
+> Upstream: docs/GATES/index.mdc
+> Downstream: docs/GATES/ドキュメント品質ゲート.mdc, docs/GATES/用語定義とID採番ルール.mdc, docs/GATES/スクリプトレジストリ.mdc
+
+## 1. 目的
+
+Nexusの品質基準を定義し、すべての開発・テスト・リリースにおいて品質を保証する。
+
+## 2. Quality Gates一覧
+
+### 2.1 Document Quality Gates
+
+- **DOC-01**: Breadcrumbs必須
+- **DOC-02**: Layer定義準拠
+- **DOC-03**: リンクパス存在確認
+- **DOC-04**: 循環参照検出
+- **DOC-05**: 章番号必須
+- **DOC-06**: 目次必須
+- **DOC-07**: 命名規則必須
+- **DOC-08**: 内容範囲の明示必須
+- **DOC-09**: はじめに必須
+
+詳細: [document.mdc](document.mdc)
+
+### 2.2 Test Case Quality Gates
+
+- **TC-01**: テストケース命名規則準拠
+- **TC-02**: テストケース独立性
+- **TC-03**: テストケースドキュメント化
+- **TC-04**: テストデータ管理
+
+## 3. 適用範囲
+
+- ドキュメント作成時（pre-commit hook）
+- テストケース作成時（pre-commit hook）
+- CI/CDパイプライン（自動実行）
+
+## 4. 検証方法
+
+### 4.1 ドキュメント検証
+
+```bash
+# 全ドキュメントのQuality Gates検証
+npm run validate:docs
+```
+
+### 4.2 テストケース検証
+
+```bash
+# 全テストケースのQuality Gates検証
+npm run validate:tests
+```
+
+## 5. 非準拠時の対処
+
+1. **エラー（Error）**: 即座に修正が必要
+2. **警告（Warning）**: 次回リリースまでに修正
+
+## 6. 関連ドキュメント
+
+- **用語定義とID採番ルール**: [用語定義とID採番ルール.mdc](用語定義とID採番ルール.mdc) - Quality Gate、Script、Promptの定義とID採番体系
+- **スクリプトレジストリ**: [scripts-registry.mdc](scripts-registry.mdc) - 全Scriptの一覧と実装場所
+- **タスクQG対応表**: [タスクQG対応表.mdc](タスクQG対応表.mdc) - V字モデルでの開発タスクとQGの対応関係
+
+alwaysApply: true
+---
