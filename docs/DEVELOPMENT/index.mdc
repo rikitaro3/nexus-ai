@@ -6,6 +6,7 @@ upstream:
   - "docs/ARCH/index.mdc"
 downstream:
   - "docs/DEVELOPMENT/Rendererドメインサービス設計.mdc"
+  - "docs/DEVELOPMENT/ドキュメント編集機能設計.mdc"
 tags: []
 ---
 
@@ -14,7 +15,7 @@ tags: []
 > Breadcrumbs
 > Layer: DEVELOPMENT
 > Upstream: docs/ARCH/index.mdc
-> Downstream: docs/DEVELOPMENT/Rendererドメインサービス設計.mdc
+> Downstream: docs/DEVELOPMENT/Rendererドメインサービス設計.mdc, docs/DEVELOPMENT/ドキュメント編集機能設計.mdc
 
 ## 目的
 Next.js 版 Nexus の実装構成・開発規約・ビルド/テスト手順を最新化し、フロントエンドと Node.js スクリプトの役割を整理します。
@@ -98,5 +99,6 @@ src/
 
 ## 7. 関連詳細設計
 - [docs/ARCH/システム構成.mdc](../ARCH/システム構成.mdc)
-- [docs/ARCH/共通コンポーネント設計.mdc](../ARCH/共通コンポーネント設計.mdc)
+- [docs/ARCH/共通コンポーネント設計.mdc](../ARCH/共通コンポーネント設計.mdc) - FEAT-0009
+- [docs/DEVELOPMENT/ドキュメント編集機能設計.mdc](ドキュメント編集機能設計.mdc) - FEAT-0021〜0023
 - [docs/QA/index.mdc](../QA/index.mdc)

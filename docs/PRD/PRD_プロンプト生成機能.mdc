@@ -1,0 +1,477 @@
+---
+title: "PRD: プロンプト生成補助機能（FEAT-0015）"
+layer: "PRD"
+template: "legacy-import"
+upstream:
+  - "docs/PRD/index.mdc"
+  - "docs/PRD/要求仕様書.mdc"
+downstream:
+  - "docs/PRD/プロンプト辞書ドラフト.mdc"
+  - "docs/DEVELOPMENT/index.mdc"
+tags: ["FEAT-0015", "prompt", "ai-workflow"]
+---
+
+# PRD: プロンプト生成補助機能（FEAT-0015）
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: docs/PRD/index.mdc, docs/PRD/要求仕様書.mdc
+> Downstream: docs/PRD/プロンプト辞書ドラフト.mdc, docs/DEVELOPMENT/index.mdc
+
+## 目次
+
+- [0. 概要](#0-概要)
+- [1. 対象種別](#1-対象種別)
+  - [1.1 タスクベース](#11-タスクベース)
+  - [1.2 ドキュメントベース](#12-ドキュメントベース)
+  - [1.3 バリデーション違反ベース](#13-バリデーション違反ベース)
+- [2. 共通テンプレート構造](#2-共通テンプレート構造)
+- [3. プロンプト生成フロー](#3-プロンプト生成フロー)
+- [4. プロンプト辞書（prompts.json）](#4-プロンプト辞書promptsjson)
+- [5. UI要件](#5-ui要件)
+- [6. データ要件](#6-データ要件)
+- [7. 品質ゲート](#7-品質ゲート)
+- [8. 実装例](#8-実装例)
+- [9. 非スコープ](#9-非スコープ)
+- [10. 完了基準](#10-完了基準)
+
+## 0. 概要
+
+### 目的
+
+3つの対象種別（タスク、ドキュメント、バリデーション違反）に対して、Cursor autoで使えるプロンプトを生成し、AI支援ワークフローを効率化する。
+
+### 背景
+
+AIを活用した開発において、適切なプロンプトを作成することは非常に重要だが、毎回ゼロから書くのは非効率的。タスク分解、ドキュメント整備、バリデーション違反の修正という3つの主要なシナリオに対して、標準化されたプロンプトテンプレートを提供し、状況に応じた最適なプロンプトを自動生成することで、AI活用の生産性と品質を大幅に向上させる。
+
+### 提供価値
+
+- プロンプト作成時間の削減（50%以上）
+- プロンプト品質の標準化（MECE、完了基準付き）
+- AI出力の予測可能性向上
+- コスト削減（外部API不使用、Cursor定額プラン活用）
+
+## 1. 対象種別
+
+### 1.1 タスクベース
+
+**目的**: タスク情報からタスク分解プロンプトを生成
+
+**入力**:
+- タスク情報: title, category, priority, featId, links (PRD/UX/API/DATA/QA)
+- コンテキスト: context.mdc、Features Registry
+
+**出力**:
+- MECEなサブタスク一覧（各項目に完了基準付き）
+- 不明点（最大5件）
+- 参照リンク（PRD/UX/API/DATA/QAの相対パスとアンカー）
+
+**実装状態**: 実装済み（TasksWorkspace + Cursorプロバイダー）
+
+**使用例**:
+```
+タスク: 「ログイン機能の実装」
+カテゴリ: Frontend
+優先度: HIGH
+FEAT: FEAT-0001
+関連ドキュメント:
+  - PRD: docs/PRD/PRD_ITパスポート.mdc#ログイン
+  - UX: docs/UX/ユーザーフロー.mdc#ログイン
+
+生成されるプロンプト:
+→ Cursorプロバイダーのテンプレートに基づいた標準プロンプト
+→ MECE分解、完了基準、参照リンクを含む
+```
+
+### 1.2 ドキュメントベース
+
+**目的**: 単一または複数のドキュメントを対象にした編集・整備プロンプトを生成
+
+**入力**:
+- 対象ドキュメント: 単一パスまたは複数パス
+- 編集目的: 章番号整備、目次追加、Breadcrumbs修正、内容拡充など
+- コンテキスト: 関連ドキュメント、Quality Gates定義
+
+**出力**:
+- 編集指示プロンプト
+- 正しい記述例
+- 参照すべきドキュメント
+
+**実装状態**: 未実装（Phase 2予定）
+
+**使用例**:
+```
+対象: docs/PRD/PRD_ITパスポート.mdc
+目的: 章番号整備
+
+生成されるプロンプト:
+→ DOC-RD-01テンプレートに基づく
+→ 章番号ルール（## 1. タイトル）の説明
+→ 既存の見出しリストと推奨番号
+```
+
+**ユースケース**:
+1. 章番号の整備（DOC-RD-01）
+2. 目次の追加（DOC-RD-02）
+3. Breadcrumbsの修正
+4. Layer定義の修正
+5. 内容の拡充・整理
+6. 命名規則の修正
+
+### 1.3 バリデーション違反ベース
+
+**目的**: Quality Gates違反に対する修正プロンプトを生成
+
+**入力**:
+- 違反情報: gateId (DOC-01〜DOC-08, TC-01〜TC-04), 対象ファイル、違反詳細
+- Quality Gates定義: docs/GATES/document.mdc
+- 対象ドキュメントの現在の状態
+
+**出力**:
+- 違反の説明
+- 修正方法の具体的な指示
+- 正しい記述例
+- 関連するQuality Gate定義へのリンク
+
+**実装状態**: 未実装（Phase 2予定）
+
+**対象違反**:
+- DOC-01: Breadcrumbsブロック必須
+- DOC-02: Layer定義準拠
+- DOC-03: リンクパス存在確認
+- DOC-04: 循環参照検出
+- DOC-05: 章番号必須
+- DOC-06: 目次必須
+- DOC-07: 命名規則必須
+- DOC-08: 内容範囲の明示必須
+- TC-01〜TC-04: テストケース関連
+
+**使用例**:
+```
+違反: DOC-01（Breadcrumbsブロック必須）
+対象: docs/PRD/PRD_新機能.mdc
+
+生成されるプロンプト:
+→ DOC-FIX-01テンプレートに基づく
+→ Breadcrumbsの正しい記述例
+→ Layer、Upstream、Downstreamの説明
+→ 関連ドキュメントへのリンク
+```
+
+## 2. 共通テンプレート構造
+
+すべてのプロンプトは以下の4つのセクションで構成される：
+
+### ヘッダー（役割定義）
+
+AI役割の明確化。
+
+例:
+- タスクベース: 「あなたはプロジェクトの実装ブレークダウン設計者です」
+- ドキュメントベース: 「あなたはドキュメント整備の専門家です」
+- バリデーション違反ベース: 「あなたはQuality Gatesの違反を修正する専門家です」
+
+### 制約
+
+共通制約:
+- 外部AI APIを使わない（Cursor autoのみ）
+- 冗長禁止、簡潔さ重視
+- DAG/MECE/Quality Gatesを尊重（context.mdc参照）
+
+追加制約（種別による）:
+- タスクベース: サブタスク数は5〜10件、各項目に完了基準必須
+- ドキュメントベース: 既存の構造を尊重、段階的な修正
+- バリデーション違反ベース: Quality Gates定義に厳密に準拠
+
+### 入力
+
+対象種別に応じた情報:
+- タスクベース: タスク詳細、FEAT-ID、関連ドキュメント
+- ドキュメントベース: ドキュメントパス、編集目的、現在の状態
+- バリデーション違反ベース: 違反内容、対象ファイル、Quality Gates定義
+
+### 出力
+
+期待される成果物の形式:
+- タスクベース: サブタスク一覧（JSON形式）、不明点、参照リンク
+- ドキュメントベース: 修正内容、修正理由、参照ドキュメント
+- バリデーション違反ベース: 修正後のコード、修正箇所の説明、検証方法
+
+## 3. プロンプト生成フロー
+
+1. **対象の選択**: タスク/ドキュメント/違反のいずれかを選択
+2. **コンテキスト情報の収集**: 関連ドキュメント、違反詳細などを収集
+3. **テンプレートの選択または自動選定**: 対象種別とユースケースに応じて適切なテンプレートを選択
+4. **変数の置換とプロンプト生成**: テンプレートに具体的な情報を埋め込む
+5. **プロンプトの表示・編集**: 生成されたプロンプトをプレビュー、必要に応じて編集
+6. **クリップボードへのコピー**: ワンクリックでコピー
+7. **Cursor autoでの実行**: CursorにプロンプトをペーストしてAI支援を受ける
+
+## 4. プロンプト辞書（prompts.json）
+
+### カテゴリ構造
+
+prompts.jsonは以下のカテゴリで構成される：
+
+1. **TASK_BREAKDOWN**: タスク分解系プロンプトパーツ
+   - TASK-BD-01: MECE分解の指示
+   - TASK-BD-02: 完了基準の定義要求
+   - TASK-BD-03: サブタスク生成テンプレート
+
+2. **DOC_REVIEW**: ドキュメント整備系プロンプトパーツ
+   - DOC-RD-01: 章番号整備
+   - DOC-RD-02: 目次追加
+   - DOC-CK-01: システム要件定義書との比較
+
+3. **QUALITY_FLOW**: 品質・検証系プロンプトパーツ
+   - CODE-QC-01: コードレビュー依頼
+   - CODE-QC-02: 型安全性チェック
+   - TEST-E2E-01: E2Eテスト実行依頼
+
+4. **VALIDATION_FIX**: バリデーション違反修正系プロンプトパーツ（新規）
+   - DOC-FIX-01: Breadcrumbsブロック追加
+   - DOC-FIX-02: Layer定義修正
+   - DOC-FIX-03: リンクパス修正
+   - DOC-FIX-04: 循環参照解消
+   - DOC-FIX-05: 章番号追加・修正
+   - DOC-FIX-06: 目次生成
+   - DOC-FIX-07: 命名規則修正
+   - DOC-FIX-08: 内容範囲の明示追加
+
+### プロンプトパーツの構造
+
+各プロンプトパーツは以下のフィールドを持つ：
+
+```json
+{
+  "id": "DOC-FIX-01",
+  "title": "Breadcrumbsブロック追加",
+  "description": "ドキュメントに欠損しているBreadcrumbsブロックを追加する修正プロンプト",
+  "body": "このドキュメントにBreadcrumbsブロックを追加してください。\n\n[正しい記述例]\n> Breadcrumbs\n> Layer: PRD\n> Upstream: docs/PRD/index.mdc\n> Downstream: docs/ARCH/index.mdc\n\n...",
+  "tags": ["validation", "doc-01", "breadcrumbs"]
+}
+```
+
+## 5. UI要件
+
+### TasksWorkspace（実装済み）
+
+- 「プロンプト生成」ボタン: タスク情報から分解プロンプトを生成
+- 「コピー」ボタン: クリップボードにコピー
+- プロンプトプレビューエリア: 生成されたプロンプトを表示・編集
+
+### Docs Navigator（新規・Phase 2）
+
+- 「ドキュメント編集プロンプト生成」ボタン: 選択されたドキュメントの編集プロンプトを生成
+- プロンプトタイプ選択: 章番号整備、目次追加、Breadcrumbs修正など
+- プロンプトプレビュー: 生成されたプロンプトを表示・編集
+- 「コピー」ボタン: クリップボードにコピー
+
+### Quality Gates結果パネル（新規・Phase 2）
+
+- 各違反行に「修正プロンプト生成」ボタン
+- 違反詳細の表示
+- 生成されたプロンプトのプレビュー
+- 「コピー」ボタン: クリップボードにコピー
+- 「適用して検証」ボタン: 修正後に再度Quality Gatesを実行
+
+## 6. データ要件
+
+### 既存フィールド（Task）
+
+```typescript
+interface Task {
+  id: string;
+  title: string;
+  category: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  status: 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE';
+  featId: string;
+  notes: string;
+  breakdownPrompt: string;  // 生成されたプロンプト
+  breakdownStatus: 'DRAFT' | 'READY' | 'REVIEWED';
+  lastBreakdownAt: string;  // ISO8601形式
+  links: {
+    PRD?: string;
+    UX?: string;
+    API?: string;
+    DATA?: string;
+    QA?: string;
+  };
+}
+```
+
+### 新規フィールド（将来拡張）
+
+```typescript
+interface Task {
+  // ... 既存フィールド
+  promptHistory?: Array<{
+    timestamp: string;
+    templateId: string;
+    prompt: string;
+    status: 'generated' | 'edited' | 'executed';
+  }>;
+  promptTemplateId?: string;  // 使用したテンプレートID
+}
+```
+
+### prompts.json（拡張）
+
+VALIDATION_FIXカテゴリを追加:
+
+```json
+{
+  "version": 1,
+  "metadata": {
+    "description": "Nexus prompt dictionary...",
+    "updatedAt": "2024-12-01T00:00:00.000Z"
+  },
+  "categories": [
+    // ... 既存カテゴリ
+    {
+      "id": "VALIDATION_FIX",
+      "label": "バリデーション違反修正",
+      "description": "Quality Gates違反を修正するためのプロンプト",
+      "items": [
+        {
+          "id": "DOC-FIX-01",
+          "title": "Breadcrumbsブロック追加",
+          "description": "...",
+          "body": "...",
+          "tags": ["validation", "doc-01"]
+        }
+        // ... 他のDOC-FIX-xx
+      ]
+    }
+  ]
+}
+```
+
+## 7. 品質ゲート
+
+### PROMPT-01: 必須要素の含有
+
+生成されたプロンプトに以下の要素が含まれる：
+- ヘッダー（役割定義）
+- 制約
+- 入力
+- 出力
+
+### PROMPT-02: 簡潔性
+
+プロンプトが冗長でなく簡潔である：
+- 推奨: 500文字以内（タスク分解プロンプトは除く）
+- 不要な説明や繰り返しを含まない
+
+### PROMPT-03: MECE原則
+
+タスク分解プロンプトの場合、MECEの原則が守られている：
+- サブタスク間に重複がない
+- タスク全体を網羅している
+
+### PROMPT-04: 外部API不使用制約
+
+外部API不使用の制約が明記されている：
+- 「外部AI APIを使わない（Cursor autoのみ）」が含まれる
+
+## 8. 実装例
+
+### タスクベースプロンプト生成（実装済み）
+
+```typescript
+// tools/nexus/src/lib/ai/providers/cursor.ts
+provider.buildBreakdownPrompt = (context, helpers) => {
+  const title = asString(context?.title).trim();
+  const category = asString(context?.category).trim();
+  const priority = asString(context?.priority).trim();
+  const featId = asString(context?.featId).trim();
+  const links = formatLinks(context?.links);
+
+  const header = 'あなたはプロジェクトの実装ブレークダウン設計者です。...';
+  const constraints = ['[制約]', '- 外部AI APIを使わない（Cursor autoのみ）', ...];
+  const inputs = ['[入力]', `- タスク: ${title} / カテゴリ: ${category} ...`, ...];
+  const outputs = ['[出力]', '- サブタスク一覧: ...', ...];
+
+  return [header, '', ...constraints, '', ...inputs, '', ...outputs].join('\n');
+};
+```
+
+### バリデーション違反ベースプロンプト生成（Phase 2実装予定）
+
+```typescript
+// tools/nexus/src/lib/prompts/validation.ts (仮)
+export function buildValidationFixPrompt(violation: GateViolation): string {
+  const template = getTemplateForGate(violation.gateId);
+  
+  const header = 'あなたはQuality Gatesの違反を修正する専門家です。';
+  const constraints = [
+    '[制約]',
+    '- Quality Gates定義（docs/GATES/document.mdc）に厳密に準拠',
+    '- 既存の構造を尊重',
+  ];
+  const inputs = [
+    '[入力]',
+    `- 違反: ${violation.gateId} - ${violation.description}`,
+    `- 対象ファイル: ${violation.filePath}`,
+    `- 現在の状態: ${violation.currentState}`,
+  ];
+  const outputs = [
+    '[出力]',
+    '- 修正後のコード',
+    '- 修正箇所の説明',
+    '- 検証方法',
+  ];
+
+  return [header, '', ...constraints, '', ...inputs, '', ...outputs, '', template.body].join('\n');
+}
+```
+
+## 9. 非スコープ
+
+以下は本機能の範囲外：
+
+- 外部AI API（OpenAI、Claude等）を使った自動プロンプト生成
+- プロンプトの自動実行（Cursor autoは手動操作が前提）
+- プロンプト効果の自動測定・最適化
+- 複数言語対応（日本語のみ）
+- プロンプトテンプレートのUI上での編集機能（prompts.json直接編集が前提）
+
+## 10. 完了基準
+
+### Phase 1（実装済み）
+
+- [x] タスクベースプロンプト生成が動作
+- [x] Cursorプロバイダーが実装されている
+- [x] TasksWorkspaceに「プロンプト生成」「コピー」ボタンがある
+- [x] prompts.jsonにTASK_BREAKDOWN、DOC_REVIEW、QUALITY_FLOWカテゴリが定義されている
+
+### Phase 2（実装予定）
+
+- [ ] ドキュメントベースプロンプト生成が動作
+- [ ] バリデーション違反ベースプロンプト生成が動作
+- [ ] prompts.jsonにVALIDATION_FIXカテゴリが追加されている
+- [ ] Docs Navigatorに「ドキュメント編集プロンプト生成」機能が追加されている
+- [ ] Quality Gates結果パネルに「修正プロンプト生成」ボタンが追加されている
+- [ ] 生成されたプロンプトが品質ゲート（PROMPT-01〜04）を満たす
+
+### Phase 3（将来拡張）
+
+- [ ] プロンプト生成履歴の記録
+- [ ] プロンプトテンプレートのバージョン管理
+- [ ] プロンプト効果の測定（タスク完了時間、修正回数など）
+- [ ] カスタムテンプレートの追加機能
+
+---
+
+## 関連ドキュメント
+
+- docs/PRD/index.mdc: PRD一覧
+- docs/PRD/要求仕様書.mdc: Nexus要求定義書（FEAT-0015の概要）
+- docs/PRD/プロンプト辞書ドラフト.mdc: プロンプトパーツの詳細
+- docs/PRD/PRD_DocsNavigator_TasksBreakdown.mdc: Tasks Breakdown支援の詳細
+- docs/GATES/document.mdc: Quality Gates定義
+- tools/nexus/prompts.json: プロンプトテンプレート定義
+- tools/nexus/src/lib/ai/providers/cursor.ts: Cursorプロバイダー実装
+- tools/nexus/src/components/tasks/TasksWorkspace.tsx: TasksWorkspace UI実装

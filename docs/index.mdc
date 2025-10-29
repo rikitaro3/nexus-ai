@@ -39,26 +39,31 @@ tags: []
 
 ### GATES（品質ゲート）
 - **GATES/index.mdc** … Quality Gates定義
+- **GATES/document.mdc** … ドキュメント品質ゲート
+- **GATES/test-case.mdc** … テストケース品質ゲート
+- **GATES/ID採番ルール.mdc** … ID採番ルール（汎用的な識別子管理）
 
 ## 関連ドキュメント（Repo）
 - **docs/PRD/PRD_DocsNavigator_TasksBreakdown.mdc** … Breakdown生成仕様
 - **docs/QA/品質ゲート.mdc** … Quality Gates定義
 
-## Features Registry（NEX-ID）
+## Features Registry（FEAT-ID）
 
-### NEX-0001: Nexus最小MVP
+### FEAT-0024: Nexus最小MVP
 - **範囲**: Docs/FEATs/Orphans + Tasks/Breakdown UI
 - **PRD**: PRD/PRD_Nexus_2.mdc
 - **ARCH**: ARCH/index.mdc
 - **DEVELOPMENT**: DEVELOPMENT/index.mdc
 - **QA**: QA/index.mdc
 - **ステータス**: 実装済み
+- **注**: 旧NEX-0001から移行
 
-### NEX-0002: コンテキスト切替（デバッグ時のみ）
+### FEAT-0025: コンテキスト切替（デバッグ時のみ）
 - **範囲**: Repo/Nexusコンテキスト切替機能
 - **PRD**: PRD/PRD_Nexus.mdc
 - **ARCH**: ARCH/index.mdc
 - **ステータス**: 実装済み
+- **注**: 旧NEX-0002から移行
 
 ## Notes
 - Nexusはデバッグ起動時のみコンテキスト選択で表示可能

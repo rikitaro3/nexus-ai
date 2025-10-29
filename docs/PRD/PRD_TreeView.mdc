@@ -1,0 +1,461 @@
+---
+title: "PRD: Tree View（ドキュメント依存関係ツリー表示）"
+layer: "PRD"
+upstream:
+  - "docs/PRD/index.mdc"
+downstream:
+  - "docs/ARCH/index.mdc"
+tags:
+  - "tree-view"
+  - "breadcrumbs"
+  - "dag"
+---
+
+# PRD: Tree View（ドキュメント依存関係ツリー表示）
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: docs/PRD/index.mdc
+> Downstream: docs/ARCH/index.mdc
+
+## Purpose
+
+- ドキュメントのBreadcrumbs（upstream/downstream）を解析
+- 依存関係をツリー構造で視覚化
+- オーファン（親のないドキュメント）を検出・表示
+
+## Features Registry
+
+### FEAT-0010: ドキュメントツリー表示
+- 機能: ドキュメントの依存関係を階層的なツリーで表示
+- 優先度: High
+- ステータス: 未実装
+
+### FEAT-0011: オーファン検出
+- 機能: 親のないドキュメント（オーファン）を検出して別表示
+- 優先度: Medium
+- ステータス: 未実装
+
+### FEAT-0012: ドキュメント詳細表示
+- 機能: 選択したドキュメントのメタデータと関連リンクを表示
+- 優先度: High
+- ステータス: 未実装
+
+### FEAT-0013: ツリーノード操作
+- 機能: ツリーノードの展開/折りたたみと選択
+- 優先度: High
+- ステータス: 未実装
+
+## Scope
+
+### 含まれる機能
+- FEAT-0010: ドキュメントツリー表示
+- FEAT-0011: オーファン検出
+- FEAT-0012: ドキュメント詳細表示
+- FEAT-0013: ツリーノード操作
+
+### 含まれない機能（Phase 2以降）
+- 循環参照の検出
+- グラフビジュアライゼーション
+- Quality Gates統合
+- ドキュメント編集機能
+
+## 用語定義
+
+- **Upstream**: このドキュメントの上位（参照元）ドキュメント
+- **Downstream**: このドキュメントから派生する下位ドキュメント
+- **オーファン**: upstreamが存在しない、またはupstream = N/Aのドキュメント
+- **ルートノード**: 最上位のオーファン（通常は `docs/index.mdc`）
+
+## データ構造
+
+### TreeNode
+```typescript
+interface TreeNode {
+  path: string;
+  layer: string;
+  title: string;
+  upstream: string[];
+  downstream: string[];
+  children: TreeNode[];
+  expanded: boolean;
+  isOrphan: boolean;
+}
+```
+
+### DocumentMetadata
+```typescript
+interface DocumentMetadata {
+  path: string;
+  title: string;
+  layer: string;
+  upstream: string[];
+  downstream: string[];
+}
+```
+
+## UI構成
+
+### レイアウト
+```
+┌─────────────────────────────────────────────────┐
+│ 📚 Docs Navigator                               │
+├─────────────────────────────────────────────────┤
+│ [Docs] [FEATs] [Tree]                           │
+│ Breadcrumbsからリンク構造を検証します           │
+├───────────────────┬─────────────────────────────┤
+│ Tree View         │ Detail                      │
+│                   │                             │
+│ 📁 docs           │ Path: docs/index.mdc        │
+│   📄 index.mdc    │ Layer: INDEX                │
+│ ▼ 📁 PRD          │ Title: Nexusドキュメント... │
+│     📄 index.mdc  │                             │
+│     📄 要求仕様書  │ Upstream:                   │
+│   ▶ 📁 ARCH       │  - (なし)                   │
+│                   │                             │
+│ Orphans (2)       │ Downstream:                 │
+│   📄 orphan1.mdc  │  - docs/PRD/index.mdc       │
+│   📄 orphan2.mdc  │  - docs/ARCH/index.mdc      │
+└───────────────────┴─────────────────────────────┘
+```
+
+### ツリーノード表示形式
+```
+▼ 📁 <layer>
+  📄 <filename>
+```
+
+- `▼` / `▶`: 展開/折りたたみアイコン（子がある場合のみ）
+- レイヤー別にグループ化
+- ファイル名のみ表示（フルパスはhoverまたは詳細に表示）
+
+## 機能仕様
+
+### FEAT-0010: ドキュメントツリー表示
+
+#### 概要
+context.mdcから取得したドキュメント一覧のYAMLフロントマターを解析し、upstream/downstreamの依存関係に基づいてツリー構造を構築・表示する。
+
+#### 要件
+1. **ドキュメントメタデータ取得**
+   - context.mdcから全ドキュメントのパス一覧を取得
+   - 各ドキュメントのYAMLフロントマターをfetchで取得
+   - gray-matterでパースしてDocumentMetadataを構築
+
+2. **ツリー構築ロジック**
+   - ルートノード特定: `upstream`が空または存在しないドキュメント
+   - 再帰的にdownstreamをたどってツリーを構築
+   - 各ノードにchildren配列を持たせる
+
+3. **ツリー表示UI**
+   - ルートから階層的に表示
+   - インデントで階層を表現（1階層 = 2スペース）
+   - レイヤー名とファイル名を表示
+   - 親子関係を視覚的に表現
+
+#### 成果物
+- `fetchDocumentMetadata()` 関数
+- `buildTree()` 関数
+- `TreeView` コンポーネント
+
+---
+
+### FEAT-0011: オーファン検出
+
+#### 概要
+どのドキュメントのdownstreamからも参照されていないドキュメント（オーファン）を検出し、ツリーとは別のセクションに表示する。
+
+#### 要件
+1. **オーファン判定**
+   - ツリーに含まれていないドキュメントを特定
+   - upstreamが存在するがツリーに含まれないドキュメントをオーファンとする
+
+2. **オーファン表示**
+   - ツリー表示の下部に「Orphans (N)」セクションを追加
+   - オーファンをリスト形式で表示
+   - クリックで詳細表示
+
+#### 成果物
+- `findOrphans()` 関数
+- オーファンリスト表示UI
+
+---
+
+### FEAT-0012: ドキュメント詳細表示
+
+#### 概要
+選択されたドキュメントのメタデータと関連リンクを詳細パネルに表示する。
+
+#### 要件
+1. **詳細情報表示**
+   - パス（相対パス）
+   - レイヤー
+   - タイトル
+   - Upstream一覧（クリック可能なリンク）
+   - Downstream一覧（クリック可能なリンク）
+
+2. **インタラクション**
+   - リンククリックで該当ドキュメントに移動
+   - 「ドキュメントを開く」ボタンで新しいタブで開く
+
+#### 成果物
+- 詳細パネルUI
+- リンククリックハンドラー
+
+---
+
+### FEAT-0013: ツリーノード操作
+
+#### 概要
+ツリーノードの展開/折りたたみと選択機能を実装する。
+
+#### 要件
+1. **展開/折りたたみ**
+   - 子を持つノードに▶/▼アイコンを表示
+   - アイコンクリックで子の表示/非表示を切り替え
+   - 展開状態をローカルストレージに保存
+
+2. **ノード選択**
+   - ノードクリックで選択状態にする
+   - 選択されたノードをハイライト表示（背景色変更）
+   - 詳細パネルに選択ノードの情報を表示
+
+3. **キーボード操作（オプション）**
+   - 矢印キーで移動
+   - Enterキーで展開/折りたたみ
+
+#### 成果物
+- ノード展開/折りたたみUI
+- 選択状態管理
+- ローカルストレージ連携
+
+## 技術仕様
+
+### 依存ライブラリ
+```json
+{
+  "gray-matter": "^4.0.3",
+  "@types/gray-matter": "^4.0.3"
+}
+```
+
+### API設計
+
+#### fetchDocumentMetadata
+```typescript
+async function fetchDocumentMetadata(path: string): Promise<DocumentMetadata | null> {
+  try {
+    const response = await fetch(`/${path}`);
+    if (!response.ok) return null;
+    const text = await response.text();
+    const { data } = matter(text);
+    return {
+      path,
+      title: data.title || path,
+      layer: data.layer || 'UNKNOWN',
+      upstream: Array.isArray(data.upstream) ? data.upstream : [],
+      downstream: Array.isArray(data.downstream) ? data.downstream : [],
+    };
+  } catch {
+    return null;
+  }
+}
+```
+
+#### buildTree
+```typescript
+function buildTree(documents: DocumentMetadata[]): TreeNode[] {
+  // 1. ルートノードを特定
+  const roots = findRootNodes(documents);
+  
+  // 2. 再帰的にツリーを構築
+  return roots.map(root => buildTreeNode(root, documents));
+}
+
+function buildTreeNode(doc: DocumentMetadata, allDocs: DocumentMetadata[]): TreeNode {
+  const children = doc.downstream
+    .map(downPath => allDocs.find(d => d.path === downPath))
+    .filter(Boolean)
+    .map(child => buildTreeNode(child!, allDocs));
+    
+  return {
+    path: doc.path,
+    layer: doc.layer,
+    title: doc.title,
+    upstream: doc.upstream,
+    downstream: doc.downstream,
+    children,
+    expanded: false,
+    isOrphan: false,
+  };
+}
+```
+
+#### findOrphans
+```typescript
+function findOrphans(documents: DocumentMetadata[], treeNodes: TreeNode[]): DocumentMetadata[] {
+  const inTree = new Set<string>();
+  
+  // ツリーに含まれるパスを収集
+  function collectPaths(node: TreeNode) {
+    inTree.add(node.path);
+    node.children.forEach(collectPaths);
+  }
+  treeNodes.forEach(collectPaths);
+  
+  // ツリーに含まれないドキュメントをオーファンとする
+  return documents.filter(doc => !inTree.has(doc.path));
+}
+```
+
+## CSS仕様
+
+```css
+.tree-view {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 600px;
+}
+
+.tree-node {
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-node:hover {
+  background: #f8fafc;
+}
+
+.tree-node.selected {
+  background: #e0f2fe;
+  border-left: 3px solid #3b82f6;
+}
+
+.tree-toggle {
+  display: inline-block;
+  width: 20px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.tree-icon {
+  font-size: 12px;
+}
+
+.tree-layer {
+  font-weight: 600;
+  color: #1f2937;
+  margin-left: 8px;
+}
+
+.tree-filename {
+  color: #4b5563;
+  margin-left: 8px;
+}
+
+.tree-orphans {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 2px dashed #e5e7eb;
+}
+
+.tree-orphans-title {
+  font-weight: 600;
+  color: #dc2626;
+  margin-bottom: 8px;
+}
+```
+
+## Phase別実装計画
+
+### Phase 1（MVP） - 基本機能
+| FEAT-ID | 機能名 | ステータス | 優先度 |
+|---------|--------|-----------|--------|
+| FEAT-0010 | ドキュメントツリー表示 | 未実装 | High |
+| FEAT-0011 | オーファン検出 | 未実装 | Medium |
+| FEAT-0012 | ドキュメント詳細表示 | 未実装 | High |
+| FEAT-0013 | ツリーノード操作 | 未実装 | High |
+
+**実装順序:**
+1. FEAT-0010: ドキュメントツリー表示（コア機能）
+2. FEAT-0013: ツリーノード操作（UX向上）
+3. FEAT-0012: ドキュメント詳細表示（情報表示）
+4. FEAT-0011: オーファン検出（品質管理）
+
+### Phase 2（拡張） - 高度な分析機能
+| FEAT-ID | 機能名 | ステータス | 優先度 |
+|---------|--------|-----------|--------|
+| FEAT-0014 | 循環参照検出 | 計画中 | Medium |
+| FEAT-0015 | レイヤー別フィルタリング | 計画中 | Low |
+| FEAT-0016 | ツリー検索機能 | 計画中 | Medium |
+| FEAT-0017 | エクスポート機能 | 計画中 | Low |
+
+### Phase 3（将来） - ビジュアライゼーション
+| FEAT-ID | 機能名 | ステータス | 優先度 |
+|---------|--------|-----------|--------|
+| FEAT-0018 | グラフビジュアライゼーション | 未定 | Low |
+| FEAT-0019 | Quality Gates統合 | 未定 | Medium |
+| FEAT-0020 | ドキュメント編集 | 未定 | Low |
+
+## 制約事項
+
+1. **ブラウザCORS制約**: ローカルファイルは直接読めないため、Next.jsのpublicフォルダまたはAPIルート経由でアクセス
+2. **パフォーマンス**: 100ドキュメント程度までを想定（それ以上は仮想スクロール導入）
+3. **gray-matterのブラウザ互換性**: 必要に応じてポリフィル追加
+
+## テスト要件
+
+### FEAT-0010: ドキュメントツリー表示
+**単体テスト:**
+- [ ] `fetchDocumentMetadata()`: 正常なメタデータ取得
+- [ ] `fetchDocumentMetadata()`: 存在しないパスの処理
+- [ ] `buildTree()`: 正常なツリー構築
+- [ ] `buildTree()`: 空のドキュメントリストの処理
+- [ ] `buildTree()`: 複数ルートノードの処理
+
+**E2Eテスト:**
+- [ ] Treeモードへの切り替え
+- [ ] ツリーの初期表示
+- [ ] ツリーの階層構造表示
+
+### FEAT-0011: オーファン検出
+**単体テスト:**
+- [ ] `findOrphans()`: オーファン検出
+- [ ] `findOrphans()`: オーファンが存在しない場合
+- [ ] `findOrphans()`: すべてがオーファンの場合
+
+**E2Eテスト:**
+- [ ] オーファンセクションの表示
+- [ ] オーファン数のカウント表示
+- [ ] オーファンのクリック
+
+### FEAT-0012: ドキュメント詳細表示
+**単体テスト:**
+- [ ] 詳細情報の表示
+- [ ] リンクの生成
+- [ ] 空のupstream/downstreamの処理
+
+**E2Eテスト:**
+- [ ] ノード選択時の詳細表示
+- [ ] Upstreamリンクのクリック
+- [ ] Downstreamリンクのクリック
+- [ ] 「ドキュメントを開く」ボタンの動作
+
+### FEAT-0013: ツリーノード操作
+**単体テスト:**
+- [ ] 展開状態の管理
+- [ ] ローカルストレージへの保存/読み込み
+- [ ] 選択状態の管理
+
+**E2Eテスト:**
+- [ ] ノードの展開/折りたたみ
+- [ ] ノードの選択
+- [ ] 選択状態のハイライト表示
+- [ ] ページリロード後の展開状態復元
+
+## 参考
+
+- Electronアプリ実装: `tools/nexus/tools/nexus/src/renderer/features/docs-navigator/docs-navigator.js`
+- ドキュメントテンプレート定義: `docs/PRD/PRD_DocumentTemplate.mdc`
+- Quality Gates定義: `docs/GATES/document.mdc`

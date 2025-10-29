@@ -47,6 +47,8 @@ Nexusは「ドキュメントトレーサビリティとタスク生成・分解
 
 ### GATES
 - docs/GATES/document.mdc … Quality Gates（DOC-01〜DOC-08）
+- docs/GATES/test-case.mdc … Test Case Quality Gates（TC-01〜TC-04）
+- docs/GATES/ID採番ルール.mdc … ID採番ルール（汎用的な識別子管理）
 - docs/GATES/index.mdc … Quality Gates索引
 
 ## Layer Structure

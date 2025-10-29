@@ -5,9 +5,9 @@ export type NavigationLink = {
 };
 
 export const mainNavigation: NavigationLink[] = [
-  { label: 'ホーム', href: '/' },
   { label: 'ドキュメント', href: '#docs' },
   { label: 'タスク', href: '#tasks' },
+  { label: 'プロンプト辞書', href: '#prompts' },
   { label: '設定', href: '#settings' },
 ];
 

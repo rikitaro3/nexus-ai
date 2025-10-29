@@ -4,6 +4,7 @@ layer: "ARCH"
 template: "legacy-import"
 upstream:
   - "docs/ARCH/index.mdc"
+  - "docs/PRD/画面仕様書_Nexus.mdc"
 downstream: []
 tags: []
 ---
@@ -12,7 +13,7 @@ tags: []
 
 > Breadcrumbs
 > Layer: ARCH
-> Upstream: docs/ARCH/index.mdc
+> Upstream: docs/ARCH/index.mdc, docs/PRD/画面仕様書_Nexus.mdc
 > Downstream: N/A
 
 ## 目次
@@ -57,11 +58,115 @@ tags: []
 
 ## 2. 必須共通コンポーネント
 
-### 2.1 概要
+### 2.1 FEAT-0009: 詳細カード（DocumentDetailPanel）
+
+#### 概要
+
+DocsモードとTreeモードで共通利用する詳細パネル表示コンポーネント。選択されたドキュメントのメタデータとリンク情報を統一的なフォーマットで表示する。
+
+#### 責務
+
+- ドキュメントメタデータの表示フォーマット統一
+- モード別の表示項目の切り替え
+- ライトモード/ダークモード対応
+- アクションボタンの提供（開く、コピー）
+
+#### インターフェース
+
+```typescript
+interface DetailPanelData {
+  path: string;
+  title?: string;
+  description?: string;
+  layer?: string;
+  upstream?: string[];
+  downstream?: string[];
+}
+
+interface DetailPanelOptions {
+  emptyMessage?: string;
+  testId?: string;
+}
+
+function renderDetailPanel(
+  data: DetailPanelData | null,
+  options?: DetailPanelOptions
+): JSX.Element
+```
+
+#### 表示ロジック
+
+1. **データがnullの場合**: 空状態メッセージを表示
+2. **Pathは常に表示**: `<code>`タグで背景色を付けて表示
+3. **Layerがある場合のみ表示**: 強調表示（Tree mode想定）
+4. **Titleがある場合のみ表示**: 通常テキスト（Tree mode想定）
+5. **Descriptionがあり、Layerがない場合のみ表示**: （Docs mode想定）
+6. **Upstream/Downstreamがある場合**: リンクリスト表示、空の場合は「(なし)」
+7. **アクションボタン**: 常に表示
+
+#### スタイル仕様
+
+**ライトモード:**
+```css
+.docs-detail { padding: 16px; }
+.docs-detail__path code { background: #f3f4f6; padding: 4px 8px; border-radius: 4px; }
+.docs-detail__label { font-weight: 600; color: #374151; min-width: 80px; }
+.docs-detail__layer strong { color: #059669; }
+.docs-detail__links a { color: #2563eb; }
+```
+
+**ダークモード:**
+```css
+body.dark .docs-detail__path code { background: #3d3d3d; color: #e0e0e0; border: 1px solid #4d4d4d; }
+body.dark .docs-detail__label { color: #d1d5db; }
+body.dark .docs-detail__title { color: #e0e0e0; }
+body.dark .docs-detail__links a { color: #60a5fa; }
+```
+
+#### 使用例
+
+**Docsモード:**
+```typescript
+renderDetailPanel(
+  activeEntry ? {
+    path: activeEntry.path,
+    description: activeEntry.description,
+  } : null
+)
+```
+
+**Treeモード:**
+```typescript
+renderDetailPanel(selectedTreeNode, {
+  emptyMessage: 'ノードを選択してください',
+  testId: 'docs-navigator__tree-detail-content',
+})
+```
+
+#### テスト要件
+
+- [ ] パス表示の確認
+- [ ] Layer/Title/Descriptionの条件付き表示
+- [ ] Upstream/Downstreamリンクの生成
+- [ ] 空状態メッセージの表示
+- [ ] 「ドキュメントを開く」ボタンの動作
+- [ ] 「パスをコピー」ボタンの動作
+- [ ] ダークモードでの表示確認
+
+#### 実装ファイル
+
+- **コンポーネント**: `src/components/docs/DocsNavigator.tsx` の `renderDetailPanel` 関数
+- **スタイル**: `src/app/globals.css` の `.docs-detail*` クラス群
+
+---
+
+### 2.2 その他の共通コンポーネント
+
+#### 概要
 
 ベストプラクティスに基づき、Electronアプリケーション全体で必要な共通コンポーネントを定義します。
 
-### 2.2 コンポーネント一覧
+#### コンポーネント一覧
 
 | コンポーネント | 優先度 | 目的 | ファイル |
 |--------------|-------|------|---------|

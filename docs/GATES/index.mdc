@@ -4,7 +4,10 @@ layer: "QA"
 template: "legacy-import"
 upstream:
   - "docs/index.mdc"
-downstream: []
+downstream:
+  - "docs/GATES/document.mdc"
+  - "docs/GATES/test-case.mdc"
+  - "docs/GATES/ID採番ルール.mdc"
 tags: []
 ---
 
@@ -38,6 +41,16 @@ Nexusの品質基準を定義し、すべての開発・テスト・リリース
 - **TC-04**: テストデータ管理
 
 詳細: [test-case.mdc](test-case.mdc)
+
+### ID Numbering Rules
+
+プロジェクト横断で適用可能なID採番ルール（識別子管理）を定義：
+
+- **ID-01**: ID形式準拠
+- **ID-02**: ID重複なし
+- **ID-03**: ID台帳登録
+
+詳細: [ID採番ルール.mdc](ID採番ルール.mdc)
 
 ## 適用範囲
 

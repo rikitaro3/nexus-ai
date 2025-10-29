@@ -1,8 +1,38 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Docs Navigator', () => {
+  test('loads YAML context map and displays all categories', async ({ page }) => {
+    // Navigate to homepage
+    await page.goto('/');
+    
+    // Click on Docs tab
+    await page.click('a[href="#docs"]');
+    
+    // Wait for loading to finish
+    await page.waitForSelector('[data-testid="docs-navigator__loading"]', { state: 'detached', timeout: 10000 });
+
+    // Check that categories are loaded
+    const categories = page.getByTestId('docs-navigator__category-list').locator('li');
+    const categoryCount = await categories.count();
+    console.log('Category count:', categoryCount);
+    
+    // Should have 6 categories: INDEX, PRD, ARCH, DEVELOPMENT, QA, GATES
+    expect(categoryCount).toBe(6);
+    
+    // Verify all expected categories are present
+    await expect(page.getByTestId('docs-navigator__category-list')).toContainText('INDEX');
+    await expect(page.getByTestId('docs-navigator__category-list')).toContainText('PRD');
+    await expect(page.getByTestId('docs-navigator__category-list')).toContainText('ARCH');
+    await expect(page.getByTestId('docs-navigator__category-list')).toContainText('DEVELOPMENT');
+    await expect(page.getByTestId('docs-navigator__category-list')).toContainText('QA');
+    await expect(page.getByTestId('docs-navigator__category-list')).toContainText('GATES');
+  });
+
   test('loads context map and supports filtering', async ({ page }) => {
     await page.goto('/');
+    
+    // Click on Docs tab
+    await page.click('a[href="#docs"]');
 
     await page.waitForSelector('[data-testid="docs-navigator__loading"]', { state: 'detached' });
 

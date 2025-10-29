@@ -37,7 +37,7 @@ export function generateId(prefix = ''): string {
 export function safeParseJson<T>(value: string): T | undefined {
   try {
     return JSON.parse(value) as T;
-  } catch (error) {
+  } catch {
     return undefined;
   }
 }

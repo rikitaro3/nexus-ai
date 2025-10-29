@@ -1,0 +1,1062 @@
+---
+title: "DEVELOPMENT: ドキュメント編集機能設計"
+layer: "DEVELOPMENT"
+upstream:
+  - "docs/PRD/PRD_DocumentEditor.mdc"
+downstream: []
+tags:
+  - "document-editor"
+  - "implementation"
+---
+
+# DEVELOPMENT: ドキュメント編集機能設計
+
+> Breadcrumbs
+> Layer: DEVELOPMENT
+> Upstream: docs/PRD/PRD_DocumentEditor.mdc
+> Downstream: N/A
+
+## 目次
+
+1. [技術選定](#1-技術選定)
+2. [アーキテクチャ概要](#2-アーキテクチャ概要)
+3. [コンポーネント設計](#3-コンポーネント設計)
+4. [API設計](#4-api設計)
+5. [State管理](#5-state管理)
+6. [セキュリティ設計](#6-セキュリティ設計)
+7. [エラーハンドリング](#7-エラーハンドリング)
+8. [実装計画](#8-実装計画)
+
+---
+
+## 1. 技術選定
+
+### 1.1 エディタコンポーネント
+
+**選定: プレーンtextarea**
+
+**理由:**
+- シンプルで軽量
+- 追加ライブラリ不要
+- Markdownソースをそのまま編集
+- ブラウザネイティブ機能で十分
+
+**却下した選択肢:**
+- ❌ CodeMirror 6: 高機能だが重い、学習コスト高
+- ❌ Monaco Editor: VS Code同等だが大きすぎる
+- ❌ react-simplemde-editor: プレビュー機能不要
+
+**実装方針:**
+```typescript
+<textarea
+  value={content}
+  onChange={(e) => setContent(e.target.value)}
+  style={{
+    width: '100%',
+    height: '100%',
+    fontFamily: 'Courier New, monospace',
+    fontSize: '13px',
+    lineHeight: '1.6',
+  }}
+/>
+```
+
+### 1.2 ファイル保存
+
+**選定: Next.js API Routes + fs.promises.writeFile**
+
+**実装:**
+```typescript
+// src/app/api/docs/route.ts
+export async function POST(request: NextRequest) {
+  const { path, content } = await request.json();
+  
+  // セキュリティチェック
+  if (path.includes('..') || path.startsWith('/')) {
+    return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+  }
+  
+  const fullPath = join(process.cwd(), path);
+  await writeFile(fullPath, content, 'utf-8');
+  
+  return NextResponse.json({ success: true });
+}
+```
+
+**バックアップ戦略:**
+- Phase 1: バックアップなし（手動Git管理）
+- Phase 2: 保存前に `.bak` ファイル作成
+
+### 1.3 バリデーション
+
+**選定: gray-matter + カスタムバリデーター**
+
+**チェック項目:**
+1. YAMLフロントマターの構文正当性（gray-matter）
+2. 必須フィールドの存在（title, layer）
+3. upstream/downstream配列の妥当性
+4. Breadcrumbsセクションの存在（正規表現）
+
+**実装:**
+```typescript
+function validateDocument(content: string): ValidationResult {
+  try {
+    const { data } = matter(content);
+    
+    const errors: string[] = [];
+    
+    // 必須フィールドチェック
+    if (!data.title) errors.push('title is required');
+    if (!data.layer) errors.push('layer is required');
+    
+    // Breadcrumbsチェック
+    if (!content.includes('> Breadcrumbs')) {
+      errors.push('Breadcrumbs section is missing');
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      errors: ['Invalid YAML frontmatter'],
+    };
+  }
+}
+```
+
+### 1.4 クリップボード操作
+
+**選定: Clipboard API**
+
+**実装:**
+```typescript
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (error) {
+    console.error('Failed to copy to clipboard:', error);
+    return false;
+  }
+}
+```
+
+---
+
+## 2. アーキテクチャ概要
+
+### 2.1 システム構成
+
+```
+┌─────────────────────────────────────────────┐
+│ DocsNavigator / TreeView                    │
+│   ↓ 「ドキュメントを開く」クリック            │
+├─────────────────────────────────────────────┤
+│ DocumentViewer (モーダル)                    │
+│   ├─ ヘッダー（パス、モード、閉じる）         │
+│   ├─ コンテンツ（閲覧/編集）                 │
+│   └─ フッター（アクションボタン）             │
+├─────────────────────────────────────────────┤
+│ API Routes                                  │
+│   ├─ GET /api/docs?path={path}              │
+│   └─ POST /api/docs (保存)                  │
+├─────────────────────────────────────────────┤
+│ File System (docs/)                         │
+└─────────────────────────────────────────────┘
+```
+
+### 2.2 データフロー
+
+#### 閲覧フロー
+```
+User: 「ドキュメントを開く」クリック
+  ↓
+DocsNavigator: openDocument(path)
+  ↓
+DocumentViewer: モーダル表示
+  ↓
+API: GET /api/docs?path={path}
+  ↓
+DocumentViewer: コンテンツ表示（pre要素）
+```
+
+#### 編集・保存フロー
+```
+User: 「編集」ボタンクリック
+  ↓
+DocumentViewer: 編集モードに切り替え（textarea表示）
+  ↓
+User: テキスト編集
+  ↓
+User: 「保存」ボタンクリック
+  ↓
+DocumentViewer: バリデーション実行
+  ↓ (成功)
+API: POST /api/docs { path, content }
+  ↓
+File System: ファイル書き込み
+  ↓
+DocumentViewer: 成功メッセージ、閲覧モードに戻る
+```
+
+#### プロンプト生成フロー
+```
+User: 「プロンプト生成」ボタンクリック
+  ↓
+DocumentViewer: メタデータからプロンプト生成
+  ↓
+Clipboard API: テキストコピー
+  ↓
+DocumentViewer: 「コピーしました」メッセージ表示
+```
+
+---
+
+## 3. コンポーネント設計
+
+### 3.1 FEAT-0021: DocumentViewer コンポーネント
+
+#### Props
+
+```typescript
+interface DocumentViewerProps {
+  path: string;
+  isOpen: boolean;
+  onClose: () => void;
+}
+```
+
+#### State
+
+```typescript
+interface DocumentViewerState {
+  // ドキュメント内容
+  originalContent: string;      // 元の内容
+  editedContent: string;         // 編集中の内容
+  
+  // モード
+  mode: 'view' | 'edit';         // 閲覧/編集モード
+  
+  // 状態
+  loading: boolean;              // 読み込み中
+  saving: boolean;               // 保存中
+  isDirty: boolean;              // 未保存の変更あり
+  
+  // フィードバック
+  message: string | null;        // 成功/エラーメッセージ
+  messageType: 'success' | 'error' | null;
+  
+  // メタデータ（プロンプト生成用）
+  metadata: DocumentMetadata | null;
+}
+```
+
+#### メソッド
+
+```typescript
+// ドキュメント読み込み
+async function loadDocument(path: string): Promise<void>
+
+// 編集モード切り替え
+function enterEditMode(): void
+function exitEditMode(): void
+
+// 保存
+async function saveDocument(): Promise<void>
+
+// プロンプト生成
+function generatePrompt(): string
+async function copyPromptToClipboard(): Promise<void>
+
+// モーダル制御
+function handleClose(): void
+function handleEscKey(e: KeyboardEvent): void
+function handleOverlayClick(e: MouseEvent): void
+```
+
+#### ライフサイクル
+
+```typescript
+useEffect(() => {
+  if (isOpen && path) {
+    loadDocument(path);
+  }
+}, [isOpen, path]);
+
+useEffect(() => {
+  // ESCキーでモーダルを閉じる
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      handleClose();
+    }
+  };
+  
+  if (isOpen) {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }
+}, [isOpen]);
+
+// 未保存警告
+useEffect(() => {
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (isDirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  };
+  
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+}, [isDirty]);
+```
+
+### 3.2 FEAT-0022: エディタ機能
+
+#### テキストエリア仕様
+
+```typescript
+<textarea
+  value={editedContent}
+  onChange={(e) => {
+    setEditedContent(e.target.value);
+    setIsDirty(true);
+  }}
+  onKeyDown={(e) => {
+    // Ctrl+S で保存
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      saveDocument();
+    }
+  }}
+  className="document-editor__textarea"
+  spellCheck={false}
+  autoComplete="off"
+/>
+```
+
+#### バリデーション実装
+
+```typescript
+interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings?: string[];
+}
+
+function validateDocument(content: string): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  
+  try {
+    // YAMLフロントマターのパース
+    const { data, content: body } = matter(content);
+    
+    // 必須フィールド
+    if (!data.title) errors.push('フロントマターにtitleが必要です');
+    if (!data.layer) errors.push('フロントマターにlayerが必要です');
+    
+    // レイヤーの値チェック
+    const validLayers = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
+    if (data.layer && !validLayers.includes(data.layer)) {
+      errors.push(`無効なレイヤー: ${data.layer}`);
+    }
+    
+    // Breadcrumbsチェック
+    if (!body.includes('> Breadcrumbs')) {
+      warnings.push('Breadcrumbsセクションがありません');
+    }
+    
+    // upstream/downstream チェック
+    if (!Array.isArray(data.upstream) && typeof data.upstream !== 'string') {
+      warnings.push('upstreamは配列または文字列である必要があります');
+    }
+    
+  } catch (error) {
+    errors.push('YAMLフロントマターの構文エラー');
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+```
+
+#### 保存前確認
+
+```typescript
+async function handleSave() {
+  // バリデーション
+  const validation = validateDocument(editedContent);
+  
+  if (!validation.valid) {
+    setMessage(validation.errors.join('\n'));
+    setMessageType('error');
+    return;
+  }
+  
+  // 警告がある場合は確認
+  if (validation.warnings && validation.warnings.length > 0) {
+    const confirmed = window.confirm(
+      `以下の警告があります:\n${validation.warnings.join('\n')}\n\n保存を続けますか？`
+    );
+    if (!confirmed) return;
+  }
+  
+  // 保存実行
+  await saveDocument();
+}
+```
+
+### 3.3 FEAT-0023: プロンプト生成
+
+#### テンプレート定義
+
+```typescript
+interface PromptTemplate {
+  header: string;
+  documentInfo: (doc: DocumentMetadata) => string;
+  modificationSection: string;
+  guidelines: string;
+}
+
+const defaultTemplate: PromptTemplate = {
+  header: '以下のドキュメントを修正してください。',
+  
+  documentInfo: (doc) => `
+**ドキュメント情報:**
+- パス: ${doc.path}
+- タイトル: ${doc.title}
+- レイヤー: ${doc.layer}
+- Upstream: ${doc.upstream.length > 0 ? doc.upstream.join(', ') : '(なし)'}
+- Downstream: ${doc.downstream.length > 0 ? doc.downstream.join(', ') : '(なし)'}
+`,
+  
+  modificationSection: `
+**修正内容:**
+[ここに具体的な修正指示を記入してください]
+`,
+  
+  guidelines: `
+**注意事項:**
+- YAMLフロントマターのupstream/downstreamを適切に更新してください
+- Breadcrumbsセクションも同様に更新してください
+- Quality Gates（DOC-01〜DOC-08）を遵守してください
+- レイヤー定義（STRATEGY, PRD, UX, API, DATA, ARCH, DEVELOPMENT, QA）に従ってください
+`,
+};
+
+function generatePrompt(metadata: DocumentMetadata): string {
+  return [
+    defaultTemplate.header,
+    defaultTemplate.documentInfo(metadata),
+    defaultTemplate.modificationSection,
+    defaultTemplate.guidelines,
+  ].join('\n');
+}
+```
+
+---
+
+## 4. API設計
+
+### 4.1 GET /api/docs
+
+**既存のエンドポイント（読み取り専用）**
+
+```typescript
+// src/app/api/docs/route.ts
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const filePath = searchParams.get('path');
+  
+  if (!filePath) {
+    return NextResponse.json({ error: 'Path required' }, { status: 400 });
+  }
+  
+  // セキュリティチェック
+  if (filePath.includes('..') || filePath.startsWith('/')) {
+    return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+  }
+  
+  const fullPath = filePath.startsWith('docs/') 
+    ? join(process.cwd(), filePath)
+    : join(process.cwd(), 'docs', filePath);
+  
+  const content = await readFile(fullPath, 'utf-8');
+  
+  return new NextResponse(content, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
+}
+```
+
+### 4.2 POST /api/docs (新規)
+
+**ファイル保存エンドポイント**
+
+```typescript
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { path, content } = body;
+    
+    // 入力検証
+    if (!path || typeof path !== 'string') {
+      return NextResponse.json({ error: 'Path is required' }, { status: 400 });
+    }
+    
+    if (content === undefined || typeof content !== 'string') {
+      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
+    }
+    
+    // セキュリティチェック
+    if (path.includes('..') || path.startsWith('/')) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+    
+    // docsフォルダ内のみ書き込み可能
+    if (!path.startsWith('docs/')) {
+      return NextResponse.json({ error: 'Can only write to docs/ folder' }, { status: 403 });
+    }
+    
+    // ファイルパス構築
+    const fullPath = join(process.cwd(), path);
+    
+    // ディレクトリの存在確認（なければ作成）
+    const dir = dirname(fullPath);
+    await mkdir(dir, { recursive: true });
+    
+    // ファイル書き込み
+    await writeFile(fullPath, content, 'utf-8');
+    
+    console.log('[API POST /api/docs] Successfully saved:', path);
+    
+    return NextResponse.json({ 
+      success: true,
+      message: 'Document saved successfully',
+    });
+    
+  } catch (error) {
+    console.error('[API POST /api/docs] Error saving file:', error);
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, { status: 500 });
+  }
+}
+```
+
+**必要なインポート:**
+```typescript
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { join, dirname } from 'path';
+```
+
+---
+
+## 5. State管理
+
+### 5.1 DocsNavigatorへの統合
+
+```typescript
+// DocsNavigator.tsx に追加
+const [viewerState, setViewerState] = useState<{
+  isOpen: boolean;
+  path: string | null;
+}>({
+  isOpen: false,
+  path: null,
+});
+
+const openDocument = (path: string) => {
+  setViewerState({ isOpen: true, path });
+};
+
+const closeDocument = () => {
+  setViewerState({ isOpen: false, path: null });
+};
+```
+
+### 5.2 DocumentViewer内部State
+
+```typescript
+const [content, setContent] = useState('');
+const [originalContent, setOriginalContent] = useState('');
+const [mode, setMode] = useState<'view' | 'edit'>('view');
+const [loading, setLoading] = useState(false);
+const [saving, setSaving] = useState(false);
+const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+const [metadata, setMetadata] = useState<DocumentMetadata | null>(null);
+
+const isDirty = useMemo(() => {
+  return mode === 'edit' && content !== originalContent;
+}, [mode, content, originalContent]);
+```
+
+---
+
+## 6. セキュリティ設計
+
+### 6.1 パストラバーサル攻撃対策
+
+**検証ルール:**
+1. パスに `..` を含まない
+2. パスが `/` で始まらない
+3. パスが `docs/` で始まる（書き込み時）
+
+**実装:**
+```typescript
+function isValidPath(path: string): boolean {
+  if (path.includes('..')) return false;
+  if (path.startsWith('/')) return false;
+  return true;
+}
+
+function isWritablePath(path: string): boolean {
+  if (!isValidPath(path)) return false;
+  if (!path.startsWith('docs/')) return false;
+  return true;
+}
+```
+
+### 6.2 XSS対策
+
+**方針:**
+- ドキュメント内容はプレーンテキストとして扱う
+- HTMLレンダリングしない
+- `<pre>` タグまたは `<textarea>` で表示
+- ユーザー入力はエスケープ不要（保存時そのまま）
+
+### 6.3 CSRF対策
+
+Next.js のデフォルトCSRF保護を利用（特別な実装不要）
+
+---
+
+## 7. エラーハンドリング
+
+### 7.1 エラー分類
+
+| エラー種別 | 原因 | ユーザーへの表示 | リカバリー |
+|-----------|------|-----------------|-----------|
+| ネットワークエラー | API通信失敗 | 「ドキュメントを読み込めませんでした」 | 再試行ボタン |
+| ファイル未検出 | 存在しないパス | 「ファイルが見つかりません」 | モーダルを閉じる |
+| バリデーションエラー | YAML構文エラー | 具体的なエラー内容 | 編集を継続 |
+| 保存失敗 | 権限エラー等 | 「保存に失敗しました」 | 編集内容を保持 |
+| クリップボードエラー | Clipboard API失敗 | 「コピーに失敗しました」 | プロンプトを表示 |
+
+### 7.2 エラーハンドリング実装
+
+```typescript
+async function loadDocument(path: string) {
+  setLoading(true);
+  setMessage(null);
+  
+  try {
+    const response = await fetch(`/api/docs?path=${encodeURIComponent(path)}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load document: ${response.status}`);
+    }
+    
+    const text = await response.text();
+    setContent(text);
+    setOriginalContent(text);
+    
+    // メタデータ抽出
+    try {
+      const { data } = matter(text);
+      setMetadata({
+        path,
+        title: data.title || path,
+        layer: data.layer || 'UNKNOWN',
+        upstream: normalizeArray(data.upstream),
+        downstream: normalizeArray(data.downstream),
+      });
+    } catch (error) {
+      console.warn('Failed to parse metadata:', error);
+    }
+    
+  } catch (error) {
+    console.error('Failed to load document:', error);
+    setMessage({
+      text: error instanceof Error ? error.message : 'ドキュメントを読み込めませんでした',
+      type: 'error',
+    });
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function saveDocument() {
+  setSaving(true);
+  setMessage(null);
+  
+  try {
+    // バリデーション
+    const validation = validateDocument(content);
+    if (!validation.valid) {
+      setMessage({
+        text: validation.errors.join('\n'),
+        type: 'error',
+      });
+      return;
+    }
+    
+    // 保存API呼び出し
+    const response = await fetch('/api/docs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Save failed');
+    }
+    
+    // 成功
+    setOriginalContent(content);
+    setMode('view');
+    setMessage({
+      text: '保存しました',
+      type: 'success',
+    });
+    
+    // 3秒後にメッセージを消す
+    setTimeout(() => setMessage(null), 3000);
+    
+  } catch (error) {
+    console.error('Failed to save document:', error);
+    setMessage({
+      text: error instanceof Error ? error.message : '保存に失敗しました',
+      type: 'error',
+    });
+  } finally {
+    setSaving(false);
+  }
+}
+```
+
+---
+
+## 8. 実装計画
+
+### Phase 1: 基本機能
+
+#### Step 1: DocumentViewer モーダル（FEAT-0021）
+
+**タスク:**
+1. モーダルコンポーネント作成
+2. オーバーレイとESCキー対応
+3. ドキュメント読み込み表示
+4. ローディング状態の表示
+
+**成果物:**
+- `src/components/docs/DocumentViewer.tsx`
+- モーダルCSS追加
+
+**テスト:**
+- モーダルの開閉
+- ドキュメント表示
+- ESCキーで閉じる
+
+#### Step 2: 編集機能（FEAT-0022）
+
+**タスク:**
+1. 編集モード切り替え
+2. textarea実装
+3. POST /api/docs エンドポイント実装
+4. バリデーション実装
+5. 保存機能実装
+
+**成果物:**
+- 編集モードUI
+- 保存API
+- バリデーション関数
+
+**テスト:**
+- 編集→保存フロー
+- バリデーションエラー
+- Ctrl+S ショートカット
+
+#### Step 3: プロンプト生成（FEAT-0023）
+
+**タスク:**
+1. プロンプトテンプレート定義
+2. メタデータからプロンプト生成
+3. クリップボードコピー実装
+4. 成功フィードバック表示
+
+**成果物:**
+- generatePrompt 関数
+- クリップボードコピー処理
+- 成功メッセージUI
+
+**テスト:**
+- プロンプト生成
+- クリップボードコピー
+- メッセージ表示
+
+### Phase 2: UX向上
+
+- 差分表示（編集前後の比較）
+- 行番号表示
+- シンタックスハイライト（オプション）
+- プロンプトカスタマイズ
+
+---
+
+## 9. 技術的制約と対策
+
+### 9.1 ファイルシステムアクセス
+
+**制約:**
+- ブラウザから直接ファイルシステムにアクセス不可
+
+**対策:**
+- Next.js API Routes経由でサーバーサイドから書き込み
+- Node.js fs APIを使用
+
+### 9.2 同時編集
+
+**制約:**
+- Phase 1では排他制御なし
+- 複数ユーザーの同時編集は未対応
+
+**対策:**
+- Phase 1: 警告メッセージのみ
+- Phase 2: ファイルロック機構の検討
+
+### 9.3 パフォーマンス
+
+**制約:**
+- 大きなファイル（>1MB）の編集は重くなる可能性
+
+**対策:**
+- ファイルサイズチェック（警告表示）
+- 大きいファイルは外部エディタ使用を推奨
+
+### 9.4 文字コード
+
+**対策:**
+- UTF-8固定
+- BOM なし
+- 改行コード: LF（\n）に統一
+
+---
+
+## 10. 実装ファイル構成
+
+```
+src/
+├─ components/
+│  └─ docs/
+│     ├─ DocsNavigator.tsx (既存)
+│     └─ DocumentViewer.tsx (新規)
+│        ├─ DocumentViewer コンポーネント
+│        ├─ validateDocument 関数
+│        ├─ generatePrompt 関数
+│        └─ copyToClipboard 関数
+│
+├─ app/
+│  ├─ api/
+│  │  └─ docs/
+│  │     └─ route.ts (既存を拡張)
+│  │        ├─ GET (既存)
+│  │        └─ POST (新規)
+│  │
+│  └─ globals.css
+│     └─ .document-modal* スタイル追加
+│
+└─ types/
+   └─ document.ts (新規、必要に応じて)
+```
+
+---
+
+## 11. データ構造
+
+### 11.1 リクエスト/レスポンス型
+
+```typescript
+// POST /api/docs リクエスト
+interface SaveDocumentRequest {
+  path: string;
+  content: string;
+}
+
+// POST /api/docs レスポンス（成功）
+interface SaveDocumentResponse {
+  success: true;
+  message: string;
+}
+
+// POST /api/docs レスポンス（失敗）
+interface SaveDocumentErrorResponse {
+  error: string;
+}
+
+// バリデーション結果
+interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings?: string[];
+}
+```
+
+---
+
+## 12. 参考実装
+
+- Electronアプリ版: `tools/nexus/tools/nexus/src/renderer/features/docs-navigator/docs-navigator.js`
+- 詳細カード: FEAT-0009（DocsNavigator.tsx の renderDetailPanel）
+- TreeView: FEAT-0010（DocsNavigator.tsx の renderTreeMode）
+
+---
+
+## 13. 未解決事項
+
+### 13.1 バックアップ戦略
+
+**Question:** 保存前に自動バックアップを作成するか？
+
+**Options:**
+- A: バックアップなし（Gitでバージョン管理）
+- B: `.bak` ファイル作成
+- C: タイムスタンプ付きバックアップ
+
+**推奨:** A（シンプル、Gitで十分）
+
+### 13.2 保存時の確認ダイアログ
+
+**Question:** 常に確認ダイアログを表示するか？
+
+**Options:**
+- A: 常に確認
+- B: バリデーション警告時のみ確認
+- C: 確認なし（保存ボタン押下で即保存）
+
+**推奨:** B（バランス良い）
+
+### 13.3 編集中の自動保存
+
+**Question:** 一定時間ごとに自動保存するか？
+
+**Options:**
+- A: 自動保存あり（LocalStorage）
+- B: 自動保存なし
+
+**推奨:** Phase 2で検討（Phase 1は手動保存のみ）
+
+---
+
+## 14. パフォーマンス考慮事項
+
+### 14.1 大きなファイルの処理
+
+```typescript
+// ファイルサイズチェック
+const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+
+async function loadDocument(path: string) {
+  const response = await fetch(`/api/docs?path=${encodeURIComponent(path)}`);
+  const text = await response.text();
+  
+  if (text.length > MAX_FILE_SIZE) {
+    setMessage({
+      text: '警告: ファイルサイズが大きいため、編集が遅くなる可能性があります',
+      type: 'warning',
+    });
+  }
+  
+  setContent(text);
+  setOriginalContent(text);
+}
+```
+
+### 14.2 レンダリング最適化
+
+```typescript
+// useMemo でメタデータ解析を最適化
+const metadata = useMemo(() => {
+  if (!content) return null;
+  try {
+    const { data } = matter(content);
+    return {
+      path,
+      title: data.title || path,
+      layer: data.layer || 'UNKNOWN',
+      upstream: normalizeArray(data.upstream),
+      downstream: normalizeArray(data.downstream),
+    };
+  } catch {
+    return null;
+  }
+}, [content, path]);
+```
+
+---
+
+## 15. 実装の優先順位
+
+| 優先度 | FEAT-ID | 機能 | 工数見積 |
+|--------|---------|------|---------|
+| P0 | FEAT-0021 | ドキュメントビューア（閲覧のみ） | 4h |
+| P0 | FEAT-0022 | ドキュメント編集・保存 | 6h |
+| P0 | FEAT-0023 | プロンプト生成 | 2h |
+| P1 | バリデーション強化 | Quality Gates連携 | 4h |
+| P1 | 差分表示 | 編集前後の比較 | 3h |
+| P2 | 自動保存 | LocalStorage | 2h |
+
+**合計工数（Phase 1）:** 約12時間
+
+---
+
+## 16. 実装チェックリスト
+
+### FEAT-0021: ドキュメントビューア
+- [ ] DocumentViewer.tsx コンポーネント作成
+- [ ] モーダルCSS実装
+- [ ] オーバーレイクリック処理
+- [ ] ESCキー処理
+- [ ] ドキュメント読み込み
+- [ ] ローディング表示
+- [ ] エラー表示
+
+### FEAT-0022: ドキュメント編集
+- [ ] 編集モード切り替えUI
+- [ ] textarea実装
+- [ ] POST /api/docs エンドポイント
+- [ ] バリデーション関数
+- [ ] 保存処理
+- [ ] Ctrl+S ショートカット
+- [ ] 未保存警告
+
+### FEAT-0023: プロンプト生成
+- [ ] プロンプトテンプレート
+- [ ] メタデータ抽出
+- [ ] プロンプト生成関数
+- [ ] クリップボードコピー
+- [ ] 成功メッセージ
+
+### E2Eテスト
+- [ ] モーダル開閉テスト
+- [ ] ドキュメント表示テスト
+- [ ] 編集・保存テスト
+- [ ] バリデーションテスト
+- [ ] プロンプト生成テスト
+
+---
+
+## 17. 参考資料
+
+- Next.js API Routes: https://nextjs.org/docs/app/building-your-application/routing/route-handlers
+- Clipboard API: https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API
+- gray-matter: https://github.com/jonschlinkert/gray-matter
+- React Modal Best Practices: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/

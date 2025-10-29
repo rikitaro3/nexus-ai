@@ -1,60 +1,60 @@
----
-title: "Nexus Context Map"
-layer: "STRATEGY"
-template: "legacy-import"
-upstream: []
-downstream:
-  - "docs/index.mdc"
-tags: []
----
-
-# Nexus Context Map
-
-Nexus自身の開発コンテキスト（資格アプリとは独立）。
-
-## Purpose
-
-Nexusは「ドキュメントトレーサビリティとタスク生成・分解プラットフォーム」として、小分けドキュメントの自動管理、AI支援の定型化、品質ゲートを実現。
-
-## Context Map
-
-### INDEX
-- docs/index.mdc … Nexusドキュメント索引
-
-### PRD
-- docs/PRD/index.mdc … Features Registry（NEX-ID管理）
-- docs/PRD/要求仕様書.mdc … 要求仕様（FR-01〜FR-08）
-- docs/PRD/システム要件定義書.mdc … システム要件定義
-- docs/PRD/プロンプト辞書ドラフト.mdc … プロンプト辞書
-- docs/PRD/PRD_Nexus_2.mdc … Nexus要求仕様
-- docs/PRD/PRD_Strategy.mdc … プロダクト戦略
-- docs/PRD/PRD_DocumentTemplate.mdc … ドキュメントテンプレート
-
-### ARCH
-- docs/ARCH/index.mdc … アーキテクチャ索引
-- docs/ARCH/システム概要.mdc … システム概要
-- docs/ARCH/システム構成.mdc … システム構成
-- docs/ARCH/セキュリティ設計.mdc … セキュリティ設計
-- docs/ARCH/共通コンポーネント設計.mdc … 共通コンポーネント方針
-- docs/ARCH/技術選定.mdc … 技術選定（Electron + TypeScript）
-- docs/ARCH/IPC設計.mdc … IPCインターフェース
-
-### DEVELOPMENT
-- docs/DEVELOPMENT/index.mdc … 開発ガイド
-
-### QA
-- docs/QA/index.mdc … QA方針・シナリオ
-
-### GATES
-- docs/GATES/document.mdc … Quality Gates（DOC-01〜DOC-08）
-- docs/GATES/index.mdc … Quality Gates索引
-
-## Layer Structure
-
-```
-PRD → システム要件定義書 → ARCH → 実装
-```
-
-- **PRD**: 何を作るか（要求仕様）
-- **システム要件定義書**: どの技術で実現するか
-- **ARCH**: 具体的な設計（HOWの詳細）
+version: "1.0"
+contextMap:
+  - category: INDEX
+    entries:
+      - path: docs/index.mdc
+        description: Nexusドキュメント索引
+  - category: PRD
+    entries:
+      - path: docs/PRD/index.mdc
+        description: Features Registry（NEX-ID管理）
+      - path: docs/PRD/要求仕様書.mdc
+        description: 要求仕様（FEAT-0001〜0008）
+      - path: docs/PRD/システム要件定義書.mdc
+        description: システム要件定義
+      - path: docs/PRD/プロンプト辞書ドラフト.mdc
+        description: プロンプト辞書
+      - path: docs/PRD/PRD_Nexus_2.mdc
+        description: Nexus要求仕様
+      - path: docs/PRD/PRD_Strategy.mdc
+        description: プロダクト戦略
+      - path: docs/PRD/PRD_DocumentTemplate.mdc
+        description: ドキュメントテンプレート
+      - path: docs/PRD/PRD_TreeView.mdc
+        description: TreeView機能（FEAT-0010〜0013）
+      - path: docs/PRD/PRD_DocumentEditor.mdc
+        description: ドキュメント編集・閲覧（FEAT-0021〜0023）
+      - path: docs/PRD/画面仕様書_Nexus.mdc
+        description: 画面仕様書（FEAT-0009含む）
+  - category: ARCH
+    entries:
+      - path: docs/ARCH/index.mdc
+        description: アーキテクチャ索引
+      - path: docs/ARCH/システム概要.mdc
+        description: システム概要
+      - path: docs/ARCH/システム構成.mdc
+        description: システム構成
+      - path: docs/ARCH/セキュリティ設計.mdc
+        description: セキュリティ設計
+      - path: docs/ARCH/共通コンポーネント設計.mdc
+        description: 共通コンポーネント方針（FEAT-0009含む）
+      - path: docs/ARCH/技術選定.mdc
+        description: 技術選定（Electron + TypeScript）
+      - path: docs/ARCH/IPC設計.mdc
+        description: IPCインターフェース
+  - category: DEVELOPMENT
+    entries:
+      - path: docs/DEVELOPMENT/index.mdc
+        description: 開発ガイド
+      - path: docs/DEVELOPMENT/ドキュメント編集機能設計.mdc
+        description: ドキュメント編集機能（FEAT-0021〜0023実装詳細）
+  - category: QA
+    entries:
+      - path: docs/QA/index.mdc
+        description: QA方針・シナリオ
+  - category: GATES
+    entries:
+      - path: docs/GATES/document.mdc
+        description: Quality Gates（DOC-01〜DOC-08）
+      - path: docs/GATES/index.mdc
+        description: Quality Gates索引

@@ -6,6 +6,7 @@
 
 - **Docs Navigator**: カテゴリ別にドキュメントを探索し、詳細ビューからファイルを開けます
 - **FEAT Cross-reference**: PRD / UX / API / DATA などのドキュメント横断で網羅性を確認できます
+- **FEAT Cross-Search**: FEAT番号で横断検索し、関連情報を統合表示・コピー可能
 - **Orphan Detection**: 上流・下流リンクの不足を検出します
 - **Tree View**: ドキュメント間の依存関係を DAG で可視化します
 - **Tasks Management**: タスクのインポート・編集・保存・エクスポートに対応します

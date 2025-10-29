@@ -1,9 +1,8 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { aiProviderRegistry } from '@/lib/ai/registry';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 
-const PROJECT_ROOT_KEY = 'nexus.settings.projectRoot';
 const CONTEXT_PATH_KEY = 'nexus.settings.contextPath';
 const AI_PROVIDER_KEY = 'nexus.settings.aiProvider';
 
@@ -32,13 +31,12 @@ function writeSetting(key: string, value: string) {
 }
 
 export default function SettingsPanel({ darkMode, onToggleTheme }: SettingsPanelProps) {
-  const [projectRoot, setProjectRoot] = useState('');
   const [contextPath, setContextPath] = useState('');
   const [aiProviderId, setAiProviderId] = useState('');
   const [status, setStatus] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setProjectRoot(readSetting(PROJECT_ROOT_KEY));
     setContextPath(readSetting(CONTEXT_PATH_KEY));
     const storedProvider = readSetting(AI_PROVIDER_KEY);
     setAiProviderId(storedProvider);
@@ -57,20 +55,6 @@ export default function SettingsPanel({ darkMode, onToggleTheme }: SettingsPanel
 
   const providers = useMemo(() => aiProviderRegistry.listProviders(), []);
 
-  const handleSaveProjectRoot = (event: FormEvent) => {
-    event.preventDefault();
-    writeSetting(PROJECT_ROOT_KEY, projectRoot);
-    setStatus('Project Rootを保存しました');
-  };
-
-  const handleTestProjectRoot = () => {
-    if (projectRoot.trim()) {
-      setStatus('パス形式の検証OK（擬似的なチェックです）');
-    } else {
-      setStatus('パスが未入力です');
-    }
-  };
-
   const handleSaveContextPath = (value: string) => {
     writeSetting(CONTEXT_PATH_KEY, value);
     setStatus('Context Pathを保存しました');
@@ -84,41 +68,21 @@ export default function SettingsPanel({ darkMode, onToggleTheme }: SettingsPanel
     setStatus(`AI Providerを${value || '未設定'}に変更しました`);
   };
 
+  const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setContextPath(file.name);
+      setStatus(`ファイル "${file.name}" を選択しました`);
+    }
+  };
+
+  const handleSelectFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <section className="card" data-testid="settings__section">
       <h2 data-testid="settings__heading">⚙️ Settings</h2>
-
-      <div className="settings-section" data-testid="settings__project-root-section">
-        <h3 data-testid="settings__project-root-heading">プロジェクトルート</h3>
-        <form onSubmit={handleSaveProjectRoot} className="form-group" data-testid="settings__project-root-group">
-          <label htmlFor="settings-project-root" data-testid="settings__project-root-label">
-            Project Root Path
-          </label>
-          <input
-            id="settings-project-root"
-            type="text"
-            value={projectRoot}
-            onChange={event => setProjectRoot(event.target.value)}
-            placeholder="/path/to/project"
-            data-testid="settings__project-root-input"
-          />
-          <div className="control-group" data-testid="settings__project-root-actions">
-            <button type="submit" className="btn btn-primary" data-testid="settings__save-project-root-button">
-              Save Project Root
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleTestProjectRoot}
-              data-testid="settings__test-project-root-button"
-            >
-              Test Path
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <hr />
 
       <div className="settings-section" data-testid="settings__ai-provider-section">
         <h3 data-testid="settings__ai-provider-heading">AI Provider</h3>
@@ -152,7 +116,23 @@ export default function SettingsPanel({ darkMode, onToggleTheme }: SettingsPanel
         <p className="settings-context-path" data-testid="settings__context-path">
           {contextPath || '(未設定)'}
         </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".mdc,.md"
+          onChange={handleFileSelect}
+          className="sr-only"
+          aria-hidden="true"
+        />
         <div className="control-group" data-testid="settings__context-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleSelectFileClick}
+            data-testid="settings__browse-file-button"
+          >
+            ファイルを選択
+          </button>
           <input
             type="text"
             value={contextPath}

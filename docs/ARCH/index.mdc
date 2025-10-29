@@ -5,6 +5,7 @@ template: "legacy-import"
 upstream:
   - "docs/PRD/システム要件定義書.mdc"
 downstream:
+  - "docs/ARCH/共通コンポーネント設計.mdc"
   - "docs/DEVELOPMENT/index.mdc"
   - "docs/QA/index.mdc"
 tags: []
@@ -15,7 +16,7 @@ tags: []
 > Breadcrumbs
 > Layer: ARCH
 > Upstream: docs/PRD/システム要件定義書.mdc
-> Downstream: docs/DEVELOPMENT/index.mdc, docs/QA/index.mdc
+> Downstream: docs/ARCH/共通コンポーネント設計.mdc, docs/DEVELOPMENT/index.mdc, docs/QA/index.mdc
 
 ## 文書情報
 
@@ -30,9 +31,6 @@ tags: []
 
 - [システム概要](システム概要.mdc)
 - [システム構成](システム構成.mdc)
-  
 - [セキュリティ設計](セキュリティ設計.mdc)
-
 - [IPC設計](IPC設計.mdc)
-
-- [共通コンポーネント設計](共通コンポーネント設計.mdc)
+- [共通コンポーネント設計](共通コンポーネント設計.mdc) - FEAT-0009含む

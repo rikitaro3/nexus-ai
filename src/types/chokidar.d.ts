@@ -15,7 +15,7 @@ declare module 'chokidar' {
     on(event: 'unlink', listener: (path: string) => void): FSWatcher;
     on(event: 'ready', listener: () => void): FSWatcher;
     on(event: 'error', listener: (error: Error) => void): FSWatcher;
-    on(event: string, listener: (...args: any[]) => void): FSWatcher;
+    on(event: string, listener: (...args: unknown[]) => void): FSWatcher;
     close(): Promise<void>;
     add?(paths: string | string[]): FSWatcher;
     unwatch?(paths: string | string[]): FSWatcher;

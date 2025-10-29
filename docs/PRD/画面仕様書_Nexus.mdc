@@ -2,12 +2,19 @@
 title: "Nexus 画面仕様書"
 layer: "PRD"
 template: "legacy-import"
-upstream: []
-downstream: []
+upstream:
+  - "docs/PRD/index.mdc"
+downstream:
+  - "docs/ARCH/共通コンポーネント設計.mdc"
 tags: []
 ---
 
 # Nexus 画面仕様書
+
+> Breadcrumbs
+> Layer: PRD
+> Upstream: docs/PRD/index.mdc
+> Downstream: docs/ARCH/共通コンポーネント設計.mdc
 
 ## 1. 目的と対象
 - 対象アプリ: Electron ベースのドキュメント／タスク管理ツール「Nexus」。
@@ -39,8 +46,31 @@ tags: []
 - 3 カラム構成。
   - 左カラム: カテゴリ一覧 `#docs-categories`。未選択時は「カテゴリを読み込み中です...」。
   - 中央カラム: ドキュメント一覧 `#docs-list`。カテゴリ選択前は「カテゴリを選択してください」。リスト項目はタイトルとメタ情報（サブテキスト）。
-  - 右カラム: 詳細パネル `#docs-detail`。ドキュメント選択で本文・リンク情報を描画。未選択時は説明プレースホルダー。 【F:src/renderer/index.html†L44-L66】
+  - 右カラム: 詳細パネル（FEAT-0009共通コンポーネント）。ドキュメント選択で詳細情報を表示。未選択時は説明プレースホルダー。
 - リスト選択で `.active` を付与し、背景色 #e0f2fe・枠線 #93c5fd。 【F:src/renderer/styles/app.css†L52-L80】
+
+#### 3.2.1 FEAT-0009: 詳細カード（共通コンポーネント）
+
+**概要:**  
+DocsモードとTreeモードで共通利用する詳細パネル表示コンポーネント。選択されたドキュメントのメタデータとリンク情報を統一的なフォーマットで表示。
+
+**表示項目:**
+1. **Path**: ドキュメントの相対パス（`<code>`タグで表示）
+2. **Layer**: レイヤー名（Tree mode時のみ、強調表示）
+3. **Title**: ドキュメントタイトル（Tree mode時のみ）
+4. **Description**: 説明文（Docs mode時のみ）
+5. **Upstream**: 上位ドキュメントへのリンク一覧（Tree mode時のみ）
+6. **Downstream**: 下位ドキュメントへのリンク一覧（Tree mode時のみ）
+7. **アクションボタン**: 「ドキュメントを開く」「パスをコピー」
+
+**UI仕様:**
+- `.docs-detail` クラスでパディング16px
+- ラベルは太字、幅80pxで統一
+- リンクは青色（#2563eb）、ホバーで下線
+- ダークモード対応: 暗い背景、明るい文字色
+
+**実装詳細:**
+→ ARCH/共通コンポーネント設計.mdc の FEAT-0009 を参照
 
 ### 3.3 FEATs モード (`#docs-mode-feats`)
 - ツールバー: テキスト検索 `#feat-search` と重複警告 `#feat-dup-alert`。
@@ -50,8 +80,10 @@ tags: []
 ### 3.4 Tree モード (`#docs-mode-tree`)
 - ツールバー: `#tree-direction` セレクト（Downstream/Upstream）と `#tree-validate` ボタン、検証ステータス表示 `#tree-status`。初期ステータスは空。 【F:src/renderer/index.html†L92-L111】
 - 左カラム `#tree-view` に階層表示。`tree-node` クラスでクリック選択、`.selected` は背景 #dbeafe。
-- 右 2 列: `#tree-detail`（リンク一覧）、`#gate-results`（Quality Gates 結果）。両方とも空状態メッセージを持つ。 【F:src/renderer/index.html†L111-L125】【F:src/renderer/styles/app.css†L150-L209】
-- Tree データは Breadcrumbs を解析して構築し、ノードクリックで上下流リンク・層情報を表示。検証結果は `gate-result` コンポーネントに pass/error/warn のステータスカラーで出し分け。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L585-L1544】【F:src/renderer/styles/app.css†L188-L205】
+  - ツリーノードは階層インデント、展開/折りたたみアイコン（▶/▼）、レイヤー名、ファイル名を表示
+  - オーファンセクション: ツリーに含まれないドキュメントを別表示（赤色で強調）
+- 右カラム: 詳細パネル（FEAT-0009共通コンポーネント）。ノード選択時にメタデータとUpstream/Downstreamリンクを表示。
+- Tree データは Breadcrumbs を解析して構築し、ノードクリックで上下流リンク・層情報を表示。検証結果は `gate-result` コンポーネントに pass/error/warn のステータスカラーで出し分け。
 
 ### 3.5 Quality Gates パイプライン
 - Tree モード DOM に `#rules-pipeline` パネルを動的追加。ステータス、差分、オートフィックス、ログ等のセクションを持つ。アクションボタン（再検証／一括更新／影響再スキャン）を配置。 【F:src/renderer/features/docs-navigator/docs-navigator.js†L70-L133】
