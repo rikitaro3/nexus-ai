@@ -71,7 +71,7 @@ function validateDocument(content: string): ValidationResult {
       warnings.push('downstreamは配列または文字列である必要があります');
     }
     
-  } catch (error) {
+  } catch {
     errors.push('YAMLフロントマターの構文エラー');
   }
   
@@ -119,6 +119,12 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
   const [metadata, setMetadata] = useState<DocumentMetadata | null>(null);
+  const validation = useMemo(() => validateDocument(content), [content]);
+
+  const hasValidationErrors = validation.errors.length > 0;
+  const validationWarnings = validation.warnings ?? [];
+  const hasValidationWarnings = validationWarnings.length > 0;
+  const validationStatus = hasValidationErrors ? 'error' : hasValidationWarnings ? 'warning' : 'success';
 
   const isDirty = useMemo(() => {
     return mode === 'edit' && content !== originalContent;
@@ -217,8 +223,6 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
     if (!path) return;
 
     // バリデーション
-    const validation = validateDocument(content);
-
     if (!validation.valid) {
       setMessage({
         text: validation.errors.join('\n'),
@@ -228,9 +232,9 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
     }
 
     // 警告がある場合は確認
-    if (validation.warnings && validation.warnings.length > 0) {
+    if (hasValidationWarnings) {
       const confirmed = window.confirm(
-        `以下の警告があります:\n${validation.warnings.join('\n')}\n\n保存を続けますか？`
+        `以下の警告があります:\n${validationWarnings.join('\n')}\n\n保存を続けますか？`
       );
       if (!confirmed) return;
     }
@@ -410,15 +414,61 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
 
         {/* フッター */}
         <div className="document-modal__footer" data-testid="document-viewer__footer">
-          {/* メッセージ */}
-          {message && (
-            <div
-              className={`document-modal__message document-modal__message--${message.type}`}
-              data-testid={`document-viewer__message-${message.type}`}
-            >
-              {message.text}
-            </div>
-          )}
+          <div className="document-modal__status-area" data-testid="document-viewer__status-area">
+            {!loading && (content.trim().length > 0 || mode === 'edit') && (
+              <div className="document-modal__validation" data-testid="document-viewer__validation">
+                <div className="document-modal__validation-header">
+                  <span className="document-modal__validation-title">チェック結果</span>
+                  <span
+                    className={`document-modal__validation-status document-modal__validation-status--${validationStatus}`}
+                    data-testid={`document-viewer__validation-status-${validationStatus}`}
+                  >
+                    {hasValidationErrors
+                      ? 'エラーがあります'
+                      : hasValidationWarnings
+                        ? '警告があります'
+                        : '問題は見つかりませんでした'}
+                  </span>
+                </div>
+
+                {hasValidationErrors && (
+                  <div className="document-modal__validation-section" data-testid="document-viewer__validation-errors">
+                    <div className="document-modal__validation-section-title">エラー</div>
+                    <ul className="document-modal__validation-list">
+                      {validation.errors.map((error, index) => (
+                        <li key={`error-${index}`}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {hasValidationWarnings && (
+                  <div className="document-modal__validation-section" data-testid="document-viewer__validation-warnings">
+                    <div className="document-modal__validation-section-title">警告</div>
+                    <ul className="document-modal__validation-list">
+                      {validationWarnings.map((warning, index) => (
+                        <li key={`warning-${index}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {!hasValidationErrors && !hasValidationWarnings && (
+                  <p className="document-modal__validation-empty">テンプレートの基本チェックを通過しました。</p>
+                )}
+              </div>
+            )}
+
+            {/* メッセージ */}
+            {message && (
+              <div
+                className={`document-modal__message document-modal__message--${message.type}`}
+                data-testid={`document-viewer__message-${message.type}`}
+              >
+                {message.text}
+              </div>
+            )}
+          </div>
 
           {/* アクションボタン */}
           <div className="document-modal__actions" data-testid="document-viewer__actions">
