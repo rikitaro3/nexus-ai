@@ -2,7 +2,7 @@
 
 import matter from 'gray-matter';
 import * as jsyaml from 'js-yaml';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import DocumentViewer from './DocumentViewer';
 
 interface ContextEntry {
@@ -536,7 +536,7 @@ export default function DocsNavigator() {
     });
   };
 
-  const renderTreeNode = (node: TreeNode, depth = 0): JSX.Element => {
+  const renderTreeNode = (node: TreeNode, depth = 0): ReactElement => {
     const isExpanded = expandedPaths.has(node.path);
     const isSelected = selectedTreeNode?.path === node.path;
     const hasChildren = node.children.length > 0;
