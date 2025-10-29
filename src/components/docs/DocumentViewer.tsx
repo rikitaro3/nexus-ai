@@ -17,6 +17,8 @@ interface DocumentMetadata {
   downstream: string[];
 }
 
+type RawFrontmatter = Record<string, unknown>;
+
 interface Message {
   text: string;
   type: 'success' | 'error';
@@ -42,36 +44,39 @@ function normalizeArray(value: unknown): string[] {
 function validateDocument(content: string): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  
+
   try {
     // YAMLフロントマターのパース
-    const { data, content: body } = matter(content);
-    
+    const { data, content: body } = matter<RawFrontmatter>(content);
+
+    const title = typeof data.title === 'string' ? data.title : null;
+    const layer = typeof data.layer === 'string' ? data.layer : null;
+
     // 必須フィールド
-    if (!data.title) errors.push('フロントマターにtitleが必要です');
-    if (!data.layer) errors.push('フロントマターにlayerが必要です');
-    
+    if (!title) errors.push('フロントマターにtitleが必要です');
+    if (!layer) errors.push('フロントマターにlayerが必要です');
+
     // レイヤーの値チェック
     const validLayers = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
-    if (data.layer && !validLayers.includes(data.layer)) {
-      errors.push(`無効なレイヤー: ${data.layer}`);
+    if (layer && !validLayers.includes(layer)) {
+      errors.push(`無効なレイヤー: ${layer}`);
     }
-    
+
     // Breadcrumbsチェック
     if (!body.includes('> Breadcrumbs')) {
       warnings.push('Breadcrumbsセクションがありません');
     }
-    
+
     // upstream/downstream チェック
     if (data.upstream !== undefined && !Array.isArray(data.upstream) && typeof data.upstream !== 'string') {
       warnings.push('upstreamは配列または文字列である必要があります');
     }
-    
+
     if (data.downstream !== undefined && !Array.isArray(data.downstream) && typeof data.downstream !== 'string') {
       warnings.push('downstreamは配列または文字列である必要があります');
     }
-    
-  } catch (error) {
+
+  } catch {
     errors.push('YAMLフロントマターの構文エラー');
   }
   
@@ -79,6 +84,19 @@ function validateDocument(content: string): ValidationResult {
     valid: errors.length === 0,
     errors,
     warnings,
+  };
+}
+
+function createMetadata(data: RawFrontmatter, path: string): DocumentMetadata {
+  const title = typeof data.title === 'string' && data.title.trim() !== '' ? data.title : path;
+  const layer = typeof data.layer === 'string' && data.layer.trim() !== '' ? data.layer : 'UNKNOWN';
+
+  return {
+    path,
+    title,
+    layer,
+    upstream: normalizeArray(data.upstream),
+    downstream: normalizeArray(data.downstream),
   };
 }
 
@@ -119,6 +137,12 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
   const [metadata, setMetadata] = useState<DocumentMetadata | null>(null);
+  const validation = useMemo(() => validateDocument(content), [content]);
+
+  const hasValidationErrors = validation.errors.length > 0;
+  const validationWarnings = validation.warnings ?? [];
+  const hasValidationWarnings = validationWarnings.length > 0;
+  const validationStatus = hasValidationErrors ? 'error' : hasValidationWarnings ? 'warning' : 'success';
 
   const isDirty = useMemo(() => {
     return mode === 'edit' && content !== originalContent;
@@ -128,6 +152,8 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
   useEffect(() => {
     if (!isOpen || !path) return;
 
+    const targetPath = path;
+
     let cancelled = false;
 
     async function loadDocument() {
@@ -136,7 +162,7 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
       setMode('view');
 
       try {
-        const response = await fetch(`/api/docs?path=${encodeURIComponent(path)}`);
+        const response = await fetch(`/api/docs?path=${encodeURIComponent(targetPath)}`);
 
         if (!response.ok) {
           throw new Error(`Failed to load document: ${response.status}`);
@@ -151,14 +177,8 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
 
         // メタデータ抽出
         try {
-          const { data } = matter(text);
-          setMetadata({
-            path,
-            title: data.title || path,
-            layer: data.layer || 'UNKNOWN',
-            upstream: normalizeArray(data.upstream),
-            downstream: normalizeArray(data.downstream),
-          });
+          const { data } = matter<RawFrontmatter>(text);
+          setMetadata(createMetadata(data, targetPath));
         } catch (error) {
           console.warn('Failed to parse metadata:', error);
           setMetadata(null);
@@ -216,9 +236,9 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
   async function handleSave() {
     if (!path) return;
 
-    // バリデーション
-    const validation = validateDocument(content);
+    const targetPath = path;
 
+    // バリデーション
     if (!validation.valid) {
       setMessage({
         text: validation.errors.join('\n'),
@@ -228,9 +248,9 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
     }
 
     // 警告がある場合は確認
-    if (validation.warnings && validation.warnings.length > 0) {
+    if (hasValidationWarnings) {
       const confirmed = window.confirm(
-        `以下の警告があります:\n${validation.warnings.join('\n')}\n\n保存を続けますか？`
+        `以下の警告があります:\n${validationWarnings.join('\n')}\n\n保存を続けますか？`
       );
       if (!confirmed) return;
     }
@@ -242,7 +262,7 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
       const response = await fetch('/api/docs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, content }),
+        body: JSON.stringify({ path: targetPath, content }),
       });
 
       if (!response.ok) {
@@ -260,14 +280,8 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
 
       // メタデータ更新
       try {
-        const { data } = matter(content);
-        setMetadata({
-          path,
-          title: data.title || path,
-          layer: data.layer || 'UNKNOWN',
-          upstream: normalizeArray(data.upstream),
-          downstream: normalizeArray(data.downstream),
-        });
+        const { data } = matter<RawFrontmatter>(content);
+        setMetadata(createMetadata(data, targetPath));
       } catch (error) {
         console.warn('Failed to update metadata:', error);
       }
@@ -410,15 +424,61 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
 
         {/* フッター */}
         <div className="document-modal__footer" data-testid="document-viewer__footer">
-          {/* メッセージ */}
-          {message && (
-            <div
-              className={`document-modal__message document-modal__message--${message.type}`}
-              data-testid={`document-viewer__message-${message.type}`}
-            >
-              {message.text}
-            </div>
-          )}
+          <div className="document-modal__status-area" data-testid="document-viewer__status-area">
+            {!loading && (content.trim().length > 0 || mode === 'edit') && (
+              <div className="document-modal__validation" data-testid="document-viewer__validation">
+                <div className="document-modal__validation-header">
+                  <span className="document-modal__validation-title">チェック結果</span>
+                  <span
+                    className={`document-modal__validation-status document-modal__validation-status--${validationStatus}`}
+                    data-testid={`document-viewer__validation-status-${validationStatus}`}
+                  >
+                    {hasValidationErrors
+                      ? 'エラーがあります'
+                      : hasValidationWarnings
+                        ? '警告があります'
+                        : '問題は見つかりませんでした'}
+                  </span>
+                </div>
+
+                {hasValidationErrors && (
+                  <div className="document-modal__validation-section" data-testid="document-viewer__validation-errors">
+                    <div className="document-modal__validation-section-title">エラー</div>
+                    <ul className="document-modal__validation-list">
+                      {validation.errors.map((error, index) => (
+                        <li key={`error-${index}`}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {hasValidationWarnings && (
+                  <div className="document-modal__validation-section" data-testid="document-viewer__validation-warnings">
+                    <div className="document-modal__validation-section-title">警告</div>
+                    <ul className="document-modal__validation-list">
+                      {validationWarnings.map((warning, index) => (
+                        <li key={`warning-${index}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {!hasValidationErrors && !hasValidationWarnings && (
+                  <p className="document-modal__validation-empty">テンプレートの基本チェックを通過しました。</p>
+                )}
+              </div>
+            )}
+
+            {/* メッセージ */}
+            {message && (
+              <div
+                className={`document-modal__message document-modal__message--${message.type}`}
+                data-testid={`document-viewer__message-${message.type}`}
+              >
+                {message.text}
+              </div>
+            )}
+          </div>
 
           {/* アクションボタン */}
           <div className="document-modal__actions" data-testid="document-viewer__actions">
