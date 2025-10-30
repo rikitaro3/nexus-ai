@@ -1,23 +1,11 @@
 'use client';
 
-import matter from 'gray-matter';
-import * as jsyaml from 'js-yaml';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
+
+import DocumentDetailPanel, { type DetailPanelData } from '@/components/docs/DocumentDetailPanel';
 import DocumentViewer from './DocumentViewer';
-
-interface ContextEntry {
-  category: string;
-  path: string;
-  description: string;
-}
-
-interface DocumentMetadata {
-  path: string;
-  title: string;
-  layer: string;
-  upstream: string[];
-  downstream: string[];
-}
+import { parseContextEntries, type ContextEntry } from '@/lib/docs/context';
+import { extractDocumentMetadata, type DocumentMetadata } from '@/lib/docs/metadata';
 
 interface TreeNode extends DocumentMetadata {
   children: TreeNode[];
@@ -28,64 +16,6 @@ interface TreeNode extends DocumentMetadata {
 type Mode = 'docs' | 'feats' | 'tree';
 
 const DEFAULT_CONTEXT_PATH = '/context.mdc';
-
-function extractSection(source: string, marker: string): string {
-  const start = source.indexOf(marker);
-  if (start === -1) return '';
-  const tail = source.slice(start + marker.length);
-  const nextHeading = tail.indexOf('\n## ');
-  if (nextHeading === -1) {
-    return tail.trim();
-  }
-  return tail.slice(0, nextHeading).trim();
-}
-
-export function parseContextEntries(raw: string): ContextEntry[] {
-  // Try YAML format first
-  try {
-    const yamlData = jsyaml.load(raw) as { contextMap?: Array<{ category: string; entries?: Array<{ path: string; description: string }> }> };
-    if (yamlData?.contextMap) {
-      console.log('[DocsNavigator] YAML format detected');
-      const entries: ContextEntry[] = [];
-      for (const cat of yamlData.contextMap) {
-        for (const entry of cat.entries || []) {
-          entries.push({
-            category: cat.category,
-            path: entry.path,
-            description: entry.description,
-          });
-        }
-      }
-      console.log('[DocsNavigator] Parsed YAML entries:', entries.length);
-      return entries;
-    }
-  } catch {
-    console.log('[DocsNavigator] Not YAML format, trying Markdown');
-  }
-
-  // Fallback to Markdown format
-  const section = extractSection(raw, '## Context Map');
-  if (!section) return [];
-  const lines = section.split('\n');
-  const entries: ContextEntry[] = [];
-  let currentCategory = '';
-  for (const line of lines) {
-    if (line.startsWith('### ')) {
-      currentCategory = line.replace(/^###\s+/, '').trim();
-      continue;
-    }
-    const match = line.match(/^-\s+([^\s].*?)\s+…\s+(.*)$/u);
-    if (match && currentCategory) {
-      entries.push({
-        category: currentCategory,
-        path: match[1].trim(),
-        description: match[2].trim(),
-      });
-    }
-  }
-  console.log('[DocsNavigator] Parsed Markdown entries:', entries.length);
-  return entries;
-}
 
 function uniqueCategories(entries: ContextEntry[]): string[] {
   const seen = new Set<string>();
@@ -108,25 +38,7 @@ async function fetchDocumentMetadata(path: string): Promise<DocumentMetadata | n
       return null;
     }
     const text = await response.text();
-    const { data } = matter(text);
-    
-    // upstream/downstreamを配列に正規化
-    const normalizeArray = (value: unknown): string[] => {
-      if (Array.isArray(value)) return value.filter(v => typeof v === 'string' && v !== 'N/A');
-      if (typeof value === 'string') {
-        if (value === 'N/A' || value.trim() === '') return [];
-        return value.split(',').map(s => s.trim()).filter(Boolean);
-      }
-      return [];
-    };
-    
-    return {
-      path,
-      title: (data.title as string) || path,
-      layer: (data.layer as string) || 'UNKNOWN',
-      upstream: normalizeArray(data.upstream),
-      downstream: normalizeArray(data.downstream),
-    };
+    return extractDocumentMetadata(text, path);
   } catch (error) {
     console.error(`[fetchDocumentMetadata] Error fetching ${path}:`, error);
     return null;
@@ -397,132 +309,35 @@ export default function DocsNavigator() {
         </section>
         <section className="docs-right" data-testid="docs-navigator__detail-column">
           <h3 data-testid="docs-navigator__detail-heading">詳細</h3>
-          {renderDetailPanel(
-            activeEntry ? {
-              path: activeEntry.path,
-              description: activeEntry.description,
-            } : null
-          )}
+          <DocumentDetailPanel
+            data={activeEntry ? { path: activeEntry.path, description: activeEntry.description } : null}
+            onOpenDocument={selectedPath => {
+              setViewerPath(selectedPath);
+              setViewerOpen(true);
+            }}
+          />
         </section>
       </div>
     </div>
   );
 
-  // 詳細パネルの共通表示コンポーネント
   const renderDetailPanel = (
-    data: {
-      path: string;
-      title?: string;
-      description?: string;
-      layer?: string;
-      upstream?: string[];
-      downstream?: string[];
-    } | null,
+    data: DetailPanelData | null,
     options: {
       emptyMessage?: string;
       testId?: string;
     } = {}
-  ) => {
-    const { emptyMessage = 'ドキュメントが選択されていません', testId = 'docs-navigator__detail' } = options;
-    
-    if (!data) {
-      return (
-        <p className="empty-state" data-testid="docs-navigator__detail-empty">
-          {emptyMessage}
-        </p>
-      );
-    }
-
-    return (
-      <div className="docs-detail" data-testid={testId}>
-        <p className="docs-detail__path">
-          <span className="docs-detail__label">Path:</span>
-          <code>{data.path}</code>
-        </p>
-        
-        {data.layer && (
-          <p className="docs-detail__layer">
-            <span className="docs-detail__label">Layer:</span>
-            <strong>{data.layer}</strong>
-          </p>
-        )}
-        
-        {data.title && (
-          <p className="docs-detail__title">
-            <span className="docs-detail__label">Title:</span>
-            {data.title}
-          </p>
-        )}
-        
-        {data.description && !data.layer && (
-          <p className="docs-detail__description">{data.description}</p>
-        )}
-        
-        {(data.upstream || data.downstream) && (
-          <div className="docs-detail__links">
-            {data.upstream && (
-              <div>
-                <span className="docs-detail__label">Upstream:</span>
-                {data.upstream.length > 0 ? (
-                  <ul>
-                    {data.upstream.map(upPath => (
-                      <li key={upPath}>
-                        <a href={`/${upPath}`} target="_blank" rel="noreferrer">
-                          {upPath}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <span className="text-muted">(なし)</span>
-                )}
-              </div>
-            )}
-            
-            {data.downstream && (
-              <div>
-                <span className="docs-detail__label">Downstream:</span>
-                {data.downstream.length > 0 ? (
-                  <ul>
-                    {data.downstream.map(downPath => (
-                      <li key={downPath}>
-                        <a href={`/${downPath}`} target="_blank" rel="noreferrer">
-                          {downPath}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <span className="text-muted">(なし)</span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        
-        <div className="control-group">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              setViewerPath(data.path);
-              setViewerOpen(true);
-            }}
-            data-testid="docs-navigator__open-document-button"
-          >
-            ドキュメントを開く
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => navigator.clipboard?.writeText(data.path)}
-          >
-            パスをコピー
-          </button>
-        </div>
-      </div>
-    );
-  };
+  ) => (
+    <DocumentDetailPanel
+      data={data}
+      emptyMessage={options.emptyMessage}
+      testId={options.testId}
+      onOpenDocument={path => {
+        setViewerPath(path);
+        setViewerOpen(true);
+      }}
+    />
+  );
 
   const handleToggleExpand = (path: string) => {
     setExpandedPaths(prev => {
