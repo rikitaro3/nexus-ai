@@ -120,6 +120,7 @@ export default function DocsNavigator() {
   const [orphans, setOrphans] = useState<DocumentMetadata[]>([]);
   const [selectedTreeNode, setSelectedTreeNode] = useState<TreeNode | DocumentMetadata | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [metadataMap, setMetadataMap] = useState<Partial<Record<string, DocumentMetadata | null>>>({});
   
   // DocumentViewer states
   const [viewerPath, setViewerPath] = useState<string | null>(null);
@@ -186,6 +187,27 @@ export default function DocsNavigator() {
     [entries, selectedPath],
   );
 
+  const metadataForSelectedPath = selectedPath ? metadataMap[selectedPath] : undefined;
+
+  useEffect(() => {
+    if (!selectedPath) return;
+    if (metadataForSelectedPath !== undefined) return;
+
+    let cancelled = false;
+
+    async function loadMetadata() {
+      const result = await fetchDocumentMetadata(selectedPath);
+      if (cancelled) return;
+      setMetadataMap(prev => ({ ...prev, [selectedPath]: result }));
+    }
+
+    loadMetadata();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPath, metadataForSelectedPath]);
+
   // Treeモードに切り替わったときにドキュメントをロード
   useEffect(() => {
     if (mode !== 'tree' || entries.length === 0) return;
@@ -200,9 +222,17 @@ export default function DocsNavigator() {
         // すべてのドキュメントのメタデータを取得
         const metadataPromises = entries.map(entry => fetchDocumentMetadata(entry.path));
         const metadataResults = await Promise.all(metadataPromises);
-        
+
         if (cancelled) return;
-        
+
+        setMetadataMap(prev => {
+          const next = { ...prev } as Partial<Record<string, DocumentMetadata | null>>;
+          entries.forEach((entry, index) => {
+            next[entry.path] = metadataResults[index] ?? null;
+          });
+          return next;
+        });
+
         // nullを除外
         const documents = metadataResults.filter((doc): doc is DocumentMetadata => doc !== null);
         console.log('[TreeView] Loaded metadata for', documents.length, 'documents');
@@ -237,6 +267,25 @@ export default function DocsNavigator() {
       cancelled = true;
     };
   }, [mode, entries]);
+
+  const buildDetailData = (
+    path: string | null,
+    fallback?: Partial<DetailPanelData>,
+  ): DetailPanelData | null => {
+    if (!path) return null;
+
+    const metadata = metadataMap[path];
+    const entry = entries.find(item => item.path === path) ?? null;
+
+    return {
+      path,
+      title: metadata?.title ?? fallback?.title,
+      layer: metadata?.layer ?? fallback?.layer,
+      upstream: metadata?.upstream ?? fallback?.upstream,
+      downstream: metadata?.downstream ?? fallback?.downstream,
+      description: entry?.description ?? fallback?.description,
+    };
+  };
 
   const renderDocsMode = () => (
     <div className="docs-mode active" data-testid="docs-navigator__mode-docs">
@@ -310,7 +359,15 @@ export default function DocsNavigator() {
         <section className="docs-right" data-testid="docs-navigator__detail-column">
           <h3 data-testid="docs-navigator__detail-heading">詳細</h3>
           <DocumentDetailPanel
-            data={activeEntry ? { path: activeEntry.path, description: activeEntry.description } : null}
+            data={buildDetailData(
+              activeEntry?.path ?? null,
+              activeEntry
+                ? {
+                    title: activeEntry.path.split('/').pop(),
+                    description: activeEntry.description,
+                  }
+                : undefined,
+            )}
             onOpenDocument={selectedPath => {
               setViewerPath(selectedPath);
               setViewerOpen(true);
@@ -322,14 +379,14 @@ export default function DocsNavigator() {
   );
 
   const renderDetailPanel = (
-    data: DetailPanelData | null,
+    target: TreeNode | DocumentMetadata | null,
     options: {
       emptyMessage?: string;
       testId?: string;
-    } = {}
+    } = {},
   ) => (
     <DocumentDetailPanel
-      data={data}
+      data={buildDetailData(target?.path ?? null, target ?? undefined)}
       emptyMessage={options.emptyMessage}
       testId={options.testId}
       onOpenDocument={path => {

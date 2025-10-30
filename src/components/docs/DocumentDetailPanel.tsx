@@ -79,8 +79,11 @@ export default function DocumentDetailPanel({
         </p>
       )}
 
-      {data.description && !data.layer && (
-        <p className="docs-detail__description">{data.description}</p>
+      {data.description && (
+        <p className="docs-detail__description">
+          <span className="docs-detail__label">Description:</span>
+          {data.description}
+        </p>
       )}
 
       {(data.upstream || data.downstream) && (
