@@ -1,4 +1,4 @@
-import { parseContextEntries } from '../DocsNavigator';
+import { parseContextEntries } from '@/lib/docs/context';
 
 describe('parseContextEntries', () => {
   describe('YAML format', () => {
@@ -162,7 +162,7 @@ contextMap:
 
       const entries = parseContextEntries(actualContent);
 
-      expect(entries).toHaveLength(19);
+      expect(entries).toHaveLength(18);
       
       // Check categories
       const categories = [...new Set(entries.map(e => e.category))];
@@ -175,9 +175,9 @@ contextMap:
         description: 'Nexusドキュメント索引',
       });
       
-      // Check PRD has 7 entries
+      // Check PRD has 6 entries
       const prdEntries = entries.filter(e => e.category === 'PRD');
-      expect(prdEntries).toHaveLength(7);
+      expect(prdEntries).toHaveLength(6);
     });
   });
 

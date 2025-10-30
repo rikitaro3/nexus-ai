@@ -1,7 +1,12 @@
 'use client';
 
-import matter from 'gray-matter';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+
+import ModalShell from '@/components/common/ModalShell';
+import StatusBadge from '@/components/common/StatusBadge';
+import Toast from '@/components/common/Toast';
+import { extractDocumentMetadata, type DocumentMetadata } from '@/lib/docs/metadata';
+import { validateDocument } from '@/lib/docs/validation';
 
 interface DocumentViewerProps {
   path: string | null;
@@ -9,95 +14,9 @@ interface DocumentViewerProps {
   onClose: () => void;
 }
 
-interface DocumentMetadata {
-  path: string;
-  title: string;
-  layer: string;
-  upstream: string[];
-  downstream: string[];
-}
-
-type RawFrontmatter = Record<string, unknown>;
-
 interface Message {
   text: string;
   type: 'success' | 'error';
-}
-
-interface ValidationResult {
-  valid: boolean;
-  errors: string[];
-  warnings?: string[];
-}
-
-// 配列を正規化する関数
-function normalizeArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter(v => typeof v === 'string' && v !== 'N/A');
-  if (typeof value === 'string') {
-    if (value === 'N/A' || value.trim() === '') return [];
-    return value.split(',').map(s => s.trim()).filter(Boolean);
-  }
-  return [];
-}
-
-// バリデーション関数
-function validateDocument(content: string): ValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  try {
-    // YAMLフロントマターのパース
-    const { data, content: body } = matter<RawFrontmatter>(content);
-
-    const title = typeof data.title === 'string' ? data.title : null;
-    const layer = typeof data.layer === 'string' ? data.layer : null;
-
-    // 必須フィールド
-    if (!title) errors.push('フロントマターにtitleが必要です');
-    if (!layer) errors.push('フロントマターにlayerが必要です');
-
-    // レイヤーの値チェック
-    const validLayers = ['STRATEGY', 'PRD', 'UX', 'API', 'DATA', 'ARCH', 'DEVELOPMENT', 'QA'];
-    if (layer && !validLayers.includes(layer)) {
-      errors.push(`無効なレイヤー: ${layer}`);
-    }
-
-    // Breadcrumbsチェック
-    if (!body.includes('> Breadcrumbs')) {
-      warnings.push('Breadcrumbsセクションがありません');
-    }
-
-    // upstream/downstream チェック
-    if (data.upstream !== undefined && !Array.isArray(data.upstream) && typeof data.upstream !== 'string') {
-      warnings.push('upstreamは配列または文字列である必要があります');
-    }
-
-    if (data.downstream !== undefined && !Array.isArray(data.downstream) && typeof data.downstream !== 'string') {
-      warnings.push('downstreamは配列または文字列である必要があります');
-    }
-
-  } catch {
-    errors.push('YAMLフロントマターの構文エラー');
-  }
-  
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
-  };
-}
-
-function createMetadata(data: RawFrontmatter, path: string): DocumentMetadata {
-  const title = typeof data.title === 'string' && data.title.trim() !== '' ? data.title : path;
-  const layer = typeof data.layer === 'string' && data.layer.trim() !== '' ? data.layer : 'UNKNOWN';
-
-  return {
-    path,
-    title,
-    layer,
-    upstream: normalizeArray(data.upstream),
-    downstream: normalizeArray(data.downstream),
-  };
 }
 
 // プロンプト生成関数
@@ -176,13 +95,11 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
         setOriginalContent(text);
 
         // メタデータ抽出
-        try {
-          const { data } = matter<RawFrontmatter>(text);
-          setMetadata(createMetadata(data, targetPath));
-        } catch (error) {
-          console.warn('Failed to parse metadata:', error);
-          setMetadata(null);
+        const parsedMetadata = extractDocumentMetadata(text, targetPath);
+        if (!parsedMetadata) {
+          console.warn('Failed to parse metadata');
         }
+        setMetadata(parsedMetadata);
       } catch (error) {
         console.error('Failed to load document:', error);
         if (!cancelled) {
@@ -279,12 +196,11 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
       });
 
       // メタデータ更新
-      try {
-        const { data } = matter<RawFrontmatter>(content);
-        setMetadata(createMetadata(data, targetPath));
-      } catch (error) {
-        console.warn('Failed to update metadata:', error);
+      const parsedMetadata = extractDocumentMetadata(content, targetPath);
+      if (!parsedMetadata) {
+        console.warn('Failed to update metadata');
       }
+      setMetadata(parsedMetadata);
 
       // 3秒後にメッセージを消す
       setTimeout(() => setMessage(null), 3000);
@@ -345,15 +261,8 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
     onClose();
   }
 
-  // オーバーレイクリック
-  function handleOverlayClick(e: React.MouseEvent) {
-    if (e.target === e.currentTarget) {
-      handleClose();
-    }
-  }
-
   // Ctrl+S ショートカット
-  function handleKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: ReactKeyboardEvent) {
     if (e.ctrlKey && e.key === 's') {
       e.preventDefault();
       if (mode === 'edit') {
@@ -362,15 +271,15 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
     }
   }
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="document-modal-overlay"
-      onClick={handleOverlayClick}
-      data-testid="document-viewer__overlay"
+    <ModalShell
+      isOpen={isOpen}
+      onRequestClose={handleClose}
+      overlayClassName="document-modal-overlay"
+      contentClassName="document-modal"
+      overlayTestId="document-viewer__overlay"
+      contentTestId="document-viewer__modal"
     >
-      <div className="document-modal" data-testid="document-viewer__modal">
         {/* ヘッダー */}
         <div className="document-modal__header" data-testid="document-viewer__header">
           <div className="document-modal__title">
@@ -378,14 +287,12 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
               {path}
             </span>
             {mode === 'edit' && (
-              <span className="document-modal__badge" data-testid="document-viewer__edit-badge">
-                編集中
-              </span>
+              <StatusBadge dataTestId="document-viewer__edit-badge">編集中</StatusBadge>
             )}
             {isDirty && (
-              <span className="document-modal__badge document-modal__badge--warning" data-testid="document-viewer__dirty-badge">
+              <StatusBadge tone="warning" dataTestId="document-viewer__dirty-badge">
                 未保存
-              </span>
+              </StatusBadge>
             )}
           </div>
           <button
@@ -471,12 +378,9 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
 
             {/* メッセージ */}
             {message && (
-              <div
-                className={`document-modal__message document-modal__message--${message.type}`}
-                data-testid={`document-viewer__message-${message.type}`}
-              >
+              <Toast tone={message.type} dataTestId={`document-viewer__message-${message.type}`}>
                 {message.text}
-              </div>
+              </Toast>
             )}
           </div>
 
@@ -535,8 +439,7 @@ export default function DocumentViewer({ path, isOpen, onClose }: DocumentViewer
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </ModalShell>
   );
 }
 
