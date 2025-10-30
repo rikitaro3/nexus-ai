@@ -179,6 +179,35 @@ renderDetailPanel(selectedTreeNode, {
 | ステート管理 | 低 | アプリケーション状態管理 | `state.ts` |
 | 国際化 | 低 | 多言語対応 | `i18n.ts` |
 
+#### Docsモジュール向け共通化計画
+
+ドキュメント閲覧・編集フローで重複が発生している処理を、以下の共通コンポーネントとして整理する。
+
+##### 1. DocumentMetadata正規化ユーティリティ
+- **責務**: YAML frontmatter や APIレスポンスから取得したメタデータを正規化し、`DocumentViewer` と `DocsNavigator` の双方で同じ型を扱えるようにする。
+- **設計方針**: `src/lib/docs/metadata.ts` に `DocumentMetadata` 型と `normalizeDocumentMetadata`、`normalizeArray` などのヘルパーを集約し、UI層からは純粋関数として利用する。
+- **テスト**: `tests/unit/docs/metadata.test.ts` を新設し、配列・未定義値の取り扱いを検証する。
+
+##### 2. ドキュメント検証ロジックの共通化
+- **責務**: ドキュメント保存前のバリデーション（必須フィールド、メタデータ整合性、危険なパスの検知）を単一の関数群に集約する。
+- **設計方針**: `src/lib/docs/validation.ts` に `validateDocument`、`collectValidationErrors` を定義し、クライアント／サーバーの両方から利用できる純粋ロジックとする。
+- **テスト**: 既存の `DocumentViewer` 依存テストから切り離し、`tests/unit/docs/validation.test.ts` でユニットテストを実施する。
+
+##### 3. `/api/docs` 向けパスガード共通ヘルパー
+- **責務**: GET/POST 双方で用いているパストラバーサル防止・リポジトリ境界チェックを共通化し、API 追加時のセキュリティ差分を無くす。
+- **設計方針**: `src/server/docs/pathGuard.ts` に `resolveDocPath`、`assertWithinRepo` を用意し、API ルート（`src/app/api/docs/*`）ではこのモジュールを経由してファイルアクセスを行う。
+- **テスト**: `tests/server/docs/pathGuard.test.ts` を作成し、許可・拒否パターンをモックファイルシステムで検証する。
+
+##### 4. モーダルUI／メッセージ部品の再利用
+- **責務**: `DocumentViewer` で使用しているモーダル枠、検証結果バッジ、トーストを共通UIとして切り出し、編集系画面で統一UXを提供する。
+- **設計方針**: `src/components/common/ModalShell.tsx`、`src/components/common/StatusBadge.tsx`、`src/components/common/Toast.tsx` を定義し、`DocumentViewer` はこれらのコンポーネントを組み合わせるだけにする。
+- **テスト**: Storybook または Playwright のビジュアルスナップショットで表示崩れを検知し、`tests/e2e/docs/modal.spec.ts` で基本操作を担保する。
+
+##### 5. Context Map パーサの分離
+- **責務**: `DocsNavigator` 内部の `parseContextEntries` を共通モジュールとして切り出し、他画面でも Context Map を安全に扱えるようにする。
+- **設計方針**: `src/lib/docs/context.ts` に `parseContextEntries` および関連型 (`ContextEntry`, `ContextEdge`) を移動し、依存するコンポーネントではこのモジュールから import する。
+- **テスト**: 既存の `DocsNavigator` テストからパーサー検証を分離し、`tests/unit/docs/context.test.ts` で境界ケース（循環参照、欠損値）を網羅する。
+
 ### 2.3 実装方針
 
 - **高優先度コンポーネント**: まず実装し、他のコンポーネントで利用可能にする
