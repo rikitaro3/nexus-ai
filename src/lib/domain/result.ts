@@ -33,16 +33,16 @@ export class Result<T, E = Error> {
     }
   }
 
-  isOk(): boolean {
+  isOk(): this is Result<T, never> {
     return this.state.kind === 'ok';
   }
 
-  isErr(): boolean {
+  isErr(): this is Result<never, E> {
     return this.state.kind === 'err';
   }
 
   unwrap(): T {
-    if (this.isOk()) {
+    if (this.state.kind === 'ok') {
       return this.state.value;
     }
 
@@ -50,11 +50,11 @@ export class Result<T, E = Error> {
   }
 
   unwrapOr(defaultValue: T): T {
-    return this.isOk() ? this.state.value : defaultValue;
+    return this.state.kind === 'ok' ? this.state.value : defaultValue;
   }
 
   unwrapErr(): E {
-    if (this.isErr()) {
+    if (this.state.kind === 'err') {
       return this.state.error;
     }
 
@@ -62,7 +62,7 @@ export class Result<T, E = Error> {
   }
 
   map<U>(fn: (value: T) => U): Result<U, E> {
-    if (this.isOk()) {
+    if (this.state.kind === 'ok') {
       return new Result<U, E>({ kind: 'ok', value: fn(this.state.value) });
     }
 
@@ -70,7 +70,7 @@ export class Result<T, E = Error> {
   }
 
   mapError<F>(fn: (error: E) => F): Result<T, F> {
-    if (this.isErr()) {
+    if (this.state.kind === 'err') {
       return new Result<T, F>({ kind: 'err', error: fn(this.state.error) });
     }
 
@@ -78,6 +78,6 @@ export class Result<T, E = Error> {
   }
 
   match<U>(handlers: { ok: (value: T) => U; err: (error: E) => U }): U {
-    return this.isOk() ? handlers.ok(this.state.value) : handlers.err(this.state.error);
+    return this.state.kind === 'ok' ? handlers.ok(this.state.value) : handlers.err(this.state.error);
   }
 }
