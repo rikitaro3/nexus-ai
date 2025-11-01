@@ -349,6 +349,20 @@ main { flex: 1; overflow: auto; padding: 20px; }
 .docs-mode-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
 .docs-mode-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .docs-mode-meta { color: #475569; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.docs-qg-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.docs-qg-status { color: #2563eb; font-size: 13px; font-weight: 500; }
+.diagnosis-modal__main { display: flex; gap: 24px; height: 100%; }
+.diagnosis-modal__selector { width: 300px; flex-shrink: 0; }
+.diagnosis-modal__selector-title { font-size: 14px; font-weight: 600; color: #0f172a; margin: 0 0 12px; }
+.diagnosis-modal__prompts-list { display: flex; flex-direction: column; gap: 8px; }
+.diagnosis-modal__prompt-item { padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; background: #fff; }
+.diagnosis-modal__prompt-item:hover { border-color: #cbd5e1; background: #f8fafc; }
+.diagnosis-modal__prompt-item.active { border-color: #2563eb; background: #eff6ff; }
+.diagnosis-modal__prompt-title { font-size: 13px; font-weight: 600; color: #0f172a; margin: 0 0 4px; }
+.diagnosis-modal__prompt-description { font-size: 12px; color: #64748b; margin: 0; }
+.diagnosis-modal__preview { flex: 1; min-width: 0; }
+.diagnosis-modal__pre { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; max-height: 600px; overflow-y: auto; margin: 0; }
+.diagnosis-modal__copy-status { color: #2563eb; font-size: 12px; font-weight: 500; margin-left: 12px; }
 .control-group select { border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 8px; }
 .status { font-size: 12px; padding: 3px 10px; border-radius: 9999px; background: #eef2ff; color: #1e40af; display: inline-flex; align-items: center; gap: 4px; }
 .status.status-info { background: #eef2ff; color: #1e40af; }

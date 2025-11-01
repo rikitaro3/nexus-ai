@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 
 import DocumentDetailPanel, { type DetailPanelData } from '@/components/docs/DocumentDetailPanel';
 import DocumentViewer from './DocumentViewer';
+import DiagnosisModal from './DiagnosisModal';
 import { parseContextEntries, type ContextEntry } from '@/lib/docs/context';
 import { extractDocumentMetadata, type DocumentMetadata } from '@/lib/docs/metadata';
 import { parseFeatRegistry, searchByFeatId, type FeatureRecord } from '@/lib/docs/featRegistry';
@@ -143,6 +144,10 @@ export default function DocsNavigator() {
   // DocumentViewer states
   const [viewerPath, setViewerPath] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
+  
+  // Quality Gates states
+  const [qualityGateStatus, setQualityGateStatus] = useState<string>('');
+  const [diagnosisModalOpen, setDiagnosisModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -294,10 +299,10 @@ export default function DocsNavigator() {
   }, [selectedPath, metadataForSelectedPath]);
 
   useEffect(() => {
-    const targetFeatureId = selectedFeatureId;
-    if (!targetFeatureId) return;
-    if (featureDocMap[targetFeatureId]) return;
+    if (!selectedFeatureId) return;
+    if (featureDocMap[selectedFeatureId]) return;
 
+    const targetFeatureId = selectedFeatureId;
     let cancelled = false;
 
     async function loadRelatedDocs() {
@@ -741,6 +746,48 @@ export default function DocsNavigator() {
     });
   };
 
+  // Quality Gates handlers
+  async function fetchPromptById(promptId: string): Promise<string | null> {
+    try {
+      const res = await fetch('/api/prompts');
+      if (!res.ok) {
+        throw new Error(`Failed to fetch prompts (${res.status})`);
+      }
+      const data = await res.json();
+      for (const category of data.categories || []) {
+        const item = category.items?.find((i: { id: string; body?: string }) => i.id === promptId);
+        if (item) return item.body;
+      }
+      return null;
+    } catch (error) {
+      console.error('[DocsNavigator] Failed to fetch prompt', error);
+      return null;
+    }
+  }
+
+  const handleDocumentDiagnosis = () => {
+    setDiagnosisModalOpen(true);
+  };
+
+  const handleDocumentInventory = async () => {
+    setQualityGateStatus('棚卸しプロンプトを取得中...');
+    try {
+      const prompt = await fetchPromptById('PRM-DOC-11-CHK-001');
+      if (prompt) {
+        await navigator.clipboard.writeText(prompt);
+        setQualityGateStatus('棚卸しプロンプトをコピーしました');
+        setTimeout(() => setQualityGateStatus(''), 3000);
+      } else {
+        setQualityGateStatus('プロンプトが見つかりませんでした');
+        setTimeout(() => setQualityGateStatus(''), 3000);
+      }
+    } catch (error) {
+      console.error('[DocsNavigator] Failed to copy inventory prompt', error);
+      setQualityGateStatus('コピーに失敗しました');
+      setTimeout(() => setQualityGateStatus(''), 3000);
+    }
+  };
+
   const renderTreeNode = (node: TreeNode, depth = 0): ReactElement => {
     const isExpanded = expandedPaths.has(node.path);
     const isSelected = selectedTreeNode?.path === node.path;
@@ -861,6 +908,29 @@ export default function DocsNavigator() {
           </span>
         </div>
       </div>
+      <div className="docs-qg-actions" data-testid="docs-navigator__quality-gates-actions">
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleDocumentDiagnosis}
+          data-testid="docs-navigator__diagnosis-button"
+        >
+          🔍 全ドキュメント診断
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleDocumentInventory}
+          data-testid="docs-navigator__inventory-button"
+        >
+          📦 ドキュメント棚卸し
+        </button>
+        {qualityGateStatus && (
+          <span className="docs-qg-status" data-testid="docs-navigator__quality-gates-status">
+            {qualityGateStatus}
+          </span>
+        )}
+      </div>
       {loading && (
         <p className="text-muted" data-testid="docs-navigator__loading">
           コンテキストを読み込み中...
@@ -875,6 +945,12 @@ export default function DocsNavigator() {
         path={viewerPath}
         isOpen={viewerOpen}
         onClose={() => setViewerOpen(false)}
+      />
+      
+      {/* DiagnosisModal */}
+      <DiagnosisModal
+        isOpen={diagnosisModalOpen}
+        onClose={() => setDiagnosisModalOpen(false)}
       />
     </section>
   );
