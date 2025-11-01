@@ -6,6 +6,7 @@ import DocumentDetailPanel, { type DetailPanelData } from '@/components/docs/Doc
 import DocumentViewer from './DocumentViewer';
 import { parseContextEntries, type ContextEntry } from '@/lib/docs/context';
 import { extractDocumentMetadata, type DocumentMetadata } from '@/lib/docs/metadata';
+import { parseFeatRegistry, searchByFeatId, type FeatureRecord } from '@/lib/docs/featRegistry';
 
 interface TreeNode extends DocumentMetadata {
   children: TreeNode[];
@@ -16,6 +17,14 @@ interface TreeNode extends DocumentMetadata {
 type Mode = 'docs' | 'feats' | 'tree';
 
 const DEFAULT_CONTEXT_PATH = '/context.mdc';
+const FEAT_REGISTRY_PATH = 'docs/PRD/要求仕様書.mdc';
+
+interface FeatureDocumentSummary {
+  path: string;
+  title: string;
+  layer: string | null;
+  description?: string;
+}
 
 function uniqueCategories(entries: ContextEntry[]): string[] {
   const seen = new Set<string>();
@@ -113,7 +122,15 @@ export default function DocsNavigator() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [search, setSearch] = useState('');
-  
+  const [features, setFeatures] = useState<FeatureRecord[]>([]);
+  const [featLoading, setFeatLoading] = useState(false);
+  const [featError, setFeatError] = useState<string | null>(null);
+  const [featSearch, setFeatSearch] = useState('');
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [featureDocMap, setFeatureDocMap] = useState<Record<string, FeatureDocumentSummary[]>>({});
+  const [featureDocLoading, setFeatureDocLoading] = useState(false);
+  const [featureDocError, setFeatureDocError] = useState<string | null>(null);
+
   // Tree mode states
   const [treeLoading, setTreeLoading] = useState(false);
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
@@ -121,6 +138,7 @@ export default function DocsNavigator() {
   const [selectedTreeNode, setSelectedTreeNode] = useState<TreeNode | DocumentMetadata | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [metadataMap, setMetadataMap] = useState<Partial<Record<string, DocumentMetadata | null>>>({});
+  const [docContentCache, setDocContentCache] = useState<Record<string, string>>({});
   
   // DocumentViewer states
   const [viewerPath, setViewerPath] = useState<string | null>(null);
@@ -167,6 +185,60 @@ export default function DocsNavigator() {
     };
   }, []);
 
+  useEffect(() => {
+    if (mode !== 'feats') return;
+    if (features.length > 0 || featLoading) return;
+
+    let cancelled = false;
+
+    async function loadFeatRegistry() {
+      setFeatLoading(true);
+      setFeatError(null);
+
+      try {
+        const response = await fetch(`/api/docs?path=${encodeURIComponent(FEAT_REGISTRY_PATH)}`);
+        if (!response.ok) {
+          throw new Error(`Failed to load feat registry (${response.status})`);
+        }
+
+        const text = await response.text();
+        if (cancelled) return;
+
+        const parsed = parseFeatRegistry(text);
+        setFeatures(parsed);
+      } catch (error) {
+        console.error('[DocsNavigator] Failed to load feat registry', error);
+        if (!cancelled) {
+          setFeatError(error instanceof Error ? error.message : 'Unknown error');
+        }
+      } finally {
+        if (!cancelled) {
+          setFeatLoading(false);
+        }
+      }
+    }
+
+    loadFeatRegistry();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, features.length, featLoading]);
+
+  useEffect(() => {
+    if (features.length === 0) return;
+    if (selectedFeatureId) return;
+
+    setSelectedFeatureId(features[0].id);
+  }, [features, selectedFeatureId]);
+
+  useEffect(() => {
+    if (!selectedFeatureId) return;
+    if (featureDocMap[selectedFeatureId]) {
+      setFeatureDocError(null);
+    }
+  }, [selectedFeatureId, featureDocMap]);
+
   const categories = useMemo(() => uniqueCategories(entries), [entries]);
 
   const filteredEntries = useMemo(() => {
@@ -186,6 +258,19 @@ export default function DocsNavigator() {
     () => entries.find(entry => entry.path === selectedPath) ?? null,
     [entries, selectedPath],
   );
+
+  const filteredFeatures = useMemo(
+    () => searchByFeatId(features, featSearch),
+    [features, featSearch],
+  );
+
+  const activeFeature = useMemo(
+    () => features.find(feature => feature.id === selectedFeatureId) ?? null,
+    [features, selectedFeatureId],
+  );
+
+  const relatedDocs = selectedFeatureId ? featureDocMap[selectedFeatureId] ?? [] : [];
+  const isRelatedDocsLoading = featureDocLoading && (!selectedFeatureId || !featureDocMap[selectedFeatureId]);
 
   const metadataForSelectedPath = selectedPath ? metadataMap[selectedPath] : undefined;
 
@@ -207,6 +292,104 @@ export default function DocsNavigator() {
       cancelled = true;
     };
   }, [selectedPath, metadataForSelectedPath]);
+
+  useEffect(() => {
+    const targetFeatureId = selectedFeatureId;
+    if (!targetFeatureId) return;
+    if (featureDocMap[targetFeatureId]) return;
+
+    let cancelled = false;
+
+    async function loadRelatedDocs() {
+      setFeatureDocLoading(true);
+      setFeatureDocError(null);
+
+      const normalized = targetFeatureId.toLowerCase();
+      const related: FeatureDocumentSummary[] = [];
+      const newContents: Record<string, string> = {};
+      const newMetadata: Partial<Record<string, DocumentMetadata | null>> = {};
+      const seen = new Set<string>();
+
+      for (const entry of entries) {
+        if (cancelled) return;
+
+        const description = entry.description ?? '';
+        let matched = description.toLowerCase().includes(normalized);
+        let content = docContentCache[entry.path];
+
+        if (!matched) {
+          if (content === undefined) {
+            try {
+              const response = await fetch(`/api/docs?path=${encodeURIComponent(entry.path)}`);
+              if (!response.ok) {
+                console.warn('[DocsNavigator] Failed to load document for FEAT search:', entry.path, response.status);
+              } else {
+                const text = await response.text();
+                if (cancelled) return;
+                newContents[entry.path] = text;
+                content = text;
+              }
+            } catch (error) {
+              console.error('[DocsNavigator] Error loading document for FEAT search:', entry.path, error);
+            }
+          }
+
+          if (content) {
+            matched = content.toLowerCase().includes(normalized);
+          }
+        }
+
+        if (!matched || seen.has(entry.path)) {
+          continue;
+        }
+
+        seen.add(entry.path);
+
+        let metadata = metadataMap[entry.path];
+        if (metadata === undefined) {
+          const fetched = await fetchDocumentMetadata(entry.path);
+          if (cancelled) return;
+          newMetadata[entry.path] = fetched ?? null;
+          metadata = fetched ?? null;
+        }
+
+        const finalMetadata = metadata ?? null;
+
+        related.push({
+          path: entry.path,
+          title: finalMetadata?.title ?? entry.path.split('/').pop() ?? entry.path,
+          layer: finalMetadata?.layer ?? null,
+          description: entry.description,
+        });
+      }
+
+      if (cancelled) return;
+
+      if (Object.keys(newContents).length > 0) {
+        setDocContentCache(prev => ({ ...prev, ...newContents }));
+      }
+
+      if (Object.keys(newMetadata).length > 0) {
+        setMetadataMap(prev => ({ ...prev, ...newMetadata }));
+      }
+
+      setFeatureDocMap(prev => ({ ...prev, [targetFeatureId]: related }));
+      setFeatureDocLoading(false);
+    }
+
+    loadRelatedDocs().catch(error => {
+      console.error('[DocsNavigator] Failed to resolve related documents', error);
+      if (!cancelled) {
+        setFeatureDocError(error instanceof Error ? error.message : 'Unknown error');
+        setFeatureDocLoading(false);
+        setFeatureDocMap(prev => ({ ...prev, [targetFeatureId]: [] }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFeatureId, entries, docContentCache, metadataMap, featureDocMap]);
 
   // Treeモードに切り替わったときにドキュメントをロード
   useEffect(() => {
@@ -378,6 +561,156 @@ export default function DocsNavigator() {
     </div>
   );
 
+  const renderFeatsMode = () => (
+    <div className="docs-mode active" data-testid="docs-navigator__mode-feats">
+      <div className="docs-split" data-testid="docs-navigator__feats-split">
+        <aside className="docs-left" data-testid="docs-navigator__feats-list">
+          <div className="form-group">
+            <input
+              type="text"
+              placeholder="FEAT検索..."
+              value={featSearch}
+              onChange={event => setFeatSearch(event.target.value)}
+              aria-label="FEAT検索"
+            />
+          </div>
+
+          {featLoading && features.length === 0 ? (
+            <p className="text-muted" data-testid="docs-navigator__feats-loading">
+              機能一覧を読み込み中...
+            </p>
+          ) : (
+            <ul data-testid="docs-navigator__feats-items">
+              {filteredFeatures.map(feature => (
+                <li
+                  key={feature.id}
+                  className={feature.id === selectedFeatureId ? 'active' : ''}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedFeatureId(feature.id)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      setSelectedFeatureId(feature.id);
+                    }
+                  }}
+                >
+                  <strong>{feature.id}</strong>
+                  <span>{feature.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!featLoading && filteredFeatures.length === 0 && !featError && (
+            <p className="empty-state" data-testid="docs-navigator__feats-empty">
+              該当するFEATが見つかりません
+            </p>
+          )}
+
+          {featError && (
+            <p className="empty-state" data-testid="docs-navigator__feats-error">
+              読み込みに失敗しました: {featError}
+            </p>
+          )}
+        </aside>
+
+        <section className="docs-right" data-testid="docs-navigator__feats-detail">
+          {activeFeature ? (
+            <div className="docs-detail" data-testid="docs-navigator__feats-detail-content">
+              <h3>{activeFeature.name}</h3>
+              <dl className="feature-detail__meta">
+                <div>
+                  <dt>FEAT-ID</dt>
+                  <dd>{activeFeature.id}</dd>
+                </div>
+                <div>
+                  <dt>REQ-ID</dt>
+                  <dd>{activeFeature.reqId}</dd>
+                </div>
+                <div>
+                  <dt>FR範囲</dt>
+                  <dd>{activeFeature.frRange}</dd>
+                </div>
+                <div>
+                  <dt>FR数</dt>
+                  <dd>{activeFeature.frCount ?? 'N/A'}</dd>
+                </div>
+                <div>
+                  <dt>優先度</dt>
+                  <dd>{activeFeature.priority}</dd>
+                </div>
+                <div>
+                  <dt>ステータス</dt>
+                  <dd>{activeFeature.status}</dd>
+                </div>
+              </dl>
+
+              <div className="feature-detail__related">
+                <h4>関連ドキュメント</h4>
+
+                {isRelatedDocsLoading ? (
+                  <p className="text-muted" data-testid="docs-navigator__feats-related-loading">
+                    関連ドキュメントを検索中...
+                  </p>
+                ) : featureDocError ? (
+                  <p className="empty-state" data-testid="docs-navigator__feats-related-error">
+                    関連ドキュメントを取得できませんでした: {featureDocError}
+                  </p>
+                ) : relatedDocs.length > 0 ? (
+                  <ul data-testid="docs-navigator__feats-related-list">
+                    {relatedDocs.map(doc => (
+                      <li key={doc.path}>
+                        <div className="feature-detail__doc-meta">
+                          <strong>{doc.title}</strong>
+                          {doc.layer && <span className="feature-detail__doc-layer">{doc.layer}</span>}
+                          <p className="text-muted">{doc.description ?? '説明が登録されていません'}</p>
+                          <code>{doc.path}</code>
+                        </div>
+                        <div className="control-group">
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              setViewerPath(doc.path);
+                              setViewerOpen(true);
+                            }}
+                          >
+                            ドキュメントを開く
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard?.writeText(doc.path);
+                              } catch (error) {
+                                console.error('[DocsNavigator] Failed to copy path:', error);
+                              }
+                            }}
+                          >
+                            パスをコピー
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="empty-state" data-testid="docs-navigator__feats-related-empty">
+                    関連するドキュメントは見つかりませんでした
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="empty-state" data-testid="docs-navigator__feats-detail-empty">
+              FEATを選択してください
+            </p>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+
   const renderDetailPanel = (
     target: TreeNode | DocumentMetadata | null,
     options: {
@@ -488,12 +821,6 @@ export default function DocsNavigator() {
     </div>
   );
 
-  const renderPlaceholder = (testId: string, title: string) => (
-    <div className="empty-state" data-testid={testId}>
-      {title} 機能は順次実装予定です。
-    </div>
-  );
-
   return (
     <section className="card" data-testid="docs-navigator__section">
       <h2 data-testid="docs-navigator__heading">📚 Docs Navigator</h2>
@@ -529,8 +856,8 @@ export default function DocsNavigator() {
             {mode === 'docs'
               ? 'コンテキストマップからカテゴリ別にドキュメントを検索できます'
               : mode === 'feats'
-                ? 'FEATs レジストリのブラウズは近日公開予定です'
-                : 'Tree ビューは近日公開予定です'}
+                ? 'FEAT-IDから機能概要と関連ドキュメントを検索できます'
+                : '依存関係ツリーとオーファン一覧を閲覧できます'}
           </span>
         </div>
       </div>
@@ -540,7 +867,7 @@ export default function DocsNavigator() {
         </p>
       )}
       {!loading && mode === 'docs' && renderDocsMode()}
-      {!loading && mode === 'feats' && renderPlaceholder('docs-navigator__mode-feats', 'FEATs')}
+      {!loading && mode === 'feats' && renderFeatsMode()}
       {!loading && mode === 'tree' && renderTreeMode()}
       
       {/* DocumentViewer Modal */}
