@@ -103,6 +103,14 @@ gates:
     threshold: 100%
     severity: error
     description: "パンくずリスト全体の整合性を保証（DOC-01～DOC-04を包括）。すべてのドキュメントで適切なBreadcrumbsブロック、Layer定義、Upstream/Downstreamパス、循環参照の不在を確認"
+
+  - id: DOC-11
+    name: "ドキュメント棚卸し整備"
+    target: "docs/**"
+    metric: "Redundancy and freshness review coverage"
+    threshold: 100%
+    severity: warn
+    description: "docs/配下と基幹ドキュメントを棚卸しし、冗長・重複・陳腐化コンテンツを特定して統合・削除・更新計画を提示する"
 ```
 
 ## 検証方法
@@ -208,6 +216,7 @@ const validLayers = ['STRATEGY','PRD','UX','API','DATA','ARCH','DEVELOPMENT','QA
 | | | | | PRM-DOC-10-FIX-002 | Layer修正 |
 | | | | | PRM-DOC-10-FIX-003 | パス修正 |
 | | | | | PRM-DOC-10-FIX-004 | 循環参照解消 |
+| DOC-11 | ドキュメント棚卸し整備 | - | （Prompt実行） | PRM-DOC-11-CHK-001 | 棚卸し・統合計画策定 |
 
 ### ScriptとPromptの役割分担
 

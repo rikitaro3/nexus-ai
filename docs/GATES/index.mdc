@@ -29,7 +29,7 @@ Nexusの品質基準を定義し、すべての開発・テスト・リリース
 ## Quality Gatesドキュメント
 
 - **品質ゲート運用ガイド.mdc** … Quality Gates一覧・適用範囲・検証方法・非準拠時の対処
-- **document.mdc** … ドキュメント品質ゲート（DOC-01〜09）詳細
+- **document.mdc** … ドキュメント品質ゲート（DOC-01〜11）詳細
 - **test-case.mdc** … テストケース品質ゲート（TC-01〜04）詳細
 - **用語定義とID採番ルール.mdc** … Quality Gate、Script、Prompt、Activityの用語定義とID採番ルール
 - **Activity一覧.mdc** … 標準化された活動パターン（Activity Type）一覧とPrompt/Script紐付け
